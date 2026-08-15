@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "missing_credential",
+    "message": "SERPER_API_KEY is not set. The research step needs it — get one at https://serper.dev.",
+    "detail": { "env": "SERPER_API_KEY" }
+  }
+}

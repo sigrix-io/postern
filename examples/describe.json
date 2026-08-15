@@ -1,0 +1,54 @@
+{
+  "postern": "0.1",
+  "agent": {
+    "id": "acme/market-research-crew",
+    "name": "Market Research Crew",
+    "version": "1.3.0",
+    "summary": "Researches a market segment and returns a positioning brief."
+  },
+  "inputs": [
+    {
+      "key": "segment",
+      "label": "Market segment",
+      "type": "text",
+      "required": true,
+      "default": null,
+      "validation": { "max_length": 200 }
+    },
+    {
+      "key": "depth",
+      "label": "Depth",
+      "type": "select",
+      "required": false,
+      "default": "standard",
+      "validation": { "options": ["quick", "standard", "exhaustive"] }
+    }
+  ],
+  "output": {
+    "type": "text",
+    "example": "## Positioning brief\n\nThe mid-market segment…"
+  },
+  "capabilities": {
+    "streaming": true,
+    "tools": ["serper_search", "file_read", "file_write"],
+    "write_tools": ["file_write"]
+  },
+  "credentials": [
+    {
+      "env": "OPENAI_API_KEY",
+      "purpose": "Runs the agents in this crew.",
+      "signup_url": "https://platform.openai.com/api-keys"
+    },
+    {
+      "env": "SERPER_API_KEY",
+      "purpose": "Web search for the research step.",
+      "signup_url": "https://serper.dev"
+    }
+  ],
+  "examples": [
+    {
+      "inputs": { "segment": "B2B SaaS observability" },
+      "output": "## Positioning brief\n\nThe mid-market segment…"
+    }
+  ]
+}

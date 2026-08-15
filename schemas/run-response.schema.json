@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sigrix.io/schemas/postern/0.1/run-response.schema.json",
+  "title": "Postern run response",
+  "description": "Response body of POST /postern/v0/run, and the payload of the stream done event. See SPEC.md section 4.2.",
+  "type": "object",
+  "required": ["postern", "run_id", "status", "output"],
+  "properties": {
+    "postern": { "type": "string", "const": "0.1" },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique within the runner's lifetime; correlates with stream events and logs."
+    },
+    "status": { "type": "string", "enum": ["ok"] },
+    "output": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "type": "string", "enum": ["text"] },
+        "value": {
+          "type": "string",
+          "description": "Concatenating every stream delta.text in order MUST equal this value."
+        }
+      },
+      "additionalProperties": true
+    },
+    "usage": {
+      "type": "object",
+      "description": "SHOULD be present when the runner can determine it.",
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "cost_usd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Best estimate in US dollars. Advisory: a client MUST NOT treat this as a billed amount."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "model_id": { "type": "string" },
+              "input_tokens": { "type": "integer", "minimum": 0 },
+              "output_tokens": { "type": "integer", "minimum": 0 },
+              "latency_ms": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,18 @@
+# Every change to this repository requires review from a maintainer.
+#
+# Merging is discretionary and stays with the maintainers — see
+# CONTRIBUTING.md. Contributions are welcome; governance is not open.
+#
+# Replace @ftymoshchuk with a @sigrix-io/<team> slug once a maintainers
+# team exists, so that reviewer load can be shared without editing this
+# file for every change in personnel.
+
+*                   @ftymoshchuk
+
+# The normative surface. Anything here is a compatibility commitment the
+# moment someone implements it, so it is called out separately from the
+# repository default even though the owner is currently the same.
+
+/SPEC.md            @ftymoshchuk
+/VERSIONING.md      @ftymoshchuk
+/schemas/           @ftymoshchuk

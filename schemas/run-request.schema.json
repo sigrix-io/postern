@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sigrix.io/schemas/postern/0.1/run-request.schema.json",
+  "title": "Postern run request",
+  "description": "Request body of POST /postern/v0/run and POST /postern/v0/stream. Both verbs take the same body. See SPEC.md section 4.2.",
+  "type": "object",
+  "required": ["inputs"],
+  "properties": {
+    "inputs": {
+      "type": "object",
+      "description": "Map keyed by the input keys declared in the describe response. A runner MUST reject a request omitting a required input, or failing a declared validation, with bad_request.",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    }
+  },
+  "additionalProperties": true
+}

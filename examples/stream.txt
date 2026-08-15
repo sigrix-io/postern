@@ -1,0 +1,41 @@
+POST /postern/v0/stream
+Content-Type: application/json
+
+{"inputs": {"segment": "B2B SaaS observability", "depth": "standard"}}
+
+--- response: 200 OK, Content-Type: text/event-stream ---
+
+event: start
+data: {"run_id": "01JD8XW2Q9"}
+
+event: step
+data: {"name": "research", "model_id": "gpt-4o-mini", "status": "started"}
+
+event: step
+data: {"name": "research", "model_id": "gpt-4o-mini", "status": "finished", "latency_ms": 3120}
+
+event: delta
+data: {"text": "## Positioning brief\n\n"}
+
+event: delta
+data: {"text": "The mid-market segment is served by three incumbents…"}
+
+event: done
+data: {"postern": "0.1", "run_id": "01JD8XW2Q9", "status": "ok", "output": {"type": "text", "value": "## Positioning brief\n\nThe mid-market segment is served by three incumbents…"}, "usage": {"input_tokens": 4210, "output_tokens": 918, "cost_usd": 0.001182}}
+
+
+Notes
+-----
+
+* start MUST be first; exactly one done or one error MUST be last.
+* Concatenating every delta.text in order equals done's output.value.
+  In this example: "## Positioning brief\n\n" + "The mid-market segment is
+  served by three incumbents…" — which is exactly output.value.
+* step and delta are both OPTIONAL and may appear zero or more times. A
+  Level 3 runner that cannot emit incremental text may send start, then
+  done, and remain conformant.
+* A client MUST ignore an event name it does not recognise rather than
+  aborting. That rule is what lets this list grow without a version bump.
+* A Level 2 runner answers this endpoint with 501 and code "unavailable" —
+  never with a single-shot response, which a client could not distinguish
+  from a stream that finished instantly.

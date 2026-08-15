@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sigrix.io/schemas/postern/0.1/describe.schema.json",
+  "title": "Postern describe response",
+  "description": "Response body of GET /postern/v0/describe. See SPEC.md section 4.1.",
+  "type": "object",
+  "required": ["postern", "agent", "inputs"],
+  "properties": {
+    "postern": {
+      "type": "string",
+      "const": "0.1",
+      "description": "Specification version this payload conforms to."
+    },
+    "agent": {
+      "type": "object",
+      "required": ["id", "name", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier, unique within the distributor."
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "inputs": {
+      "type": "array",
+      "description": "Ordered input declarations. An envelope: the specification fixes the shape of the list, not how an agent arrives at its contents.",
+      "items": { "$ref": "#/$defs/input" }
+    },
+    "output": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["text"] },
+        "example": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "streaming": { "type": "boolean" },
+        "tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Every tool the agent can invoke."
+        },
+        "write_tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The subset of tools that spend money, mutate state outside the workspace, or are otherwise not safely repeatable. MUST be a subset of tools."
+        }
+      },
+      "additionalProperties": true
+    },
+    "credentials": {
+      "type": "array",
+      "description": "Credentials declared by environment variable NAME only. A value here is nonconformant.",
+      "items": {
+        "type": "object",
+        "required": ["env"],
+        "properties": {
+          "env": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "description": "Environment variable name. Never a value."
+          },
+          "purpose": { "type": "string" },
+          "signup_url": { "type": "string", "format": "uri" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["inputs"],
+        "properties": {
+          "inputs": { "type": "object" },
+          "output": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "input": {
+      "type": "object",
+      "required": ["key", "label", "type", "required"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_.-]+$",
+          "description": "Key used in the run request's inputs map. The key 'prompt' is reserved for a single free-text brief."
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "enum": ["text", "number", "select"],
+          "description": "Clients MUST treat an unrecognised type as text rather than failing."
+        },
+        "required": { "type": "boolean" },
+        "default": { "type": ["string", "number", "boolean", "null"] },
+        "validation": {
+          "type": "object",
+          "description": "Open object. Unrecognised members MUST be ignored, not rejected.",
+          "properties": {
+            "max_length": { "type": "integer", "minimum": 0 },
+            "min": { "type": "number" },
+            "max": { "type": "number" },
+            "pattern": { "type": "string" },
+            "options": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "REQUIRED when type is select."
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "select" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["validation"],
+            "properties": {
+              "validation": { "required": ["options"] }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

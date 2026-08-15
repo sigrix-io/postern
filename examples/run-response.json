@@ -1,0 +1,30 @@
+{
+  "postern": "0.1",
+  "run_id": "01JD8XW2Q9",
+  "status": "ok",
+  "output": {
+    "type": "text",
+    "value": "## Positioning brief\n\nThe mid-market segment is served by three incumbents…"
+  },
+  "usage": {
+    "input_tokens": 4210,
+    "output_tokens": 918,
+    "cost_usd": 0.001182,
+    "steps": [
+      {
+        "name": "research",
+        "model_id": "gpt-4o-mini",
+        "input_tokens": 2100,
+        "output_tokens": 400,
+        "latency_ms": 3120
+      },
+      {
+        "name": "synthesise",
+        "model_id": "gpt-4o-mini",
+        "input_tokens": 2110,
+        "output_tokens": 518,
+        "latency_ms": 4025
+      }
+    ]
+  }
+}

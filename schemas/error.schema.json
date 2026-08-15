@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sigrix.io/schemas/postern/0.1/error.schema.json",
+  "title": "Postern error response",
+  "description": "Body of every non-2xx Postern response. See SPEC.md section 2.1.",
+  "type": "object",
+  "required": ["error"],
+  "properties": {
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "bad_request",
+            "not_found",
+            "not_entitled",
+            "missing_credential",
+            "agent_error",
+            "unavailable"
+          ],
+          "description": "not_entitled is only valid from a local runner reporting its own state. Distributors MUST answer not_found instead, so the entitlement endpoint cannot be used to enumerate a private catalogue."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable; SHOULD be safe to show a user verbatim."
+        },
+        "detail": {
+          "type": ["object", "string", "null"]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
