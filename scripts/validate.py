@@ -150,6 +150,11 @@ MUST_REJECT = [
         {"postern": "0.1", "level": 3, "state": "ready", "entitlement": {"state": "active"}},
     ),
     (
+        "status.schema.json",
+        "a revoked entitlement with no timestamp to re-check from",
+        {"postern": "0.1", "level": 3, "state": "ready", "entitlement": {"state": "revoked"}},
+    ),
+    (
         "error.schema.json",
         "an error code outside the defined set",
         {"error": {"code": "teapot", "message": "x"}},

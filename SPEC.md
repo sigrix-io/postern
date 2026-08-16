@@ -356,10 +356,21 @@ Liveness, conformance level, and entitlement state.
 `state` is `ready`, `running`, or `degraded`. `entitlement.state` is
 `active`, `revoked`, `unknown`, or `not_required` (§5.1).
 
-`entitlement.stale_after_seconds` is **REQUIRED** whenever `state` is
-`active`. It declares how long the runner may continue to rely on the cached
-answer in `checked_at` before re-checking, and is the honest upper bound on
-how long a revoked entitlement can keep working (§5.4).
+`entitlement.stale_after_seconds` is **REQUIRED** whenever
+`entitlement.state` is `active`. It declares how long the runner may
+continue to rely on the cached answer before re-checking, and is the honest
+upper bound on how long a revoked entitlement can keep working (§5.4).
+
+`entitlement.checked_at` is **REQUIRED** whenever `entitlement.state` is
+`active` or `revoked`. Both are answers a distributor actually gave, and
+neither is terminal — a revoked entitlement may later be restored (§5.4), so
+a runner holding `revoked` with no timestamp has no basis for ever asking
+again. It is omitted for `not_required`, where no check took place.
+
+A runner **MUST** report the `checked_at` it received from the distributor
+(§5.3) unchanged, and **MUST NOT** re-stamp it with its own clock.
+Re-stamping discards the anchor and silently restores the stacking that
+§5.3 exists to prevent, while every field still validates.
 
 `status` **MUST** answer at Level 1, and **MUST NOT** require credentials.
 
@@ -404,7 +415,12 @@ Authorization: Bearer <token>
 ```
 
 ```json
-{"state": "active", "agent_id": "acme/market-research-crew", "stale_after_seconds": 60}
+{
+  "state": "active",
+  "agent_id": "acme/market-research-crew",
+  "checked_at": "2026-08-15T09:14:02Z",
+  "stale_after_seconds": 60
+}
 ```
 
 `state` is `active` or `revoked`. A distributor **MUST** resolve the token
@@ -414,6 +430,17 @@ beyond the buyer the token identifies.
 
 A distributor **MAY** serve this from a cache, and **MUST** declare the
 cache bound as `stale_after_seconds`.
+
+`checked_at` is **REQUIRED**, an RFC 3339 timestamp, and means *the moment
+the distributor last consulted the authority* — not the moment it answered.
+A distributor serving from a cache reports the age of the underlying read,
+not the age of the response.
+
+That definition is what makes the declared window honest. Without it the
+distributor's cache age is invisible to the caller, a runner can only stamp
+its own clock on receipt, and the two caches run back to back — so the real
+worst case is their sum while `stale_after_seconds` claims to be the whole
+of it.
 
 ### 5.4 Revocation
 
@@ -427,6 +454,12 @@ the window is *declared*: a distributor **MUST NOT** report a
 `stale_after_seconds` shorter than the longest staleness any of its caches
 can actually produce. A runner **MUST** re-check on the first request after
 `checked_at + stale_after_seconds`.
+
+Because `checked_at` is the distributor's own read time rather than the
+runner's receipt time (§5.3), that deadline is anchored upstream: the
+distributor's cache and the runner's cache expire together instead of in
+sequence, and `stale_after_seconds` is the whole window rather than half of
+it.
 
 A runner **MUST NOT** cache an entitlement answer for longer than the
 distributor declared, and **MUST NOT** persist an `active` answer across
@@ -549,6 +582,13 @@ and informative for everyone else. Postern is usable with no reference to it.*
   rather than with `unavailable`, which is now 503 only (§2.1, §4.3).
 - Added `withdrawn` (410), so the withdrawn-agent response in §5.6 has a
   code and can be constructed at all (§2.1, §5.6).
+- The entitlement check response now carries `checked_at`, defined as the
+  moment the distributor last consulted the authority rather than the moment
+  it answered. A runner propagates it unchanged and **MUST NOT** re-stamp it,
+  so the distributor's cache and the runner's cache share one deadline
+  instead of stacking (§5.3, §5.4).
+- `entitlement.checked_at` is now **REQUIRED** in `status` when the
+  entitlement state is `active` or `revoked` (§4.4).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
