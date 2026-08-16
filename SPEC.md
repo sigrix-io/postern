@@ -122,6 +122,14 @@ Every non-2xx response body **MUST** be:
 | `agent_error` | 500 | The agent ran and failed. |
 | `unavailable` | 503 | The runner is not ready. |
 
+A client **MUST** treat an unrecognised `code` as a generic failure of its
+HTTP status class, and **SHOULD** show `message` to the user. New codes may
+be added in a minor release; a client that rejects a code it does not
+recognise converts that addition into a breaking change for its own users.
+The schema in [`schemas/`](schemas) enumerates the codes a conforming
+implementation *emits*, which is a narrower question than the set a client
+**MUST** accept.
+
 ---
 
 ## 3. Conformance
@@ -525,6 +533,11 @@ and informative for everyone else. Postern is usable with no reference to it.*
 ---
 
 ## Appendix A · Changes
+
+**Unreleased** — corrections made before first publication.
+
+- A client **MUST** tolerate an error `code` it does not recognise, so that
+  adding a code stays an additive change (§2.1).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

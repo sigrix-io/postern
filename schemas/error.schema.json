@@ -20,7 +20,7 @@
             "agent_error",
             "unavailable"
           ],
-          "description": "not_entitled is only valid from a local runner reporting its own state. Distributors MUST answer not_found instead, so the entitlement endpoint cannot be used to enumerate a private catalogue."
+          "description": "The codes a conforming implementation emits. A client MUST tolerate a code outside this set, treating it as a generic failure of its HTTP status class (SPEC.md section 2.1) — this enum is not a licence to reject. not_entitled is only valid from a local runner reporting its own state. Distributors MUST answer not_found instead, so the entitlement endpoint cannot be used to enumerate a private catalogue."
         },
         "message": {
           "type": "string",
