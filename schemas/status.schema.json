@@ -30,7 +30,11 @@
           "enum": ["active", "revoked", "unknown", "not_required"],
           "description": "not_required means no distributor is configured; the runner MUST NOT refuse to run on entitlement grounds."
         },
-        "checked_at": { "type": "string", "format": "date-time" },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The distributor's own read time, propagated unchanged from the entitlement check. A runner MUST NOT re-stamp it with its own clock. REQUIRED when state is active or revoked."
+        },
         "stale_after_seconds": {
           "type": "integer",
           "minimum": 0,
@@ -45,6 +49,13 @@
             "required": ["state"]
           },
           "then": { "required": ["checked_at", "stale_after_seconds"] }
+        },
+        {
+          "if": {
+            "properties": { "state": { "const": "revoked" } },
+            "required": ["state"]
+          },
+          "then": { "required": ["checked_at"] }
         }
       ]
     },

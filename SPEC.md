@@ -93,8 +93,8 @@ Request and response bodies are `application/json; charset=utf-8`, except
 A runner **MAY** additionally be launched as a subprocess and discovered
 through a launch specification (`command`, `args`, `env`), the same shape
 MCP uses for stdio servers. The port it binds is then reported on stdout as
-a single line, `Postern_PORT=<port>`, before any other output. Discovery is the
-only thing this changes: the protocol itself is unchanged.
+a single line, `POSTERN_PORT=<port>`, before any other output. Discovery is
+the only thing this changes: the protocol itself is unchanged.
 
 ### 2.1 Errors
 
@@ -118,9 +118,19 @@ Every non-2xx response body **MUST** be:
 | `bad_request` | 400 | Malformed body, or an input failed `describe`'s validation. |
 | `not_found` | 404 | No such agent — **or** the caller is not entitled to it (§5.5). |
 | `not_entitled` | 403 | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
+| `withdrawn` | 410 | The caller was entitled, and the agent has since been withdrawn (§5.6). |
 | `missing_credential` | 424 | A credential named by `describe` is absent from the environment. |
 | `agent_error` | 500 | The agent ran and failed. |
-| `unavailable` | 503 | The runner is not ready. |
+| `not_implemented` | 501 | The verb is defined by this specification but sits above the runner's conformance level (§3). Retrying will not help. |
+| `unavailable` | 503 | The runner is not ready. Retrying may help. |
+
+A client **MUST** treat an unrecognised `code` as a generic failure of its
+HTTP status class, and **SHOULD** show `message` to the user. New codes may
+be added in a minor release; a client that rejects a code it does not
+recognise converts that addition into a breaking change for its own users.
+The schema in [`schemas/`](schemas) enumerates the codes a conforming
+implementation *emits*, which is a narrower question than the set a client
+**MUST** accept.
 
 ---
 
@@ -185,7 +195,7 @@ and **MUST** be answerable without credentials and without an entitlement.
   },
   "capabilities": {
     "streaming": true,
-    "tools": ["serper_search", "file_read"],
+    "tools": ["serper_search", "file_read", "file_write"],
     "write_tools": ["file_write"]
   },
   "credentials": [
@@ -217,9 +227,8 @@ Unrecognised members **MUST** be ignored rather than rejected.
 **The key forward-compatibility property of this specification is that
 `inputs` is an envelope.** Postern fixes that an agent declares a list of
 typed, labelled, individually-validated inputs. It does not fix *how a given
-agent
-arrives at that list* — whether it exposes one free-text brief, a dozen
-configured fields, or both is the agent's business, and it may change
+agent arrives at that list* — whether it exposes one free-text brief, a
+dozen configured fields, or both is the agent's business, and it may change
 between agent versions without breaking any client. Clients render the
 envelope. This is deliberate, and it is why `run` takes a map rather than a
 positional argument (§4.2).
@@ -306,7 +315,7 @@ payload. Five event types are defined:
 |---|---|---|
 | `start` | `{"run_id": "…"}` | **MUST** be first. |
 | `step` | `{"name": "…", "model_id": "…", "status": "started\|finished", "latency_ms": N}` | **OPTIONAL**, zero or more. |
-| `delta` | `{"text": "…"}` | **OPTIONAL**, zero or more. Incremental output; concatenating every `delta.text` in order **MUST** equal the final `output.value`. |
+| `delta` | `{"text": "…"}` | **OPTIONAL**, zero or more. Incremental output. **If any `delta` is emitted**, concatenating every `delta.text` in order **MUST** equal the final `output.value`; a runner that cannot produce incremental text emits none. |
 | `done` | The full `run` response body (§4.2) | **MUST** be last on success. |
 | `error` | The error body (§2.1) | **MUST** be last on failure. |
 
@@ -315,9 +324,14 @@ A stream **MUST** end with exactly one `done` or one `error`. A client
 this list grows without a version bump.
 
 A Level 2 runner **MUST** answer `stream` with `501` and code
-`unavailable`, rather than falling back to a single-shot response — a client
-that asked for a stream and silently got one event cannot tell the
+`not_implemented`, rather than falling back to a single-shot response — a
+client that asked for a stream and silently got one event cannot tell the
 difference between "not supported" and "finished instantly".
+
+The code matters as much as the status. A runner's level is a permanent,
+discoverable property (§3), so "this runner will never serve `stream`" is
+not the same answer as "this runner is not ready just now". `unavailable`
+would invite a retry that can never succeed.
 
 ### 4.4 `GET /postern/v0/status`
 
@@ -341,10 +355,21 @@ Liveness, conformance level, and entitlement state.
 `state` is `ready`, `running`, or `degraded`. `entitlement.state` is
 `active`, `revoked`, `unknown`, or `not_required` (§5.1).
 
-`entitlement.stale_after_seconds` is **REQUIRED** whenever `state` is
-`active`. It declares how long the runner may continue to rely on the cached
-answer in `checked_at` before re-checking, and is the honest upper bound on
-how long a revoked entitlement can keep working (§5.4).
+`entitlement.stale_after_seconds` is **REQUIRED** whenever
+`entitlement.state` is `active`. It declares how long the runner may
+continue to rely on the cached answer before re-checking, and is the honest
+upper bound on how long a revoked entitlement can keep working (§5.4).
+
+`entitlement.checked_at` is **REQUIRED** whenever `entitlement.state` is
+`active` or `revoked`. Both are answers a distributor actually gave, and
+neither is terminal — a revoked entitlement may later be restored (§5.4), so
+a runner holding `revoked` with no timestamp has no basis for ever asking
+again. It is omitted for `not_required`, where no check took place.
+
+A runner **MUST** report the `checked_at` it received from the distributor
+(§5.3) unchanged, and **MUST NOT** re-stamp it with its own clock.
+Re-stamping discards the anchor and silently restores the stacking that
+§5.3 exists to prevent, while every field still validates.
 
 `status` **MUST** answer at Level 1, and **MUST NOT** require credentials.
 
@@ -379,7 +404,7 @@ A distributor issues each buyer an **entitlement token**.
 
 A runner presents its token as `Authorization: Bearer <token>` on every
 request to a distributor. Tokens are never sent to a client, and never
-appear in an Postern response body.
+appear in a Postern response body.
 
 ### 5.3 The check
 
@@ -389,7 +414,12 @@ Authorization: Bearer <token>
 ```
 
 ```json
-{"state": "active", "agent_id": "acme/market-research-crew", "stale_after_seconds": 60}
+{
+  "state": "active",
+  "agent_id": "acme/market-research-crew",
+  "checked_at": "2026-08-15T09:14:02Z",
+  "stale_after_seconds": 60
+}
 ```
 
 `state` is `active` or `revoked`. A distributor **MUST** resolve the token
@@ -399,6 +429,17 @@ beyond the buyer the token identifies.
 
 A distributor **MAY** serve this from a cache, and **MUST** declare the
 cache bound as `stale_after_seconds`.
+
+`checked_at` is **REQUIRED**, an RFC 3339 timestamp, and means *the moment
+the distributor last consulted the authority* — not the moment it answered.
+A distributor serving from a cache reports the age of the underlying read,
+not the age of the response.
+
+That definition is what makes the declared window honest. Without it the
+distributor's cache age is invisible to the caller, a runner can only stamp
+its own clock on receipt, and the two caches run back to back — so the real
+worst case is their sum while `stale_after_seconds` claims to be the whole
+of it.
 
 ### 5.4 Revocation
 
@@ -412,6 +453,12 @@ the window is *declared*: a distributor **MUST NOT** report a
 `stale_after_seconds` shorter than the longest staleness any of its caches
 can actually produce. A runner **MUST** re-check on the first request after
 `checked_at + stale_after_seconds`.
+
+Because `checked_at` is the distributor's own read time rather than the
+runner's receipt time (§5.3), that deadline is anchored upstream: the
+distributor's cache and the runner's cache expire together instead of in
+sequence, and `stale_after_seconds` is the whole window rather than half of
+it.
 
 A runner **MUST NOT** cache an entitlement answer for longer than the
 distributor declared, and **MUST NOT** persist an `active` answer across
@@ -442,9 +489,9 @@ Authorization: Bearer <token>
 - `200` — the bundle, `application/zip`, conforming to §6. The response
   **SHOULD** carry a `Digest: sha-256=<base64>` header.
 - `404` — no such agent, or not entitled (§5.5).
-- `410` — previously entitled, and the agent has since been withdrawn. The
-  body **SHOULD** carry the date access ends, so a client can say something
-  true about it.
+- `410` with code `withdrawn` — previously entitled, and the agent has since
+  been withdrawn. The body **SHOULD** carry the date access ends, so a client
+  can say something true about it.
 
 A distributor **SHOULD** rate-limit bundle retrieval per token and per
 source address, and **SHOULD** count a rejected request against both buckets
@@ -514,8 +561,7 @@ Two distributors' namespaces coexisting in one bundle is valid.
 *This section is normative for [Sigrix](https://sigrix.io) as a distributor
 and informative for everyone else. Postern is usable with no reference to it.*
 
-- Namespace: `org.sigrix`, carrying `agent_id`, `listing_url` and
-  `verification`.
+- Namespace: `org.sigrix`, carrying `agent_id` and `listing_url`.
 - Tokens are 32 random bytes, URL-safe base64, stored as SHA-256. One active
   token per buyer; rotation revokes every predecessor.
 - `stale_after_seconds` is 60.
@@ -525,6 +571,28 @@ and informative for everyone else. Postern is usable with no reference to it.*
 ---
 
 ## Appendix A · Changes
+
+**Unreleased** — corrections made before first publication.
+
+- A client **MUST** tolerate an error `code` it does not recognise, so that
+  adding a code stays an additive change (§2.1).
+- Added `not_implemented` (501). A Level 2 runner answers `stream` with it
+  rather than with `unavailable`, which is now 503 only (§2.1, §4.3).
+- Added `withdrawn` (410), so the withdrawn-agent response in §5.6 has a
+  code and can be constructed at all (§2.1, §5.6).
+- The entitlement check response now carries `checked_at`, defined as the
+  moment the distributor last consulted the authority rather than the moment
+  it answered. A runner propagates it unchanged and **MUST NOT** re-stamp it,
+  so the distributor's cache and the runner's cache share one deadline
+  instead of stacking (§5.3, §5.4).
+- `entitlement.checked_at` is now **REQUIRED** in `status` when the
+  entitlement state is `active` or `revoked` (§4.4).
+- The `delta` reconstruction rule applies only when a `delta` is emitted, so
+  a Level 3 runner that cannot produce incremental text stays conformant by
+  emitting none (§4.3).
+- The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
+  mixed-case form (§2).
+- Removed `verification` from the `org.sigrix` member list (§8).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
