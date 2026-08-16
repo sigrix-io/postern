@@ -561,8 +561,7 @@ Two distributors' namespaces coexisting in one bundle is valid.
 *This section is normative for [Sigrix](https://sigrix.io) as a distributor
 and informative for everyone else. Postern is usable with no reference to it.*
 
-- Namespace: `org.sigrix`, carrying `agent_id`, `listing_url` and
-  `verification`.
+- Namespace: `org.sigrix`, carrying `agent_id` and `listing_url`.
 - Tokens are 32 random bytes, URL-safe base64, stored as SHA-256. One active
   token per buyer; rotation revokes every predecessor.
 - `stale_after_seconds` is 60.
@@ -593,6 +592,7 @@ and informative for everyone else. Postern is usable with no reference to it.*
   emitting none (§4.3).
 - The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
   mixed-case form (§2).
+- Removed `verification` from the `org.sigrix` member list (§8).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
