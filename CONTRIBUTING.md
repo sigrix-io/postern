@@ -89,11 +89,18 @@ be linked from here.
   python scripts/validate.py
   ```
 
-  It validates every example against its schema, and asserts that the four
-  rules which cost implementers something — `select` needing `options`, a
-  credential never carrying a value, an `active` entitlement needing a
-  declared staleness bound, and the closed error-code set — still reject
-  what they are supposed to reject.
+  It validates every example against its schema, and every fenced JSON
+  block in [SPEC.md](SPEC.md) against its schema too — so the document you
+  read and the files a validator reads cannot drift apart unnoticed. It then
+  asserts that the rules which cost implementers something still fail when
+  they are broken: `select` needing `options`, a credential never carrying a
+  value, an `active` entitlement needing a declared staleness bound, the
+  closed error-code set, and — because JSON Schema cannot express a subset
+  relation between sibling arrays — `write_tools` being a subset of `tools`.
+
+  A JSON block in [SPEC.md](SPEC.md) whose shape it does not recognise is a
+  failure rather than a skip. If you add one, give it a mapping or an
+  explicit reason to be skipped.
 - **Add an Appendix A entry** for anything normative.
 
 ## Writing style
