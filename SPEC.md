@@ -93,8 +93,8 @@ Request and response bodies are `application/json; charset=utf-8`, except
 A runner **MAY** additionally be launched as a subprocess and discovered
 through a launch specification (`command`, `args`, `env`), the same shape
 MCP uses for stdio servers. The port it binds is then reported on stdout as
-a single line, `Postern_PORT=<port>`, before any other output. Discovery is the
-only thing this changes: the protocol itself is unchanged.
+a single line, `POSTERN_PORT=<port>`, before any other output. Discovery is
+the only thing this changes: the protocol itself is unchanged.
 
 ### 2.1 Errors
 
@@ -227,9 +227,8 @@ Unrecognised members **MUST** be ignored rather than rejected.
 **The key forward-compatibility property of this specification is that
 `inputs` is an envelope.** Postern fixes that an agent declares a list of
 typed, labelled, individually-validated inputs. It does not fix *how a given
-agent
-arrives at that list* — whether it exposes one free-text brief, a dozen
-configured fields, or both is the agent's business, and it may change
+agent arrives at that list* — whether it exposes one free-text brief, a
+dozen configured fields, or both is the agent's business, and it may change
 between agent versions without breaking any client. Clients render the
 envelope. This is deliberate, and it is why `run` takes a map rather than a
 positional argument (§4.2).
@@ -405,7 +404,7 @@ A distributor issues each buyer an **entitlement token**.
 
 A runner presents its token as `Authorization: Bearer <token>` on every
 request to a distributor. Tokens are never sent to a client, and never
-appear in an Postern response body.
+appear in a Postern response body.
 
 ### 5.3 The check
 
@@ -592,6 +591,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
 - The `delta` reconstruction rule applies only when a `delta` is emitted, so
   a Level 3 runner that cannot produce incremental text stays conformant by
   emitting none (§4.3).
+- The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
+  mixed-case form (§2).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
