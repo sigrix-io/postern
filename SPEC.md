@@ -316,7 +316,7 @@ payload. Five event types are defined:
 |---|---|---|
 | `start` | `{"run_id": "…"}` | **MUST** be first. |
 | `step` | `{"name": "…", "model_id": "…", "status": "started\|finished", "latency_ms": N}` | **OPTIONAL**, zero or more. |
-| `delta` | `{"text": "…"}` | **OPTIONAL**, zero or more. Incremental output; concatenating every `delta.text` in order **MUST** equal the final `output.value`. |
+| `delta` | `{"text": "…"}` | **OPTIONAL**, zero or more. Incremental output. **If any `delta` is emitted**, concatenating every `delta.text` in order **MUST** equal the final `output.value`; a runner that cannot produce incremental text emits none. |
 | `done` | The full `run` response body (§4.2) | **MUST** be last on success. |
 | `error` | The error body (§2.1) | **MUST** be last on failure. |
 
@@ -589,6 +589,9 @@ and informative for everyone else. Postern is usable with no reference to it.*
   instead of stacking (§5.3, §5.4).
 - `entitlement.checked_at` is now **REQUIRED** in `status` when the
   entitlement state is `active` or `revoked` (§4.4).
+- The `delta` reconstruction rule applies only when a `delta` is emitted, so
+  a Level 3 runner that cannot produce incremental text stays conformant by
+  emitting none (§4.3).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
