@@ -185,7 +185,7 @@ and **MUST** be answerable without credentials and without an entitlement.
   },
   "capabilities": {
     "streaming": true,
-    "tools": ["serper_search", "file_read"],
+    "tools": ["serper_search", "file_read", "file_write"],
     "write_tools": ["file_write"]
   },
   "credentials": [
