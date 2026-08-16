@@ -118,9 +118,11 @@ Every non-2xx response body **MUST** be:
 | `bad_request` | 400 | Malformed body, or an input failed `describe`'s validation. |
 | `not_found` | 404 | No such agent — **or** the caller is not entitled to it (§5.5). |
 | `not_entitled` | 403 | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
+| `withdrawn` | 410 | The caller was entitled, and the agent has since been withdrawn (§5.6). |
 | `missing_credential` | 424 | A credential named by `describe` is absent from the environment. |
 | `agent_error` | 500 | The agent ran and failed. |
-| `unavailable` | 503 | The runner is not ready. |
+| `not_implemented` | 501 | The verb is defined by this specification but sits above the runner's conformance level (§3). Retrying will not help. |
+| `unavailable` | 503 | The runner is not ready. Retrying may help. |
 
 A client **MUST** treat an unrecognised `code` as a generic failure of its
 HTTP status class, and **SHOULD** show `message` to the user. New codes may
@@ -323,9 +325,14 @@ A stream **MUST** end with exactly one `done` or one `error`. A client
 this list grows without a version bump.
 
 A Level 2 runner **MUST** answer `stream` with `501` and code
-`unavailable`, rather than falling back to a single-shot response — a client
-that asked for a stream and silently got one event cannot tell the
+`not_implemented`, rather than falling back to a single-shot response — a
+client that asked for a stream and silently got one event cannot tell the
 difference between "not supported" and "finished instantly".
+
+The code matters as much as the status. A runner's level is a permanent,
+discoverable property (§3), so "this runner will never serve `stream`" is
+not the same answer as "this runner is not ready just now". `unavailable`
+would invite a retry that can never succeed.
 
 ### 4.4 `GET /postern/v0/status`
 
@@ -450,9 +457,9 @@ Authorization: Bearer <token>
 - `200` — the bundle, `application/zip`, conforming to §6. The response
   **SHOULD** carry a `Digest: sha-256=<base64>` header.
 - `404` — no such agent, or not entitled (§5.5).
-- `410` — previously entitled, and the agent has since been withdrawn. The
-  body **SHOULD** carry the date access ends, so a client can say something
-  true about it.
+- `410` with code `withdrawn` — previously entitled, and the agent has since
+  been withdrawn. The body **SHOULD** carry the date access ends, so a client
+  can say something true about it.
 
 A distributor **SHOULD** rate-limit bundle retrieval per token and per
 source address, and **SHOULD** count a rejected request against both buckets
@@ -538,6 +545,10 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 - A client **MUST** tolerate an error `code` it does not recognise, so that
   adding a code stays an additive change (§2.1).
+- Added `not_implemented` (501). A Level 2 runner answers `stream` with it
+  rather than with `unavailable`, which is now 503 only (§2.1, §4.3).
+- Added `withdrawn` (410), so the withdrawn-agent response in §5.6 has a
+  code and can be constructed at all (§2.1, §5.6).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
