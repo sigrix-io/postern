@@ -1,0 +1,9 @@
+# Dependencies for scripts/validate.py. Pinned rather than floating, so a
+# jsonschema release cannot turn a green repository red for reasons unrelated
+# to any change made here, and so CI and your machine run the same validator.
+#
+# Bump it deliberately, in its own pull request, having run the validator.
+#
+# scripts/check_links.py needs nothing from this file — it is standard
+# library only, so a scheduled link check has no supply chain of its own.
+jsonschema==4.26.0

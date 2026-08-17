@@ -1,0 +1,37 @@
+# Runs scripts/check_links.py against the URLs this repository publishes.
+#
+# Kept out of the pull request gate on purpose: the links it checks belong to
+# other people, and their outage is not a reason to block a contributor's
+# change. A failure here is a maintainer's triage task, which is what a
+# scheduled run produces and a required check does not.
+name: links
+
+on:
+  schedule:
+    # Mondays, 07:00 UTC. Link rot is slow, and a daily run would only find
+    # the same breakage six more times before anyone triaged it.
+    #
+    # Two GitHub behaviours worth knowing: scheduled workflows run only from
+    # the default branch, so editing this on a branch changes nothing until
+    # it merges; and GitHub disables them in a repository with no activity
+    # for 60 days, so a quiet period ends with this silently off.
+    - cron: '0 7 * * 1'
+  # So a maintainer can answer "is that link still dead?" without waiting
+  # until Monday.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # No install step: check_links.py is standard library only.
+      - run: python scripts/check_links.py
