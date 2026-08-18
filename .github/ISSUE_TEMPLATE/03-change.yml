@@ -1,0 +1,50 @@
+name: Change
+description: You want Postern to do something it does not.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        The bar rises with how permanent the change is, so the use case comes
+        first: a change is judged by the problem it solves rather than by the
+        shape of the solution.
+  - type: textarea
+    id: use_case
+    attributes:
+      label: What are you trying to build that you cannot?
+      description: >-
+        The concrete thing, not the missing feature. Several rules in this
+        specification cost implementers something on purpose, and knowing what
+        you hit is what separates a rule doing its job from a rule that is wrong.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of change is it?
+      options:
+        - Additive, within one of the four verbs
+        - A fifth verb
+        - Packaging
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you change?
+      description: Optional. An issue that only states the problem is still worth filing.
+    validations:
+      required: false
+  - type: checkboxes
+    id: ceiling
+    attributes:
+      label: If you picked "a fifth verb"
+      description: >-
+        The four-verb ceiling is a governance constraint, not a stage of
+        development, so this reopens a decision rather than requesting a
+        feature — see [VERSIONING.md](https://github.com/sigrix-io/postern/blob/main/VERSIONING.md#the-four-verb-ceiling).
+        Leave both unticked for any other kind of change.
+      options:
+        - label: I have argued above why the capability cannot be expressed within the existing four.
+        - label: I have addressed the permanent maintenance load it adds.

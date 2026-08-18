@@ -1,0 +1,36 @@
+name: Defect
+description: The specification contradicts itself, or requires something impossible.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        A defect is a claim about the document, so it is settled by quoting the
+        document. Both quotes below are what makes this fast to confirm.
+  - type: textarea
+    id: first
+    attributes:
+      label: First location, quoted
+      description: Section or line reference, then the text itself.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: second
+    attributes:
+      label: The location it disagrees with, quoted
+      description: >-
+        If the rule is impossible rather than contradictory, say what makes it
+        impossible here instead.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: consequence
+    attributes:
+      label: What does an implementer get wrong because of this?
+      description: >-
+        A contradiction nobody can act on wrongly is an editorial fix; one that
+        sends two implementations in different directions is not. Which is it?
+    validations:
+      required: true

@@ -1,0 +1,17 @@
+# The four forms alongside this file are the four kinds CONTRIBUTING.md says
+# are triaged differently. A blank issue would let the classification be
+# skipped, which is the thing that does not currently work.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/sigrix-io/postern/security/policy
+    about: >-
+      Do not open a public issue. Email security@sigrix.io — acknowledged
+      within 72 hours. Weaknesses in the specification itself are in scope,
+      not only bugs in something that runs.
+  - name: Raise a code of conduct concern
+    url: https://github.com/sigrix-io/postern/blob/main/CODE_OF_CONDUCT.md
+    about: >-
+      Email conduct@sigrix.io. A different address and a different queue from
+      security reports; neither is a fallback for the other.
