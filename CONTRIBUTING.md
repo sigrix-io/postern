@@ -85,7 +85,7 @@ be linked from here.
   stale is incomplete. Check them before you push:
 
   ```bash
-  pip install jsonschema
+  pip install -r scripts/requirements.txt
   python scripts/validate.py
   ```
 
@@ -101,6 +101,17 @@ be linked from here.
   A JSON block in [SPEC.md](SPEC.md) whose shape it does not recognise is a
   failure rather than a skip. If you add one, give it a mapping or an
   explicit reason to be skipped.
+- **Expect the same check on your pull request.** `validate.py` runs in CI
+  on every pull request, including from forks, against the same pinned
+  `jsonschema` you installed above — so a stale schema is caught whether or
+  not you remembered to run it. It is the only required check, and it needs
+  no secrets, so nothing about your pull request has to be trusted for it to
+  run.
+
+  `scripts/check_links.py`, which checks that the URLs the specification
+  cites still resolve, runs weekly on a schedule instead. Someone else's
+  outage is not a reason to block your change. You can run it locally if you
+  are touching links; it needs no dependencies.
 - **Add an Appendix A entry** for anything normative.
 
 ## Writing style

@@ -1,0 +1,37 @@
+# Runs scripts/validate.py, the check CONTRIBUTING.md asks contributors to
+# run before pushing. Asking is not enforcing: this is what makes the
+# examples and schemas a guarantee rather than a request.
+#
+# Deliberately small. This repository has one validator and no build, and a
+# workflow that grows past what it is checking is a maintenance cost nobody
+# agreed to.
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# `pull_request`, never `pull_request_target`. The former runs the workflow
+# as defined in the pull request's own head commit, with a read-only token
+# and no access to repository secrets — which is the safe shape for a public
+# repository taking pull requests from strangers, and is why this check works
+# unchanged once forking is enabled. It needs no write access and no secrets.
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Pinned in scripts/requirements.txt so this step installs the same
+      # validator a contributor installed locally.
+      - run: pip install -r scripts/requirements.txt
+
+      - run: python scripts/validate.py
