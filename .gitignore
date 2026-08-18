@@ -1,0 +1,13 @@
+# Python bytecode. CONTRIBUTING.md asks every contributor to run
+# scripts/validate.py before pushing, and scripts/check_links.py if they are
+# touching links — so this directory appears during a normal contribution,
+# not only on a maintainer's machine. Without this entry one routine
+# `git add -A` commits build artefacts nobody wants to review.
+__pycache__/
+*.py[cod]
+
+# Installing the pinned jsonschema without touching the system Python means a
+# virtual environment. Nothing here creates one; both conventional names are
+# listed so that whichever a contributor reaches for stays untracked.
+.venv/
+venv/
