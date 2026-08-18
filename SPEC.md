@@ -197,6 +197,17 @@ unentitled, missing credentials, or simply a catalogue entry — can still
 describe itself. This is what lets a client render an agent it cannot yet
 run.
 
+A runner **MUST** answer a verb above its declared level with `501` and code
+`not_implemented` (§2.1), rather than degrading to a lesser behaviour. The
+rule is stated once here rather than restated per verb, so that it holds for
+every verb — including any added later, and including a client that read
+`level` and called above it anyway.
+
+The code matters as much as the status. A runner's level is a permanent,
+discoverable property, so "this runner will never serve this verb" is not
+the same answer as "this runner is not ready just now", and `unavailable`
+would invite a retry that can never succeed.
+
 ---
 
 ## 4. The execution surface
@@ -264,6 +275,14 @@ An ordered array of input declarations. Each **MUST** carry `key`, `label`,
 type outside this set in v0; a client **MUST** treat an unrecognised type as
 `text` rather than failing.
 
+Those three types fix the value space of `run`'s `inputs` map (§4.2) and of
+`default`: `text` and `select` carry a string, `number` carries a number,
+and `null` means no value was supplied. Nothing declarable in v0 produces a
+boolean, and the schemas do not admit one. A fourth type — and the value
+shape it implies — can be added later, which is additive; withdrawing a
+value shape a runner had already relied on would not be, which is why the
+narrower set is the one published first.
+
 `validation` is an open object. Recognised members: `max_length`, `min`,
 `max`, `pattern`, `options` (**REQUIRED** when `type` is `select`).
 Unrecognised members **MUST** be ignored rather than rejected.
@@ -305,7 +324,8 @@ travel, and a bundle carrying one is nonconformant.
 
 ### 4.2 `POST /postern/v0/run`
 
-Executes the agent and returns the final result.
+Executes the agent and returns the final result. A Level 1 runner does not
+implement it, and **MUST** answer `501` with code `not_implemented` (§3).
 
 Request:
 
@@ -323,7 +343,6 @@ Response:
 {
   "postern": "0.1",
   "run_id": "01JD8XW2Q9",
-  "status": "ok",
   "output": {"type": "text", "value": "## Positioning brief…"},
   "usage": {
     "input_tokens": 4210,
@@ -336,6 +355,20 @@ Response:
   }
 }
 ```
+
+The response body carries no `status` field. Every failure routes through
+§2.1's error envelope on a non-2xx status, so a `run` body exists only where
+the run succeeded, and a field whose one legal value is `ok` repeats what
+the status line already said.
+
+It is not withheld as a place to grow one, either. The case such a field
+would be reserved for — a run that finished but returned a partial or
+truncated result — cannot be carried by adding a value to it, because a
+client that does not recognise the new value reads an incomplete result as a
+complete one. A signal a client must not miss cannot ride in a field a
+client is entitled to ignore (see [VERSIONING.md](VERSIONING.md)), so that
+change needs a mechanism of its own whenever it is wanted, and loses nothing
+by not having a placeholder now.
 
 `usage` **SHOULD** be present when the runner can determine it.
 `usage.cost_usd` is the runner's best estimate in US dollars and is
@@ -368,14 +401,9 @@ A stream **MUST** end with exactly one `done` or one `error`. A client
 this list grows without a version bump.
 
 A Level 2 runner **MUST** answer `stream` with `501` and code
-`not_implemented`, rather than falling back to a single-shot response — a
-client that asked for a stream and silently got one event cannot tell the
+`not_implemented` (§3), rather than falling back to a single-shot response —
+a client that asked for a stream and silently got one event cannot tell the
 difference between "not supported" and "finished instantly".
-
-The code matters as much as the status. A runner's level is a permanent,
-discoverable property (§3), so "this runner will never serve `stream`" is
-not the same answer as "this runner is not ready just now". `unavailable`
-would invite a retry that can never succeed.
 
 ### 4.4 `GET /postern/v0/status`
 
@@ -664,6 +692,20 @@ and informative for everyone else. Postern is usable with no reference to it.*
 - The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
   mixed-case form (§2).
 - Removed `verification` from the `org.sigrix` member list (§8).
+- A runner answers *any* verb above its declared level with `501` and
+  `not_implemented`. The rule was previously stated only for a Level 2
+  runner asked to `stream`, leaving a Level 1 runner asked to `run` with no
+  defined answer; it now sits in §3, so it also covers any level added later
+  (§3, §4.2, §4.3).
+- Narrowed input values to what the three declared types can produce.
+  `run`'s `inputs` map and an input's `default` no longer admit a boolean,
+  which none of `text`, `number` or `select` yields. Adding a fourth type
+  later is additive; withdrawing a value shape a runner had relied on would
+  not be (§4.1.1).
+- Removed `status` from the `run` response. Its only legal value was `ok`,
+  because §2.1 routes every failure through a non-2xx error envelope, and
+  the partial-result case it might have grown into cannot be carried by a
+  value an older client would read as a complete result (§4.2).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

@@ -145,6 +145,23 @@ MUST_REJECT = [
         },
     ),
     (
+        "describe.schema.json",
+        "a boolean default, which no declared input type can produce",
+        {
+            "postern": "0.1",
+            "agent": _AGENT,
+            "inputs": [
+                {"key": "d", "label": "D", "type": "text", "required": False,
+                 "default": True}
+            ],
+        },
+    ),
+    (
+        "run-request.schema.json",
+        "a boolean input value, which no declared input type can produce",
+        {"inputs": {"agree": True}},
+    ),
+    (
         "status.schema.json",
         "an active entitlement with no declared staleness bound",
         {"postern": "0.1", "level": 3, "state": "ready", "entitlement": {"state": "active"}},
