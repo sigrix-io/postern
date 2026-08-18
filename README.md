@@ -47,7 +47,7 @@ Postern adds no files to that layout.
 
 It also does not define tool calling (use
 [MCP](https://modelcontextprotocol.io)), model APIs, agent frameworks,
-orchestration, or hosting.
+orchestration between agents, or hosting.
 
 **Four verbs is a ceiling, not a starting point.** A protocol that can be
 kept compatible by a small team beats a complete one that cannot. See
