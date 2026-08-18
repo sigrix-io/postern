@@ -1,0 +1,42 @@
+name: I depend on this
+description: You are building on 0.x. Not a defect, and very welcome anyway.
+labels: ["dependent"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Nothing is stable before 1.0, so knowing who is out there is the only
+        thing that lets us avoid breaking you silently. See
+        [VERSIONING.md](https://github.com/sigrix-io/postern/blob/main/VERSIONING.md).
+  - type: input
+    id: what
+    attributes:
+      label: What are you building?
+      description: A client, a runner, a distributor, something else. A link if it is public.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Which version are you on?
+      placeholder: "0.1"
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: How do we reach you before a break?
+      description: >-
+        Whatever you will actually read. Watching this repository works too —
+        say so and leave this as "watching".
+    validations:
+      required: true
+  - type: textarea
+    id: surface
+    attributes:
+      label: Which parts do you rely on?
+      description: >-
+        Optional, and the most useful field here. A verb, a field, a rule you
+        have written code against. It tells us what is expensive to change.
+    validations:
+      required: false

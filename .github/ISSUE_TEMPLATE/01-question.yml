@@ -1,0 +1,35 @@
+name: Question
+description: Something in the specification is unclear.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Ambiguity found by a reader is ambiguity found before it is baked into
+        implementations, which is why these are the most useful reports we get.
+  - type: input
+    id: section
+    attributes:
+      label: Which section
+      description: A section number is enough. A line number is better.
+      placeholder: "§5.4, or SPEC.md:413"
+    validations:
+      required: true
+  - type: textarea
+    id: readings
+    attributes:
+      label: What are the two readings?
+      description: >-
+        Two implementers could read this text and build different things. Say
+        what those things are. If you have only one reading and it looks wrong,
+        that is a defect rather than a question — the defect form fits better.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: What were you trying to build when you hit it?
+      description: >-
+        Optional, and usually the part that tells us which reading has to win.
+    validations:
+      required: false

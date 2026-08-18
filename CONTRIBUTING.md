@@ -42,18 +42,26 @@ faithfully.
 
 ## Before opening an issue
 
-State which of these you are filing, because they are triaged differently:
+The tracker has a form for each of four kinds, because they are triaged
+differently. Pick the one that fits and the form will ask for what that kind
+needs; this section is why the four are separate.
 
 - **A question.** Something in the specification is unclear. These are the
   most useful reports we get: ambiguity found by a reader is ambiguity
   found before it is baked into implementations.
 - **A defect.** The specification is internally inconsistent, or requires
-  something impossible, or two sections disagree. Quote both places.
+  something impossible, or two sections disagree.
 - **A change.** You want Postern to do something it does not. Read the two
   sections below first.
 - **"I depend on this."** Not a defect, and very welcome anyway. Knowing who
   is building on `0.x` is what lets us avoid breaking you silently. See
   [VERSIONING.md](VERSIONING.md).
+
+There is no blank issue, and that is not a filter — every one of the four is
+welcome. It is that "which of these is it" is the question the queue is
+sorted by, and asking it on the way in costs you one click and saves a round
+trip. A report that fits none of them is a question; file it as one and say
+so.
 
 ## Proposing a change
 
@@ -82,6 +90,10 @@ or call it. Publish your SDK under your own name and open an issue so it can
 be linked from here.
 
 ## Pull requests
+
+The pull request template carries these four as a checklist, so they are in
+front of you while you write the description rather than in a file you read
+once. Here is why each is asked for.
 
 - **One change per pull request.** A normative change bundled with typo
   fixes is hard to review and harder to revert.
