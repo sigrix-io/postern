@@ -19,7 +19,10 @@ schedule and a failure is a maintainer's triage task rather than a red mark
 on an innocent change. It uses the standard library only, so the scheduled
 job has no supply chain of its own.
 
-Exit status is 0 when every URL resolves, 1 otherwise.
+Exit status is 0 when every URL resolves, 1 otherwise. A URL whose host
+answers but refuses this client — a 401 or 403, which is what bot protection
+looks like from a script — is reported as `warn` and does not fail the run:
+that answers "who is asking", not "does this still exist".
 """
 
 from __future__ import annotations
@@ -122,20 +125,36 @@ def _note(citations: list[str]) -> str:
     return ""
 
 
-def _check(url: str) -> str | None:
-    """Return None when the URL resolves, or the reason it did not."""
+def _check(url: str) -> tuple[str, str]:
+    """Classify a URL as "ok", "warn" or "fail", with a reason for the last two.
+
+    The question this script asks is whether a URL still exists, and only
+    some failures answer it. A 404 says the path is gone; a refused
+    connection says the host is. A 401 or 403 says neither — the server
+    resolved the path and declined to serve *this* client, which is what bot
+    protection looks like from a script and what a human following the link
+    never sees. Failing on that produces a job that is red every week for a
+    working link, and a job that cries wolf gets ignored when it is right.
+    """
     # HEAD is cheap and enough for most hosts. A few reject it outright or
     # mishandle it, so anything that looks like a refusal of the method
     # rather than of the URL is retried as a GET before it is believed.
     status, detail = _reach(url, "HEAD")
-    if status is None or status in (403, 405, 501) or status >= 500:
+    if status is None or status in (401, 403, 405, 501) or status >= 500:
         status, detail = _reach(url, "GET")
 
     if status is None:
-        return detail
+        return "fail", detail
     if 200 <= status < 400:
-        return None
-    return f"HTTP {status}" + (f" {detail}" if detail else "")
+        return "ok", ""
+
+    described = f"HTTP {status}" + (f" {detail}" if detail else "")
+    if status in (401, 403):
+        return "warn", (
+            f"{described} — the host answered and refused this client rather "
+            f"than the URL, which is usually bot protection. Not read as rot."
+        )
+    return "fail", described
 
 
 def main() -> int:
@@ -147,17 +166,19 @@ def main() -> int:
             print(f"skip  {url} — reserved for documentation ({where})")
             continue
 
-        reason = _check(url)
-        if reason:
+        state, reason = _check(url)
+        if state == "ok":
+            print(f"ok    {url}")
+            continue
+
+        print(f"{'FAIL' if state == 'fail' else 'warn'}  {url}")
+        print(f"        {reason}")
+        print(f"        cited in {where}")
+        if state == "fail":
             failed = True
-            print(f"FAIL  {url}")
-            print(f"        {reason}")
-            print(f"        cited in {where}")
             note = _note(citations)
             if note:
                 print(f"        {note}")
-        else:
-            print(f"ok    {url}")
 
     return 1 if failed else 0
 
