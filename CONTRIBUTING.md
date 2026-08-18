@@ -114,8 +114,9 @@ once. Here is why each is asked for.
   asserts that the rules which cost implementers something still fail when
   they are broken: `select` needing `options`, a credential never carrying a
   value, an `active` entitlement needing a declared staleness bound, the
-  closed error-code set, and — because JSON Schema cannot express a subset
-  relation between sibling arrays — `write_tools` being a subset of `tools`.
+  closed error-code set, the closed error-envelope root, and — because JSON
+  Schema cannot express a subset relation between sibling arrays —
+  `write_tools` being a subset of `tools`.
 
   A JSON block in [SPEC.md](SPEC.md) whose shape it does not recognise is a
   failure rather than a skip. If you add one, give it a mapping or an

@@ -145,6 +145,24 @@ The schema in [`schemas/`](schemas) enumerates the codes a conforming
 implementation *emits*, which is a narrower question than the set a client
 **MUST** accept.
 
+Nothing sits beside `error`. The envelope's root has exactly one member, and
+a conforming implementation **MUST NOT** emit a sibling for it —
+[`error.schema.json`](schemas/error.schema.json) is closed at the root, and
+it is the only schema here that is.
+
+The reason is one extension point rather than two, and it withholds nothing:
+`error` is open and `detail` takes arbitrary structure, so anything an
+implementation wants to attach to a failure still has somewhere to go. What
+the closed root buys is that the whole failure is under one key, and that
+every future addition to this envelope lands inside `error`, where unknown
+members are already ignored rather than rejected. That is also why closing
+it costs no forward compatibility — there is no top-level addition to block,
+because there is nowhere a top-level addition would need to go.
+
+Like the code enum, the closed root constrains writing rather than reading.
+A client that receives a sibling of `error` **MUST NOT** reject the response
+for it. Emit the shape exactly; accept more than the shape.
+
 ### 2.2 One agent per runner
 
 A runner **MUST** serve exactly one agent. None of `describe`, `run`,
@@ -516,8 +534,22 @@ Authorization: Bearer <token>
   **SHOULD** carry a `Digest: sha-256=<base64>` header.
 - `404` — no such agent, or not entitled (§5.5).
 - `410` with code `withdrawn` — previously entitled, and the agent has since
-  been withdrawn. The body **SHOULD** carry the date access ends, so a client
-  can say something true about it.
+  been withdrawn. The body **SHOULD** carry the date access ends as
+  `error.detail.access_ends_at`, an RFC 3339 timestamp, so a client can say
+  something true about it. The envelope's root is closed (§2.1), so it rides
+  inside `detail` rather than beside `error`.
+
+A withdrawal answer in full:
+
+```json
+{
+  "error": {
+    "code": "withdrawn",
+    "message": "This agent was withdrawn. Your access ends on 2027-08-15.",
+    "detail": {"access_ends_at": "2027-08-15T00:00:00Z"}
+  }
+}
+```
 
 A distributor **SHOULD** rate-limit bundle retrieval per token and per
 source address, and **SHOULD** count a rejected request against both buckets
@@ -621,6 +653,14 @@ and informative for everyone else. Postern is usable with no reference to it.*
   "no such agent" meaning is distributor-side only; on a runner the code can
   only mean an unimplemented path. Each code in the §2.1 table now says
   which side emits it (§2.1, §2.2).
+- The error envelope's root is closed by design — nothing sits beside
+  `error`, so the envelope has one extension point rather than two. The
+  schema already asserted this; §2.1 now states it, with the reason and with
+  the fact that it constrains what an implementation emits rather than
+  licensing a client to reject what it receives (§2.1).
+- The §5.6 `410` body carries the date access ends as
+  `error.detail.access_ends_at`. The closed root leaves `detail` as the only
+  place it can go, and the specification previously left it unplaced (§5.6).
 - The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
   mixed-case form (§2).
 - Removed `verification` from the `org.sigrix` member list (§8).
