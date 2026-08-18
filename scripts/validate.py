@@ -159,6 +159,11 @@ MUST_REJECT = [
         "an error code outside the defined set",
         {"error": {"code": "teapot", "message": "x"}},
     ),
+    (
+        "error.schema.json",
+        "anything riding beside error in the envelope root",
+        {"error": {"code": "agent_error", "message": "x"}, "partial_output": "..."},
+    ),
 ]
 
 # The invariants above are code rather than schema, so they need pinning of
