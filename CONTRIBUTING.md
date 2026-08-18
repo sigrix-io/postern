@@ -24,14 +24,21 @@ tell us what we got wrong.
 
 ## Reporting a security issue
 
-**Do not open a public issue.** Email **security@sigrix.io** with enough
-detail to reproduce. You will get an acknowledgement within 72 hours and an
-assessment as soon as we have one.
+**Do not open a public issue.** Email **security@sigrix.io**, and expect an
+acknowledgement within 72 hours.
 
-This applies to weaknesses in the specification itself — an entitlement flow
-that can be bypassed, a rule that leaks catalogue contents, a token
-handling requirement that is unsafe as written — not only to
-implementations.
+[SECURITY.md](SECURITY.md) is the full policy: what is in scope, what is
+not, which versions are supported, and what happens after you send it. It
+lives in its own file because that is where GitHub points a reporter looking
+for one, and a reporter who cannot find the private route uses the public
+one.
+
+The part worth repeating here: weaknesses in the *specification* are in
+scope, not only bugs in something that runs. An entitlement flow that can be
+bypassed, a rule that leaks catalogue contents, a token handling requirement
+that is unsafe as written — those are the reports that matter most, because
+they are inherited by every implementation that follows the document
+faithfully.
 
 ## Before opening an issue
 
@@ -127,6 +134,15 @@ The specification is meant to be read by someone implementing it at 2am.
   is not is a rule people quietly skip.
 - Prefer a worked example to a paragraph.
 - Present tense, active voice, no future promises.
+
+## Code of conduct
+
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — the Contributor Covenant — applies
+to every space this project uses.
+
+Report conduct concerns to **conduct@sigrix.io**. That is a different address
+from security reports and a different queue; neither is a fallback for the
+other.
 
 ## License
 
