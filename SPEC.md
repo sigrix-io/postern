@@ -113,16 +113,29 @@ Every non-2xx response body **MUST** be:
 `code` is a stable machine-readable token; `message` is human-readable and
 **SHOULD** be safe to show a user verbatim. Defined codes:
 
-| Code | HTTP | Meaning |
-|---|---|---|
-| `bad_request` | 400 | Malformed body, or an input failed `describe`'s validation. |
-| `not_found` | 404 | No such agent — **or** the caller is not entitled to it (§5.5). |
-| `not_entitled` | 403 | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
-| `withdrawn` | 410 | The caller was entitled, and the agent has since been withdrawn (§5.6). |
-| `missing_credential` | 424 | A credential named by `describe` is absent from the environment. |
-| `agent_error` | 500 | The agent ran and failed. |
-| `not_implemented` | 501 | The verb is defined by this specification but sits above the runner's conformance level (§3). Retrying will not help. |
-| `unavailable` | 503 | The runner is not ready. Retrying may help. |
+| Code | HTTP | Side | Meaning |
+|---|---|---|---|
+| `bad_request` | 400 | R · D | Malformed request — a bad body, or an input that failed `describe`'s validation. |
+| `not_found` | 404 | R · D | No such agent — **or** the caller is not entitled to it (§5.5). The one code that means different things on each side; see below. |
+| `not_entitled` | 403 | R | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
+| `withdrawn` | 410 | D | The caller was entitled, and the agent has since been withdrawn (§5.6). |
+| `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment. |
+| `agent_error` | 500 | R | The agent ran and failed. |
+| `not_implemented` | 501 | R | The verb is defined by this specification but sits above the runner's conformance level (§3). Retrying will not help. |
+| `unavailable` | 503 | R · D | The runner or distributor is not ready. Retrying may help. |
+
+**Side** says which half of the protocol emits a code: `R` for a runner
+(§4), `D` for a distributor (§5). A code marked for one side only is not
+merely unusual on the other — it is unconstructible there, and a client
+receiving it has been told something about the responder rather than about
+the request.
+
+`not_found` is the exception, because the two sides have different things to
+miss. A distributor emits it for an agent that is absent from the caller's
+catalogue *or* present and not entitled — the two are deliberately
+indistinguishable (§5.5). A runner has no agent identifier to miss (§2.2),
+so its only use of `404` is a path it does not implement, which says nothing
+about the agent it serves.
 
 A client **MUST** treat an unrecognised `code` as a generic failure of its
 HTTP status class, and **SHOULD** show `message` to the user. New codes may
@@ -131,6 +144,19 @@ recognise converts that addition into a breaking change for its own users.
 The schema in [`schemas/`](schemas) enumerates the codes a conforming
 implementation *emits*, which is a narrower question than the set a client
 **MUST** accept.
+
+### 2.2 One agent per runner
+
+A runner **MUST** serve exactly one agent. None of `describe`, `run`,
+`stream` or `status` carries an agent identifier, so a client **MAY** treat
+a runner's port as that agent's address. Only the distributor paths in §5
+take an `{agent_id}`, because a distributor answers for a catalogue while a
+runner only ever answers for itself.
+
+Serving several agents means running several runners. A client that wants a
+catalogue holds a list of ports; a client that wants two agents to work
+together calls both. Composition is the client's — the addressing form of
+the orchestration non-goal in §1.2.
 
 ---
 
@@ -590,6 +616,11 @@ and informative for everyone else. Postern is usable with no reference to it.*
 - The `delta` reconstruction rule applies only when a `delta` is emitted, so
   a Level 3 runner that cannot produce incremental text stays conformant by
   emitting none (§4.3).
+- A runner serves exactly one agent, stated normatively rather than left to
+  be inferred from the absence of an identifier in its paths. `not_found`'s
+  "no such agent" meaning is distributor-side only; on a runner the code can
+  only mean an unimplemented path. Each code in the §2.1 table now says
+  which side emits it (§2.1, §2.2).
 - The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
   mixed-case form (§2).
 - Removed `verification` from the `org.sigrix` member list (§8).
