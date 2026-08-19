@@ -1,0 +1,7 @@
+{
+  "postern": "0.1",
+  "state": "active",
+  "agent_id": "acme/market-research-crew",
+  "checked_at": "2026-08-15T09:14:02Z",
+  "stale_after_seconds": 60
+}

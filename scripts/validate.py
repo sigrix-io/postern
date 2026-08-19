@@ -16,8 +16,8 @@ Four things are checked, because four different kinds of edit go wrong:
    drift apart silently, and they drift in the direction nobody looks.
 3. Rules that cost an implementer something, and rules JSON Schema cannot
    express at all, are pinned by payloads that MUST fail.
-4. The agent identifier grammar (SPEC.md section 1.5) is written out in three
-   places, so those three are asserted to be one string.
+4. The agent identifier grammar (SPEC.md section 1.5) is written out in
+   SPEC.md and in three schemas, so all four are asserted to be one string.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -56,6 +56,14 @@ PAIRS = [
     # exists to keep.
     ("error.schema.json", "error-withdrawn.json"),
     ("error.schema.json", "error-not-found.json"),
+    # Both entitlement states rather than only `active`. They differ by one
+    # value and validate identically, which is the point: §4.4 and §5.4 require
+    # `checked_at` and `stale_after_seconds` of a `revoked` answer too, and an
+    # implementer who has only ever seen the `active` example is the one who
+    # ships a bare {"state": "revoked"} and leaves a runner no deadline at
+    # which to ask again.
+    ("entitlement.schema.json", "entitlement.json"),
+    ("entitlement.schema.json", "entitlement-revoked.json"),
 ]
 
 FENCE = re.compile(r"^```json\n(.*?)^```", re.MULTILINE | re.DOTALL)
@@ -91,7 +99,7 @@ def _classify(document: object) -> tuple[str | None, str | None]:
     if "agent-plugins.org" in str(document.get("$schema", "")):
         return None, "§6 plugin.json — Agent Plugins owns this schema, not Postern"
     if "state" in document and "agent_id" in document:
-        return None, "§5.3 entitlement check — no schema until #22 lands"
+        return "entitlement.schema.json", None
     return None, None
 
 
@@ -137,6 +145,26 @@ INVARIANTS = {
 # id in the stub would be a second reason in all of them.
 _AGENT = {"id": "acme/a", "name": "A", "version": "1"}
 _CHECKED_AT = "2026-08-15T09:14:02Z"
+_ENTITLEMENT = {
+    "postern": "0.1",
+    "state": "active",
+    "agent_id": "acme/market-research-crew",
+    "checked_at": _CHECKED_AT,
+    "stale_after_seconds": 60,
+}
+
+
+def _without(member: str) -> dict:
+    """The §5.3 answer missing exactly one of its required members.
+
+    Written as a subtraction rather than five literals so that "omits exactly
+    one" holds by construction: a pin that fails for two reasons stops
+    guarding the rule it names, and the entitlement pins are where that is
+    easiest to do by accident.
+    """
+    return {key: value for key, value in _ENTITLEMENT.items() if key != member}
+
+
 MUST_REJECT = [
     (
         "describe.schema.json",
@@ -226,6 +254,40 @@ MUST_REJECT = [
         {"postern": "0.1", "level": 3, "state": "ready",
          "entitlement": {"state": "revoked", "checked_at": _CHECKED_AT}},
     ),
+    # Every member of the §5.3 answer is required, and each absence costs a
+    # runner something it cannot recover: the version it is talking to, the
+    # question that was answered, the anchor for §5.4's deadline, or the
+    # deadline itself.
+    (
+        "entitlement.schema.json",
+        "an entitlement answer with no version marker",
+        _without("postern"),
+    ),
+    (
+        "entitlement.schema.json",
+        "an entitlement answer with no agent_id to match against the request",
+        _without("agent_id"),
+    ),
+    (
+        "entitlement.schema.json",
+        "an entitlement answer with no timestamp to re-check from",
+        _without("checked_at"),
+    ),
+    (
+        "entitlement.schema.json",
+        "an entitlement answer with no deadline to re-check after",
+        _without("stale_after_seconds"),
+    ),
+    (
+        "entitlement.schema.json",
+        "an entitlement answer in a state only a runner reports",
+        {**_ENTITLEMENT, "state": "unknown"},
+    ),
+    (
+        "entitlement.schema.json",
+        "an entitlement answer whose agent_id is percent-encoded",
+        {**_ENTITLEMENT, "agent_id": "acme%2Fmarket-research-crew"},
+    ),
     (
         "error.schema.json",
         "an error code outside the defined set",
@@ -255,20 +317,29 @@ INVARIANT_MUST_FLAG = [
 ]
 
 
+# Where each schema keeps the agent identifier. Two shapes, one grammar.
+_IDENTIFIER_POINTERS = {
+    "describe.schema.json": ("agent", "id"),
+    "status.schema.json": ("agent", "id"),
+    "entitlement.schema.json": ("agent_id",),
+}
+
+
 def _identifier_pattern() -> bool:
     """SPEC.md §1.5 publishes the agent identifier grammar as a regular
-    expression, and two schemas carry it as a `pattern`. Three copies of one
-    rule is three places to edit and two chances to forget, and the symptom of
+    expression, and three schemas carry it as a `pattern`. Four copies of one
+    rule is four places to edit and three chances to forget, and the symptom of
     forgetting is the one §1.5 exists to prevent: two implementations that
     disagree about which strings are identifiers.
 
     Returns True when they disagree, so callers can accumulate.
     """
-    carried = {
-        name: (_load("schemas", name)["properties"]["agent"]["properties"]["id"]
-               .get("pattern"))
-        for name in ("describe.schema.json", "status.schema.json")
-    }
+    carried = {}
+    for name, pointer in _IDENTIFIER_POINTERS.items():
+        node = _load("schemas", name)
+        for step in pointer:
+            node = node["properties"][step]
+        carried[name] = node.get("pattern")
     if len(set(carried.values())) != 1:
         print("FAIL  the schemas do not carry one agent id pattern")
         for name, pattern in sorted(carried.items()):
@@ -281,7 +352,7 @@ def _identifier_pattern() -> bool:
         print(f"        {pattern}")
         return True
 
-    print("ok    SPEC.md and both schemas carry one agent id pattern")
+    print("ok    SPEC.md and all three schemas carry one agent id pattern")
     return False
 
 

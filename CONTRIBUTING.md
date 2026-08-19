@@ -118,8 +118,8 @@ once. Here is why each is asked for.
   closed error-code set, the closed error-envelope root, and — because JSON
   Schema cannot express a subset relation between sibling arrays —
   `write_tools` being a subset of `tools`. Last, it asserts that the agent
-  identifier grammar is one string in the three places that write it out:
-  [SPEC.md](SPEC.md) §1.5 and the `pattern` in two schemas.
+  identifier grammar is one string in the four places that write it out:
+  [SPEC.md](SPEC.md) §1.5 and the `pattern` in three schemas.
 
   A JSON block in [SPEC.md](SPEC.md) whose shape it does not recognise is a
   failure rather than a skip. If you add one, give it a mapping or an
