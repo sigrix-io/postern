@@ -121,6 +121,47 @@ optional `describe` fields, new `stream` event types, new `validation`
 members. That is where the growth is supposed to go, and the
 ignore-unknown-members rule above is what keeps it cheap.
 
+## The name
+
+`Postern` is not only what this repository is called. It is in the path
+prefix every request carries (`/postern/v0/`), in the `postern` field of
+every payload, and in the schema `$id` base — so it is load-bearing in the
+wire format, and renaming it would break every conforming implementation at
+once. It belongs here for the same reason the ceiling above does: it is
+permanent, and the argument for it should outlive whoever made it.
+
+**The descriptive name was already taken, in an adjacent area.** This first
+drafted as "AEP — the Agent Execution Protocol", which is the obvious name
+and the wrong one. `draft-sato-soos-aep`, *"The Agent Execution Protocol
+(AEP) for Agentic AI Systems"*, is an active IETF draft specifying a
+governance loop — SENSE, REASON, PLAN, ACT, OBSERVE — with authorization
+boundaries and policy-driven approval at execution time. AceTeam publishes
+an "Agentic Execution Protocol" under the same three letters. A third AEP
+that also touches authorization would be permanently second in search for
+its own name, and genuinely confusable with a governance specification that
+is not this one.
+
+**A ninth acronym would be camouflage.** The surrounding landscape already
+carries MCP, A2A, ACP, ANP, AP2, UCP, OASF and KYA-OS. MCP won on being
+early and well-backed rather than on its name; a new three-letter
+descriptive acronym in that field is invisible.
+
+**The infrastructure names that stick are concrete object nouns** carrying a
+descriptive tagline for the search terms — Vault, Consul, Nomad, Boundary,
+Waypoint, Sigstore. Postern follows that pattern, and the tagline is the
+subtitle on the README. A postern is the small gate in a fortification
+through which authorised people pass: present proof, pass through, then run.
+Collisions are limited to a dormant API-mocking tool.
+
+Animal names were considered and rejected on availability — Pangolin already
+names three significant projects, Kestrel is ASP.NET Core's web server,
+Marten a .NET document database, and Tapir a Scala HTTP-endpoint library,
+which would have collided thematically as well as by name.
+
+A proposal to rename this to something more descriptive is welcome to argue
+its case. It should start from the above rather than from the premise that
+nobody considered it.
+
 ## Deprecation
 
 A deprecated element is marked in the specification, kept working for at
