@@ -116,7 +116,7 @@ Every non-2xx response body **MUST** be:
 | Code | HTTP | Side | Meaning |
 |---|---|---|---|
 | `bad_request` | 400 | R · D | Malformed request — a bad body, or an input that failed `describe`'s validation. |
-| `not_found` | 404 | R · D | No such agent — **or** the caller is not entitled to it (§5.5). The one code that means different things on each side; see below. |
+| `not_found` | 404 | R · D | No such agent — **or** the caller is not entitled to it, **or** the token does not resolve (§5.5). The one code that means different things on each side; see below. |
 | `not_entitled` | 403 | R | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
 | `withdrawn` | 410 | D | The caller was entitled, and the agent has since been withdrawn (§5.6). |
 | `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment. |
@@ -499,6 +499,10 @@ to a buyer and answer only for that buyer; there **MUST NOT** be a
 parameter, header or path segment by which a caller can widen the answer
 beyond the buyer the token identifies.
 
+A token that does not resolve — unknown, revoked, or superseded by rotation
+— is answered under §5.5 rather than distinguished. There is no third state
+here: a check either answers for a buyer or answers `404`.
+
 A distributor **MAY** serve this from a cache, and **MUST** declare the
 cache bound as `stale_after_seconds`.
 
@@ -547,6 +551,26 @@ identifier space that turns the entitlement endpoint into an enumeration
 oracle for the distributor's private catalogue. The cost of this rule is a
 worse error message for a legitimate caller who mistyped an id; that is the
 right trade.
+
+**The same holds for the token.** A distributor **MUST NOT** distinguish an
+unknown, revoked, or superseded token from a valid one presented for an
+agent its buyer is not entitled to. Both answer `404` with `not_found`. The
+enumeration argument applies to tokens exactly as it applies to agents: a
+caller who can tell "this token is dead" from "you may not have this agent"
+can sort guesses into two piles, and two piles is all an enumeration needs.
+
+**Postern defines no `401`.** No status in this specification means
+"authenticate and try again", because saying that is itself an answer — it
+confirms the token was once real. §7's requirement that a rotated token's
+predecessor stop resolving is discharged here: it stops resolving by
+answering `404`, on the next request, like a token that never existed.
+
+This costs a legitimate caller the same way the agent rule does. A runner
+holding a malformed or long-revoked token is told `404` for as long as it
+keeps asking, with nothing in the protocol to say that a new token is the
+remedy. Telling a buyer their token needs replacing is the distributor's
+job, out of band, where it can be done to a buyer rather than to anyone
+holding a guess.
 
 The local runner reporting its *own* state to its *own* client is the one
 place `not_entitled` (403) is correct — there is nothing to enumerate.
@@ -638,7 +662,9 @@ Two distributors' namespaces coexisting in one bundle is valid.
 - **Token rotation invalidates immediately.** A rotated token's predecessor
   **MUST** stop resolving on the next request, not at the end of a cache
   window. Revocation of *entitlement* may lag (§5.4); revocation of a
-  *token* may not.
+  *token* may not. Stopping means answering `404` with `not_found`,
+  indistinguishably from a token that never existed (§5.5) — there is no
+  `401` to fall back on.
 
 ---
 
@@ -660,6 +686,13 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before first publication.
 
+- §5.5's indistinguishability rule covers token state, not only agents. An
+  unknown, revoked, or superseded token answers `404` with `not_found`, the
+  same as a valid token presented for an agent the buyer may not have, and
+  Postern defines no `401` — a status meaning "authenticate and try again"
+  would confirm the token was once real. §5.3's success rule gains the
+  failure branch it presupposed, and §7's "stop resolving" now names the
+  answer it stops with (§2.1, §5.3, §5.5, §7).
 - A client **MUST** tolerate an error `code` it does not recognise, so that
   adding a code stays an additive change (§2.1).
 - Added `not_implemented` (501). A Level 2 runner answers `stream` with it

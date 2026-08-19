@@ -45,12 +45,15 @@ PAIRS = [
     ("run-response.schema.json", "run-response.json"),
     ("status.schema.json", "status.json"),
     ("error.schema.json", "error.json"),
-    # Two error examples rather than one. The envelope is the same, but the
-    # 410 withdrawal is the only defined response that carries a member
-    # under `detail` (§5.6's `access_ends_at`), and a schema pair is what
-    # keeps a payload the specification describes in prose from being one
-    # nobody ever built.
+    # Three error examples rather than one. The envelope is identical in each;
+    # what differs is `detail`, and that is the part prose alone leaves
+    # untested — a runner-side member (§4.1.3's env), a distributor-side one
+    # (§5.6's access_ends_at), and, for §5.5's 404, nothing at all. The last
+    # is the load-bearing one: a detail saying which of "no such agent", "not
+    # entitled" and "dead token" applied would undo the rule the response
+    # exists to keep.
     ("error.schema.json", "error-withdrawn.json"),
+    ("error.schema.json", "error-not-found.json"),
 ]
 
 FENCE = re.compile(r"^```json\n(.*?)^```", re.MULTILINE | re.DOTALL)

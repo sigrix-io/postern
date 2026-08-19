@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "not_found",
+    "message": "This agent is not available to you. It may not exist, or your token may not grant access to it.",
+    "detail": null
+  }
+}
