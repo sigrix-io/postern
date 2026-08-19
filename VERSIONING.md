@@ -107,11 +107,6 @@ broken specification rather than an unhosted one. Serving these files at
 that base is therefore a maintenance obligation, and
 [`scripts/check_links.py`](scripts/check_links.py) checks it weekly.
 
-> **Not true yet.** The files are not served at that base as this is written.
-> Serving them is a prerequisite for making the repository public, because a
-> published `$id` cannot move afterwards. Until then the weekly link job is
-> red on these URLs, on purpose and with a note saying so.
-
 ## The four-verb ceiling
 
 `describe`, `run`, `stream`, `status`. **This number is a governance
