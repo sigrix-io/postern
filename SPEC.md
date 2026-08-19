@@ -77,6 +77,85 @@ Three roles appear throughout:
   entitlement checks and serves agent bundles. A marketplace, typically.
   A runner with no distributor is valid; see §5.1.
 
+### 1.5 Agent identifiers
+
+An **agent identifier** names one agent. The same identifier appears as
+`agent.id` in `describe` (§4.1) and `status` (§4.4), as `agent_id` in an
+entitlement answer (§5.3), and as the path addressing an agent on a
+distributor (§5.3, §5.6). One agent, one identifier, spelled one way in all
+four places.
+
+```abnf
+agent-id = part "/" part
+part     = alnum [ *( alnum / "-" / "." ) alnum ]
+alnum    = %x30-39 / %x61-7A   ; 0-9 a-z
+```
+
+The same grammar, as the regular expression the schemas carry:
+
+```
+^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$
+```
+
+An identifier **MUST** match it and **MUST NOT** exceed 128 characters.
+`acme/market-research-crew`, used throughout this document, is valid under
+it.
+
+The owner part is what makes a name unique within a distributor without
+having to be unique in the world. An identifier is unique within one
+distributor; two distributors **MAY** issue the same identifier for
+different agents, and an agent with no distributor (§5.1) still has one,
+which is not required to be unique anywhere.
+
+**Comparison is octet-for-octet**, once the grammar has been checked. There
+is no case folding, because the grammar admits no uppercase. There is no
+Unicode normalisation, because it admits nothing outside ASCII. There is no
+collapsing of repeated separators, and no equivalence between `-` and `.`.
+An implementation **MUST NOT** normalise a string into validity: `Acme/x` is
+not another spelling of `acme/x`, and `acme/x ` is not `acme/x`. A string
+either matches or is not an identifier at all.
+
+Each exclusion removes a rule that two implementations could apply
+differently, and an identifier that compares differently on two
+implementations is an entitlement check that silently answers the wrong
+question:
+
+- **Uppercase**, because admitting it forces a case-folding rule at every
+  comparison, in a comparison that decides whether a purchase is honoured.
+- **`_`**, because the registries that admit both `_` and `-` fold one into
+  the other, and a fold is the thing this grammar exists to avoid.
+- **Everything outside ASCII**, because it brings normalisation forms and
+  confusable characters with it.
+
+A leading or trailing `-` or `.` is excluded by the grammar rather than by a
+rule beside it, which is also what stops a part being `.` or `..` — the two
+strings a URL path resolves away before a server sees them.
+
+One length bound rather than two. A per-part bound would have to be written
+here *and* expressed in the schema pattern, and a rule written twice is a
+rule that can disagree with itself. 128 characters is the ceiling a
+distributor is entitled to reject above, before an identifier reaches a
+lookup or a storage layer.
+
+Every character the grammar admits is unreserved in a URL path
+([RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-2.3)) except the
+`/`, which is the separator it looks like. An identifier therefore appears
+in a path exactly as it is written, and percent-encoding never arises;
+§5.3.1 states what follows for the two distributor endpoints.
+
+**An identifier names an agent; it does not classify one.** Nothing in the
+grammar encodes a listing type, a tier, a plan, or any other distinction
+internal to a distributor, and a distributor **MUST NOT** require one to be
+encoded there. Where a distributor dispatches on such a distinction, it
+resolves it on its own side from an identifier that does not carry it.
+
+The alternative was to encode the type, which makes that dispatch free and
+total. It was rejected because it puts a distributor's own catalogue model
+into a public URL, and because re-typing a listing would then change its
+identifier — an identifier §5.2's tokens, §6's bundles and every client's
+stored state all point at. The cost of resolving instead is a step that can
+miss, and that cost is paid in §5.5.
+
 ---
 
 ## 2. Transport
@@ -115,7 +194,7 @@ Every non-2xx response body **MUST** be:
 
 | Code | HTTP | Side | Meaning |
 |---|---|---|---|
-| `bad_request` | 400 | R · D | Malformed request — a bad body, or an input that failed `describe`'s validation. |
+| `bad_request` | 400 | R · D | Malformed request — a bad body, an input that failed `describe`'s validation, or an agent identifier that does not match §1.5's grammar (§5.3.1). |
 | `not_found` | 404 | R · D | No such agent — **or** the caller is not entitled to it, **or** the token does not resolve (§5.5). The one code that means different things on each side; see below. |
 | `not_entitled` | 403 | R | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
 | `withdrawn` | 410 | D | The caller was entitled, and the agent has since been withdrawn (§5.6). |
@@ -168,8 +247,8 @@ for it. Emit the shape exactly; accept more than the shape.
 A runner **MUST** serve exactly one agent. None of `describe`, `run`,
 `stream` or `status` carries an agent identifier, so a client **MAY** treat
 a runner's port as that agent's address. Only the distributor paths in §5
-take an `{agent_id}`, because a distributor answers for a catalogue while a
-runner only ever answers for itself.
+address an agent by identifier (§1.5), because a distributor answers for a
+catalogue while a runner only ever answers for itself.
 
 Serving several agents means running several runners. A client that wants a
 catalogue holds a list of ports; a client that wants two agents to work
@@ -265,6 +344,10 @@ and **MUST** be answerable without credentials and without an entitlement.
   ]
 }
 ```
+
+`agent.id` is the identifier defined in §1.5. It is the same string the
+distributor paths in §5.3 and §5.6 address, which is what lets a client go
+from an agent it has described to an entitlement check for it.
 
 #### 4.1.1 `inputs`
 
@@ -491,7 +574,7 @@ appear in a Postern response body.
 ### 5.3 The check
 
 ```
-GET  {distributor}/postern/v0/entitlements/{agent_id}
+GET  {distributor}/postern/v0/entitlements/{owner}/{name}
 Authorization: Bearer <token>
 ```
 
@@ -526,6 +609,44 @@ distributor's cache age is invisible to the caller, a runner can only stamp
 its own clock on receipt, and the two caches run back to back — so the real
 worst case is their sum while `stale_after_seconds` claims to be the whole
 of it.
+
+#### 5.3.1 Addressing the agent
+
+An identifier occupies **two path segments**, not one:
+`acme/market-research-crew` is addressed as
+`…/entitlements/acme/market-research-crew`, with its `/` serving as the path
+separator it looks like. §5.6's bundle path works identically.
+
+The percent-encoded spelling is not an alternative to it. A distributor
+**MUST NOT** decode `%2F` into the separator, and **MUST NOT** treat an
+encoded form as another spelling of an identifier. §1.5's grammar admits no
+character that a path requires encoding for, so a conforming request to
+either distributor endpoint carries no percent-encoding at all, and a
+distributor needs no decoding step to serve one.
+
+This is stated rather than left to routing because the encoded form is
+exactly where implementations diverge: `%2F` in a path is rejected before
+the application sees it by some servers, silently decoded by others, and
+normalised away by several HTTP client libraries. A specification admitting
+both spellings would have chosen, for its implementers, a `404` that nobody
+can debug.
+
+A request carrying anything other than exactly two segments after
+`entitlements/` matches no route, and `404` is the right answer to it. No
+identifier could have matched that path, so the answer says nothing about
+the catalogue.
+
+An identifier that fills two segments and does not match §1.5's grammar is
+answered `400` with `bad_request` — **not** `404`. This is the one distributor
+answer §5.5 does not cover, and it is safe for the reason §5.5 exists to
+protect: it is computed from the request string alone. A distributor
+**MUST** be able to produce it without consulting its catalogue, **MUST
+NOT** vary it by whether a corrected form of the identifier exists, and
+**MUST NOT** correct the identifier and answer for the correction.
+
+What that buys is the one diagnosis §5.5 otherwise makes impossible. A
+caller who typed `Acme/Market-Research-Crew` is told the string is wrong,
+rather than being told — indistinguishably — that they may not own it.
 
 ### 5.4 Revocation
 
@@ -588,12 +709,31 @@ holding a guess.
 The local runner reporting its *own* state to its *own* client is the one
 place `not_entitled` (403) is correct — there is nothing to enumerate.
 
+**A distributor's own routing failures are invisible under this rule too.**
+A distributor that resolves an identifier to something internal before it
+can answer — a listing type, a shard, a catalogue partition (§1.5) — has a
+resolution step that can miss, and a miss produces `404`: byte for byte the
+answer a correct refusal produces. A buyer who owns the agent is told what a
+stranger is told, and no status, no error `code` and no field anywhere in
+this protocol separates the two.
+
+So this class of bug will never be reported by a client, and a distributor
+**MUST** cover each branch of that resolution with a test of its own, out of
+band — one test per branch, not one per happy path. The failure worth naming
+is a branch that does not exist at all: a listing type nobody wrote a case
+for authenticates normally and then `404`s a buyer who owns the thing, and
+every test written against the endpoint's success path still passes.
+
 ### 5.6 Bundle retrieval
 
 ```
-GET  {distributor}/postern/v0/bundles/{agent_id}
+GET  {distributor}/postern/v0/bundles/{owner}/{name}
 Authorization: Bearer <token>
 ```
+
+The identifier is addressed exactly as in §5.3.1: two path segments, never
+percent-encoded, and `400` with `bad_request` for a string that does not
+match §1.5's grammar.
 
 - `200` — the bundle, `application/zip`, conforming to §6. The response
   **SHOULD** carry a `Digest: sha-256=<base64>` header.
@@ -758,6 +898,21 @@ and informative for everyone else. Postern is usable with no reference to it.*
   so §5.4's re-check rule could not be evaluated for a `revoked` answer and
   the restoration §5.4 obliges a distributor to support could never be
   observed (§4.4, §5.4).
+- `agent_id` has a grammar: two parts of lowercase ASCII alphanumerics, `-`
+  and `.`, joined by one `/`, bounded at 128 characters and compared
+  octet-for-octet with no folding or normalisation of any kind (§1.5). It was
+  previously only a non-empty string, and the canonical
+  `acme/market-research-crew` did not fit the single path segment the
+  distributor endpoints gave it. It now occupies two segments and is never
+  percent-encoded — the grammar admits no character a path requires encoding
+  for — and a string that fills two segments without matching the grammar is
+  answered `400`, an answer a distributor **MUST** be able to produce without
+  consulting its catalogue, which is why it does not weaken §5.5 (§5.3.1,
+  §5.6). The identifier carries no listing type, so a distributor dispatching
+  on one resolves it itself and **MUST** test each branch out of band: §5.5
+  makes a missing branch indistinguishable from a correct refusal, so no
+  client will ever report it (§5.5). `agent.id` carries the pattern and the
+  bound in `describe.schema.json` and `status.schema.json` (§4.1, §4.4).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
