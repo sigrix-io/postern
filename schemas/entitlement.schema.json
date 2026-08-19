@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://sigrix.io/schemas/postern/0.1/entitlement.schema.json",
+  "$id": "https://postern.dev/schemas/0.1/entitlement.schema.json",
   "title": "Postern entitlement check response",
   "description": "Response body of GET {distributor}/postern/v0/entitlements/{owner}/{name}, the only success payload a distributor returns. See SPEC.md section 5.3. Every member is required: a runner cannot evaluate section 5.4's re-check deadline without all of checked_at, stale_after_seconds and the state they qualify.",
   "type": "object",

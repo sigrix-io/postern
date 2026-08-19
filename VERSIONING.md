@@ -2,13 +2,14 @@
 
 ## Where the version lives
 
-Three places, and they move at different speeds:
+Four places, and they move at different speeds:
 
 | Version | Example | Changes when |
 |---|---|---|
 | **Specification version** | `0.1` | Any change to this document's normative content. |
 | **Path prefix** | `/postern/v0/` | Only on a breaking revision. `v0` covers every `0.x`. |
 | **`postern` field** in payloads | `"postern": "0.1"` | Tracks the specification version exactly. |
+| **Schema `$id`** | `https://postern.dev/schemas/0.1/describe.schema.json` | Tracks the specification version exactly. A new version publishes a new directory; see below. |
 
 A client reads the `postern` field to know what it is talking to. It **must
 not** infer the specification version from the path prefix, which is
@@ -55,6 +56,45 @@ Two rules make "additive only" mean something:
    one for its users.
 2. **Optional stays optional.** Promoting an existing optional field to
    required is a major change, however obvious the field has become.
+
+## Schema identifiers
+
+Every schema in [`schemas/`](schemas) declares an `$id` on `postern.dev`, at
+`/schemas/<specification version>/<file name>` — the table above has a worked
+one. Four commitments come with that, written here rather than in the schemas
+because the person who needs them is a maintainer two years from now.
+
+**The base belongs to the project, not to a vendor.** These identifiers lived
+under `sigrix.io` until this was settled. A specification that is
+Apache-2.0, requires no Sigrix service anywhere in the protocol, and treats
+[§8](SPEC.md#8-sigrix-profile) as a profile any distributor may ignore
+should not answer "who controls this" with a domain name. Sigrix authored Postern and says so; the licence and
+[CONTRIBUTING.md](CONTRIBUTING.md) are where that belongs.
+
+**The version in the path is the specification version**, exactly as the
+`postern` field is, and unlike the `/postern/v0/` path prefix, which is
+deliberately coarser. A new specification version publishes a new directory
+beside the old one. It does not edit one in place.
+
+**A published `$id` is permanent.** The document at it may be corrected; the
+identifier is never reused for anything else, and never withdrawn. It is the
+one thing here that cannot be walked back — an implementation that stored a
+reference cannot be told the name moved — which is why the base was settled
+before publication rather than after.
+
+**They are meant to resolve.** JSON Schema does not require an `$id` to be
+dereferenceable, and Postern's schemas are usable from
+[`schemas/`](schemas) without ever fetching one. But publishing an
+`https://` URI invites the assumption that it answers, and a 404 reads as a
+broken specification rather than an unhosted one. Serving these files at
+that base is therefore a maintenance obligation, and
+[`scripts/check_links.py`](scripts/check_links.py) checks it weekly.
+
+> **Not true yet.** `postern.dev` is not registered as this is written.
+> Registering it and serving the schemas is a prerequisite for making the
+> repository public — publishing an identifier base nobody has claimed
+> leaves it claimable by somebody else. Until then the weekly link job is
+> red on these URLs, on purpose and with a note saying so.
 
 ## The four-verb ceiling
 
