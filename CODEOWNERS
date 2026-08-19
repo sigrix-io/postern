@@ -3,16 +3,25 @@
 # Merging is discretionary and stays with the maintainers — see
 # CONTRIBUTING.md. Contributions are welcome; governance is not open.
 #
-# Replace @ftymoshchuk with a @sigrix-io/<team> slug once a maintainers
-# team exists, so that reviewer load can be shared without editing this
-# file for every change in personnel.
+# The owner is a team rather than a person so that reviewer load can be
+# shared without editing this file for every change in personnel, and so
+# the repository does not advertise a single point of failure to anyone
+# deciding whether to depend on the specification. It may hold one person;
+# the indirection is the point.
 
-*                   @ftymoshchuk
+*                   @sigrix-io/postern-maintainers
 
 # The normative surface. Anything here is a compatibility commitment the
 # moment someone implements it, so it is called out separately from the
 # repository default even though the owner is currently the same.
+#
+# examples/ belongs here for the reason CONTRIBUTING.md gives when it names
+# examples/ and schemas/ in one breath as normative-adjacent: an example is
+# what an implementer copies, so a wrong one ships wrong implementations
+# rather than merely reading badly. Guarding one of that pair and not the
+# other splits something the contribution guide treats as a single thing.
 
-/SPEC.md            @ftymoshchuk
-/VERSIONING.md      @ftymoshchuk
-/schemas/           @ftymoshchuk
+/SPEC.md            @sigrix-io/postern-maintainers
+/VERSIONING.md      @sigrix-io/postern-maintainers
+/schemas/           @sigrix-io/postern-maintainers
+/examples/          @sigrix-io/postern-maintainers
