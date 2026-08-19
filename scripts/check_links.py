@@ -49,6 +49,20 @@ TRAILING = ".,;:!?"
 RESERVED_DOMAINS = ("example.com", "example.net", "example.org")
 RESERVED_TLDS = (".example", ".invalid", ".localhost", ".test")
 
+# A URL written with a placeholder in it names a shape rather than a
+# document, and asking whether it resolves reports a defect that is really a
+# sentence. Two shapes arrive here, because the terminator set above ends a
+# match at `<` but not at an ellipsis:
+#
+#     https://postern.dev/schemas/0.1/…            the mark is inside the URL
+#     https://postern.dev/schemas/0.1/<name>.json  the mark ended the match
+#
+# The second is the one worth the code. It leaves behind a URL that looks
+# real — a clean directory path nobody wrote and nothing serves — and it
+# fails forever, in a weekly job whose whole value is that a failure means
+# something.
+ELISIONS = ("…", "...", "{")
+
 # Some hosts answer a bare urllib request with 403 and a browser with 200.
 # Identifying as a browser-shaped client is not a trick here: the question
 # being asked is whether a human following this link arrives somewhere, so
@@ -76,16 +90,58 @@ def _sources():
         yield path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8")
 
 
-def _collect() -> dict[str, list[str]]:
-    """Map every URL in those sources to the files citing it."""
+def _collect() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Map every URL in those sources to the files citing it.
+
+    Returns (links, illustrations). They are separated here rather than
+    filtered away, so that a URL this script decides not to check still says
+    so on the way past: a silent drop is how a real citation stops being
+    checked without anyone noticing.
+    """
     found: dict[str, list[str]] = {}
+    illustrations: dict[str, list[str]] = {}
     for where, text in _sources():
         for match in URL.finditer(text):
             url = match.group(0).rstrip(TRAILING)
-            citations = found.setdefault(url, [])
+            follower = text[match.end() : match.end() + 1]
+            bucket = illustrations if _is_illustrative(url, follower) else found
+            citations = bucket.setdefault(url, [])
             if where not in citations:
                 citations.append(where)
-    return dict(sorted(found.items()))
+    return dict(sorted(found.items())), dict(sorted(illustrations.items()))
+
+
+def _is_illustrative(url: str, follower: str) -> bool:
+    """True when a URL is an illustration: the mark is in it, or ended it."""
+    return any(mark in url for mark in ELISIONS) or follower in "<{"
+
+
+# A rule with no failing case is a rule that can be deleted without anything
+# going red, and this one is invisible when it works: the URLs it acts on are
+# the ones that never appear in the output. Each case below is a string this
+# script has actually mis-read, or one it must not start mis-reading — the
+# markdown link, the autolink and the JSON member are the three ways a real
+# URL ends in this repository.
+CLASSIFIER_CASES = [
+    ("https://postern.dev/schemas/0.1/…", " ", True),
+    ("https://postern.dev/schemas/0.1/", "<", True),
+    ("https://example.org/{owner}", "\n", True),
+    ("https://www.rfc-editor.org/rfc/rfc9530", ")", False),
+    ("https://sigrix.io", ">", False),
+    ("https://postern.dev/schemas/0.1/error.schema.json", '"', False),
+]
+
+
+def _classifier_holds() -> bool:
+    """Check the illustration rule before any network call. True on failure."""
+    wrong = [
+        (url, follower)
+        for url, follower, illustrative in CLASSIFIER_CASES
+        if _is_illustrative(url, follower) != illustrative
+    ]
+    for url, follower in wrong:
+        print(f"FAIL  the illustration rule mis-reads {url!r} before {follower!r}")
+    return bool(wrong)
 
 
 def _is_reserved(url: str) -> bool:
@@ -158,9 +214,15 @@ def _check(url: str) -> tuple[str, str]:
 
 
 def main() -> int:
-    failed = False
+    failed = _classifier_holds()
+    links, illustrations = _collect()
 
-    for url, citations in _collect().items():
+    for url, citations in illustrations.items():
+        where = ", ".join(citations)
+        print(f"skip  {url} — written with a placeholder, so it names a shape "
+              f"rather than a document ({where})")
+
+    for url, citations in links.items():
         where = ", ".join(citations)
         if _is_reserved(url):
             print(f"skip  {url} — reserved for documentation ({where})")
