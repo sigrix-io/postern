@@ -1142,18 +1142,6 @@ and informative for everyone else. Postern is usable with no reference to it.*
   the colons are syntax rather than decoration. `Repr-Digest` rather than
   `Content-Digest` because a client verifies the bundle it keeps, not the
   bytes of one hop (§5.6).
-- Every schema `$id` moves off the vendor domain: the base was
-  `sigrix.io/schemas/postern/0.1/` and is now `postern.dev/schemas/0.1/`,
-  with the file name unchanged. The base is the one part of a schema that
-  cannot be changed once anyone has stored a reference to it, so
-  it is settled before publication rather than after: it now names the
-  project rather than the vendor that authored it, which is what a
-  specification requiring no Sigrix service anywhere in the protocol should
-  answer "who controls this" with. The old URLs never resolved, so nothing
-  that resolved stops resolving; these are meant to, which is a maintenance
-  obligation [VERSIONING.md](VERSIONING.md) now records along with the rule
-  that a new specification version publishes a new directory beside the old
-  one rather than editing it.
 - A runner has defined behaviour when the distributor cannot be reached
   (§5.7). The check response declares `grace_seconds` beside
   `stale_after_seconds`, and a runner whose answer has expired with nothing

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://postern.dev/schemas/0.1/status.schema.json",
+  "$id": "https://sigrix.io/schemas/postern/0.1/status.schema.json",
   "title": "Postern status response",
   "description": "Response body of GET /postern/v0/status. Answerable at conformance Level 1 and without credentials. See SPEC.md section 4.4.",
   "type": "object",
