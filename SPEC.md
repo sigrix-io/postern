@@ -40,6 +40,14 @@ or how a distributor decides who is entitled to what. A Postern server is a
 process that answers on a port. Where that process runs, and what it wraps,
 is out of scope.
 
+**"Orchestration between agents" means the choreography, not the call.** An
+agent may itself be a Postern client, and a system in which one agent calls
+another is two ordinary Postern relationships rather than an exception to
+this list — §2.2 says what that looks like in addressing terms. What is out
+of scope is how agents discover one another, negotiate, hand off, share
+state, or delegate authority between themselves. Postern assumes you already
+have the agent and have already decided to call it.
+
 ### 1.3 Relationship to adjacent specifications
 
 Postern is a narrow layer in a crowded stack, and it is easier to say what
