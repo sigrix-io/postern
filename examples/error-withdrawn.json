@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "withdrawn",
+    "message": "This agent was withdrawn. Your access ends on 2027-08-15.",
+    "detail": { "access_ends_at": "2027-08-15T00:00:00Z" }
+  }
+}
