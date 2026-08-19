@@ -513,9 +513,9 @@ Liveness, conformance level, and entitlement state.
 `entitlement.stale_after_seconds` is **REQUIRED** whenever
 `entitlement.state` is `active` or `revoked` — wherever a check actually
 happened, and so wherever `checked_at` is required too. It declares how long
-the runner may continue to rely on the cached answer before re-checking, and
-is the honest upper bound on how long a revoked entitlement can keep working
-(§5.4).
+the runner may continue to rely on the cached answer before re-checking. It
+bounds how long a revoked entitlement can keep working, together with any
+grace the distributor declared for an unreachable check (§5.4, §5.7).
 
 Requiring it for `revoked` as well is what makes that bound evaluable in
 both directions. A timestamp with no duration beside it tells a runner when
@@ -524,6 +524,17 @@ a distributor to support could not be observed. It is the same bound either
 way; what changes is who it protects — under `active`, how long a revoked
 entitlement can keep working, and under `revoked`, how long a restored one
 stays unusable.
+
+`entitlement.state` is `unknown` when the runner cannot presently vouch for
+the entitlement: it is inside a declared grace period, or it has never
+obtained an answer at all. §5.7 is the only thing that produces that state,
+and the two shapes of it are told apart by whether `checked_at` is
+there — an agent still running with a deadline, or one that cannot start.
+
+`entitlement.grace_seconds` is **OPTIONAL**, and carries the bound the
+distributor declared (§5.3) where the runner has been told one. A client
+needs it beside `checked_at` to say when an agent running through an outage
+will stop.
 
 `entitlement.checked_at` is **REQUIRED** whenever `entitlement.state` is
 `active` or `revoked`. Both are answers a distributor actually gave, and
@@ -534,7 +545,9 @@ again. It is omitted for `not_required`, where no check took place.
 A runner **MUST** report the `checked_at` it received from the distributor
 (§5.3) unchanged, and **MUST NOT** re-stamp it with its own clock.
 Re-stamping discards the anchor and silently restores the stacking that
-§5.3 exists to prevent, while every field still validates.
+§5.3 exists to prevent, while every field still validates. The one answer
+that carries no such value is a `404`, which cannot: there is nothing to
+discard there, and §5.7.4 says what a runner reports instead.
 
 `status` **MUST** answer at Level 1, and **MUST NOT** require credentials.
 
@@ -584,7 +597,8 @@ Authorization: Bearer <token>
   "state": "active",
   "agent_id": "acme/market-research-crew",
   "checked_at": "2026-08-15T09:14:02Z",
-  "stale_after_seconds": 60
+  "stale_after_seconds": 60,
+  "grace_seconds": 86400
 }
 ```
 
@@ -625,6 +639,10 @@ cache. §5.4 obliges a runner to re-check after
 in `status` for `active` and `revoked` alike, so a distributor omitting it
 makes its runner nonconformant and leaves a revoked entitlement with no
 stated moment at which it stops being honoured.
+
+`grace_seconds` declares how long a runner may keep going past that window
+when it cannot reach the distributor at all (§5.7). `0` is a valid
+declaration and means *stop at the window*.
 
 `checked_at` is an RFC 3339 timestamp, and means *the moment the
 distributor last consulted the authority* — not the moment it answered.
@@ -697,9 +715,25 @@ distributor's cache and the runner's cache expire together instead of in
 sequence, and `stale_after_seconds` is the whole window rather than half of
 it.
 
+Where the distributor declares a grace period (§5.7), the window this
+bounds is `stale_after_seconds + grace_seconds` rather than
+`stale_after_seconds` alone. Both terms are the distributor's own, so the
+sum is knowable to it before it publishes either; what is required is that
+neither is understated.
+
 A runner **MUST NOT** cache an entitlement answer for longer than the
-distributor declared, and **MUST NOT** persist an `active` answer across
-restarts.
+distributor declared. It **MAY** persist one across a restart, and where it
+does it **MUST** persist `checked_at` alongside and evaluate the deadlines
+against that value on load. A restart is not a new window: the answer is as
+old afterwards as it was before.
+
+Persisting is safe only because `checked_at` is the distributor's own read
+time. An answer with no trustworthy expiry has to be discarded on restart,
+which is what this specification required of an `active` answer until the
+check response carried one (§5.3). An answer that carries its own expiry
+does not: discarding it shortens nothing, since a runner that can reach the
+distributor re-checks anyway, and it costs exactly the case §5.7 exists
+for.
 
 ### 5.5 Not-entitled is indistinguishable from not-found
 
@@ -800,6 +834,140 @@ A distributor **SHOULD** rate-limit bundle retrieval per token and per
 source address, and **SHOULD** count a rejected request against both buckets
 rather than only the one that rejected it.
 
+### 5.7 When the distributor cannot be reached
+
+§5.4 obliges a runner to re-check once its answer expires. This section says
+what happens when it tries and nothing answers, which is the common case the
+rest of §5 leaves undefined: bought software, a distributor having a bad
+afternoon, and no rule saying whether the agent runs.
+
+**Unreachable** means a transport failure — DNS, TLS, a refused connection,
+a timeout — or a `5xx`, or a response whose body is not a valid check answer
+(§5.3). A `404` is **not** unreachable. It is an answer, and it is handled
+at the end of this section.
+
+#### 5.7.1 The declared grace
+
+The check response carries `grace_seconds` (§5.3). While the distributor is
+unreachable, a runner **MAY** go on running the agent past
+`checked_at + stale_after_seconds`, and **MUST** stop on entitlement grounds
+once `checked_at + stale_after_seconds + grace_seconds` has passed. For the
+whole of that period it **MUST** report `entitlement.state` as `unknown`:
+the answer it holds has expired and it has not been able to replace it,
+which is precisely what that state means. This is the only thing in the
+protocol that produces it.
+
+A runner **SHOULD** keep attempting the check for the whole of the grace
+period rather than waiting it out. The answer that ends grace early is also
+the answer that renews the entitlement.
+
+`grace_seconds` is **REQUIRED**, and `0` is a valid declaration meaning
+*stop at the window*. A distributor that wants strictness says so, rather
+than leaving it to be inferred from an absent field — the same reasoning
+that makes `stale_after_seconds` required whether or not there is a cache.
+
+**Why any grace at all.** A distributor outage is a failure the buyer did
+not cause and cannot fix. A protocol that answers it by disabling everything
+everyone bought converts one party's downtime into everybody's.
+
+**Why it is bounded.** Going offline is the one thing a holder can always
+do. An unbounded grace is a revocation model with a trivial bypass, and
+§5.4's obligations would be nominal.
+
+**Why the distributor declares it.** The same reason it declares
+`stale_after_seconds`: the party carrying the revocation risk sets the
+bound, and the party that would benefit from a longer one is running the
+agent on hardware it controls. A bound chosen by the party it constrains is
+a preference.
+
+§5.4 calls `stale_after_seconds` the honest upper bound on how long a
+revoked entitlement can keep working. With a grace period declared, that
+bound is `stale_after_seconds + grace_seconds`, and this specification says
+so rather than leaving the second term to be discovered. Both numbers are
+the distributor's own, so the sum is knowable to it before it publishes
+either.
+
+#### 5.7.2 A restart is not a new window
+
+A runner **MAY** persist a check answer across a restart. Where it does, it
+**MUST** persist `checked_at` with it and evaluate both deadlines against
+that value on load. A restart **MUST NOT** yield a fresh window, a fresh
+grace period, or a later `checked_at` than the distributor gave.
+
+That is what makes an offline restart survivable at all. Without it a runner
+that reboots with no network holds nothing, can obtain nothing, and cannot
+tell an entitlement it had five minutes ago from one it never had — so the
+machine that worked before the power cut does not work after it, for a
+reason unrelated to whether anybody is entitled to anything.
+
+#### 5.7.3 A runner that has never been told anything
+
+Grace counts from `checked_at`, and a runner that has never completed a
+check does not have one. It therefore **MUST NOT** run the agent on
+entitlement grounds, however long it has been trying.
+
+- `status` reports `unknown` with no `checked_at`.
+- `run` and `stream` answer `503` with `unavailable` (§2.1) — retrying may
+  genuinely help, once the network returns. `not_entitled` would assert
+  something no distributor has said.
+
+The two shapes of `unknown` are told apart by that timestamp: `unknown` with
+a `checked_at` is a runner inside grace, still running, with a deadline;
+`unknown` without one is a runner that cannot start. A client can say which
+without a further field, and the distinction costs nothing in practice —
+retrieving the bundle required reaching the distributor (§5.6), so a runner
+that has never reached it has nothing to run either.
+
+#### 5.7.4 A `404` is an answer, not an outage
+
+A runner that receives `404` from the check **MUST** stop honouring the
+entitlement immediately. No grace applies, because nothing failed: the
+distributor was reached and declined to vouch for this buyer.
+
+- `status` reports `revoked`.
+- `run` and `stream` answer `403` with `not_entitled` (§2.1) — the one place
+  that code is correct, a local runner reporting its own state to its own
+  client.
+
+`revoked` is reported even though the runner cannot tell a withdrawn
+entitlement from one that never existed, or from a token that no longer
+resolves. §5.5 makes those three deliberately indistinguishable, and that
+indistinguishability reaches the runner's vocabulary too. What is common to
+all three — and all a client can act on — is that the entitlement is not in
+force. A runner **SHOULD NOT** tell the user more than that.
+
+§4.4 requires `checked_at` and `stale_after_seconds` wherever the state is
+`revoked`, and a `404` carries neither: §5.5 requires that body to be
+constant, and attaching fields to it would rebuild the oracle the rule
+exists to prevent. So a runner reporting `revoked` after a `404` uses its
+own receipt time and its own re-check cadence, and **SHOULD** reuse the last
+`stale_after_seconds` the distributor gave it. §4.4's rule against
+re-stamping is not engaged, because it forbids discarding an anchor the
+distributor supplied, and here there is none to discard.
+
+**Every case, in one table.** `describe` and `status` are unaffected
+throughout: §4.1 requires `describe` to answer without an entitlement and
+§4.4 requires `status` to answer at Level 1, so a runner that cannot run its
+agent still says what it is and what is wrong. Only `run` and `stream`
+stop.
+
+| Situation | `entitlement.state` | `run` and `stream` |
+|---|---|---|
+| Answered `active`, within the window | `active` | Run. |
+| Answered `revoked` | `revoked` | `403` `not_entitled` |
+| Answered `404` | `revoked` | `403` `not_entitled` |
+| Unreachable, still within the window | `active` | Run. |
+| Unreachable, past the window, within grace | `unknown`, with `checked_at` | Run. |
+| Unreachable, past the window and grace | `unknown`, with `checked_at` | `503` `unavailable` |
+| Unreachable, never checked at all | `unknown`, no `checked_at` | `503` `unavailable` |
+| No distributor configured (§5.1) | `not_required` | Run. |
+
+The rule underneath the table is worth stating on its own, because it is the
+one an implementer will apply to a case this table does not list:
+**unreachable answers `unavailable`, refused answers `not_entitled`.** A
+runner that cannot find out says so and invites a retry; a runner that has
+been told no does not pretend the answer might change on the next request.
+
 ---
 
 ## 6. Packaging
@@ -869,7 +1037,9 @@ and informative for everyone else. Postern is usable with no reference to it.*
 - Namespace: `org.sigrix`, carrying `agent_id` and `listing_url`.
 - Tokens are 32 random bytes, URL-safe base64, stored as SHA-256. One active
   token per buyer; rotation revokes every predecessor.
-- `stale_after_seconds` is 60.
+- `stale_after_seconds` is 60, and `grace_seconds` is 86400 — long enough
+  to ride out an outage, short enough that a refunded buyer is not still
+  running a week later.
 - Withdrawn listings answer `410` with a twelve-month tail from the
   withdrawal date for buyers who owned them.
 
@@ -984,6 +1154,37 @@ and informative for everyone else. Postern is usable with no reference to it.*
   obligation [VERSIONING.md](VERSIONING.md) now records along with the rule
   that a new specification version publishes a new directory beside the old
   one rather than editing it.
+- A runner has defined behaviour when the distributor cannot be reached
+  (§5.7). The check response declares `grace_seconds` beside
+  `stale_after_seconds`, and a runner whose answer has expired with nothing
+  answering keeps running until
+  `checked_at + stale_after_seconds + grace_seconds`, reporting `unknown` —
+  the state §4.4 has always listed and nothing in §5 produced. The honest
+  upper bound in §5.4 is now the sum of the two rather than the first alone,
+  and is stated as such; both terms are the distributor's own, so it can
+  evaluate the sum before publishing either. `0` is a valid grace and means
+  *stop at the window*, so strictness is declared rather than inferred from
+  an absent field. §8 puts Sigrix's at 86400 (§4.4, §5.3, §5.4, §5.7, §8).
+- §5.4's rule against persisting an `active` answer across a restart is
+  replaced. A runner **MAY** persist an answer, provided it persists
+  `checked_at` with it and evaluates the deadlines against that value on
+  load; a restart yields no fresh window. The old rule was written when the
+  check returned no timestamp at all, so a persisted answer had no
+  trustworthy expiry and discarding it was the only bound available. With
+  the anchor returned and propagated unchanged (§5.3), discarding shortens
+  nothing — a runner that can reach the distributor re-checks anyway — and
+  costs the case §5.7 exists for, where a machine reboots with no network
+  and cannot tell an entitlement it held five minutes ago from one it never
+  had (§5.4, §5.7).
+- A `404` from the check is an answer rather than an outage: no grace
+  applies, the runner stops at once, reports `revoked`, and answers `run`
+  and `stream` with `403` `not_entitled`. It reports `revoked` even though
+  §5.5 stops it distinguishing a withdrawn entitlement from one that never
+  existed or a token that no longer resolves — what the three have in common
+  is all a client can act on. A runner that has never completed a check does
+  not run at all, reports `unknown` with no `checked_at`, and answers `503`
+  `unavailable`. The rule under both: unreachable answers `unavailable`,
+  refused answers `not_entitled` (§5.7).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

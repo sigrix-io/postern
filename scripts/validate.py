@@ -64,6 +64,11 @@ PAIRS = [
     # which to ask again.
     ("entitlement.schema.json", "entitlement.json"),
     ("entitlement.schema.json", "entitlement-revoked.json"),
+    # The state §5.7 makes reachable. `unknown` carries neither of the fields
+    # §4.4 requires of `active` and `revoked`, so nothing else in examples/
+    # exercises a runner reporting an entitlement it cannot presently vouch
+    # for — which is the case a client is most likely to render wrongly.
+    ("status.schema.json", "status-unknown.json"),
 ]
 
 FENCE = re.compile(r"^```json\n(.*?)^```", re.MULTILINE | re.DOTALL)
@@ -151,6 +156,7 @@ _ENTITLEMENT = {
     "agent_id": "acme/market-research-crew",
     "checked_at": _CHECKED_AT,
     "stale_after_seconds": 60,
+    "grace_seconds": 86400,
 }
 
 
@@ -277,6 +283,11 @@ MUST_REJECT = [
         "entitlement.schema.json",
         "an entitlement answer with no deadline to re-check after",
         _without("stale_after_seconds"),
+    ),
+    (
+        "entitlement.schema.json",
+        "an entitlement answer that leaves the offline grace to be inferred",
+        _without("grace_seconds"),
     ),
     (
         "entitlement.schema.json",

@@ -4,7 +4,14 @@
   "title": "Postern entitlement check response",
   "description": "Response body of GET {distributor}/postern/v0/entitlements/{owner}/{name}, the only success payload a distributor returns. See SPEC.md section 5.3. Every member is required: a runner cannot evaluate section 5.4's re-check deadline without all of checked_at, stale_after_seconds and the state they qualify.",
   "type": "object",
-  "required": ["postern", "state", "agent_id", "checked_at", "stale_after_seconds"],
+  "required": [
+    "postern",
+    "state",
+    "agent_id",
+    "checked_at",
+    "stale_after_seconds",
+    "grace_seconds"
+  ],
   "properties": {
     "postern": {
       "type": "string",
@@ -31,6 +38,11 @@
       "type": "integer",
       "minimum": 0,
       "description": "How long the answer may be relied on, counted from checked_at. Sent whether or not the distributor caches, because a runner's re-check deadline and its status report both need it. MUST NOT be shorter than the longest staleness any of the distributor's caches can produce."
+    },
+    "grace_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How long a runner may keep running past checked_at + stale_after_seconds while the distributor is unreachable (SPEC.md section 5.7). 0 is a valid declaration and means stop at the window. Required, because an absent field would make strictness something inferred rather than declared. With this the honest bound on a revoked entitlement is stale_after_seconds + grace_seconds."
     }
   },
   "additionalProperties": true
