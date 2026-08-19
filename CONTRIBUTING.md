@@ -89,6 +89,11 @@ something you need our permission for. Postern is HTTP; any language can serve
 or call it. Publish your SDK under your own name and open an issue so it can
 be linked from here.
 
+**A rename** — see [the name](VERSIONING.md#the-name), which records why this
+is not called AEP and what was ruled out. The name is in the path prefix and
+in every payload, so changing it breaks every implementation at once. The
+argument is welcome; please read that section before making it.
+
 ## Pull requests
 
 The pull request template carries these four as a checklist, so they are in
