@@ -8,9 +8,9 @@
   "properties": {
     "inputs": {
       "type": "object",
-      "description": "Map keyed by the input keys declared in the describe response. A runner MUST reject a request omitting a required input, or failing a declared validation, with bad_request.",
+      "description": "Map keyed by the input keys declared in the describe response. A runner MUST reject a request omitting a required input, or failing a declared validation, with bad_request. Values follow the value space of the three input types (SPEC.md section 4.1.1): a string for text and select, a number for number, null for no value. No v0 input type produces a boolean.",
       "additionalProperties": {
-        "type": ["string", "number", "boolean", "null"]
+        "type": ["string", "number", "null"]
       }
     }
   },

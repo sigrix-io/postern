@@ -21,7 +21,7 @@ event: delta
 data: {"text": "The mid-market segment is served by three incumbents…"}
 
 event: done
-data: {"postern": "0.1", "run_id": "01JD8XW2Q9", "status": "ok", "output": {"type": "text", "value": "## Positioning brief\n\nThe mid-market segment is served by three incumbents…"}, "usage": {"input_tokens": 4210, "output_tokens": 918, "cost_usd": 0.001182}}
+data: {"postern": "0.1", "run_id": "01JD8XW2Q9", "output": {"type": "text", "value": "## Positioning brief\n\nThe mid-market segment is served by three incumbents…"}, "usage": {"input_tokens": 4210, "output_tokens": 918, "cost_usd": 0.001182}}
 
 
 Notes
@@ -36,6 +36,7 @@ Notes
   done, and remain conformant.
 * A client MUST ignore an event name it does not recognise rather than
   aborting. That rule is what lets this list grow without a version bump.
-* A Level 2 runner answers this endpoint with 501 and code "unavailable" —
-  never with a single-shot response, which a client could not distinguish
-  from a stream that finished instantly.
+* A Level 2 runner answers this endpoint with 501 and code
+  "not_implemented" — never with a single-shot response, which a client
+  could not distinguish from a stream that finished instantly. Any verb
+  above a runner's declared level is answered the same way.

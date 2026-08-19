@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sigrix.io/schemas/postern/0.1/run-response.schema.json",
   "title": "Postern run response",
-  "description": "Response body of POST /postern/v0/run, and the payload of the stream done event. See SPEC.md section 4.2.",
+  "description": "Response body of POST /postern/v0/run, and the payload of the stream done event. See SPEC.md section 4.2. There is no status field: every failure routes through the error envelope on a non-2xx status, so this body exists only when the run succeeded.",
   "type": "object",
-  "required": ["postern", "run_id", "status", "output"],
+  "required": ["postern", "run_id", "output"],
   "properties": {
     "postern": { "type": "string", "const": "0.1" },
     "run_id": {
@@ -12,7 +12,6 @@
       "minLength": 1,
       "description": "Unique within the runner's lifetime; correlates with stream events and logs."
     },
-    "status": { "type": "string", "enum": ["ok"] },
     "output": {
       "type": "object",
       "required": ["type", "value"],
