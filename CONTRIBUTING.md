@@ -114,12 +114,16 @@ once. Here is why each is asked for.
   asserts that the rules which cost implementers something still fail when
   they are broken: `select` needing `options`, a credential never carrying a
   value, an `active` entitlement needing a declared staleness bound, an agent
-  identifier that would need case-folding or percent-decoding to resolve, the
-  closed error-code set, the closed error-envelope root, and — because JSON
-  Schema cannot express a subset relation between sibling arrays —
-  `write_tools` being a subset of `tools`. Last, it asserts that the agent
-  identifier grammar is one string in the four places that write it out:
-  [SPEC.md](SPEC.md) §1.5 and the `pattern` in three schemas.
+  identifier that would need case-folding or percent-decoding to resolve, a
+  timestamp that is not RFC 3339, the closed error-code set, the closed
+  error-envelope root, and — because JSON Schema cannot express a subset
+  relation between sibling arrays — `write_tools` being a subset of `tools`.
+  It asserts that the agent identifier grammar is one string in the four
+  places that write it out: [SPEC.md](SPEC.md) §1.5 and the `pattern` in
+  three schemas. And it checks that every `format` the schemas declare is one
+  it can actually assert — `jsonschema` treats `format` as an annotation and
+  silently ignores any it has no library for, so a `date-time` checked by
+  nothing accepts every string ever written while looking like it works.
 
   A JSON block in [SPEC.md](SPEC.md) whose shape it does not recognise is a
   failure rather than a skip. If you add one, give it a mapping or an
