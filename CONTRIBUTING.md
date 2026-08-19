@@ -113,10 +113,13 @@ once. Here is why each is asked for.
   read and the files a validator reads cannot drift apart unnoticed. It then
   asserts that the rules which cost implementers something still fail when
   they are broken: `select` needing `options`, a credential never carrying a
-  value, an `active` entitlement needing a declared staleness bound, the
+  value, an `active` entitlement needing a declared staleness bound, an agent
+  identifier that would need case-folding or percent-decoding to resolve, the
   closed error-code set, the closed error-envelope root, and — because JSON
   Schema cannot express a subset relation between sibling arrays —
-  `write_tools` being a subset of `tools`.
+  `write_tools` being a subset of `tools`. Last, it asserts that the agent
+  identifier grammar is one string in the three places that write it out:
+  [SPEC.md](SPEC.md) §1.5 and the `pattern` in two schemas.
 
   A JSON block in [SPEC.md](SPEC.md) whose shape it does not recognise is a
   failure rather than a skip. If you add one, give it a mapping or an

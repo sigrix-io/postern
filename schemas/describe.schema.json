@@ -17,8 +17,9 @@
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1,
-          "description": "Stable identifier, unique within the distributor."
+          "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+          "maxLength": 128,
+          "description": "Agent identifier (SPEC.md section 1.5): two parts of lowercase ASCII alphanumerics, '-' and '.', joined by one '/'. Stable, and unique within the distributor. Compared octet-for-octet; addressed as two path segments on a distributor and never percent-encoded."
         },
         "name": { "type": "string", "minLength": 1 },
         "version": { "type": "string", "minLength": 1 },

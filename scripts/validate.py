@@ -8,7 +8,7 @@ aspirational: run it before opening a pull request.
     pip install jsonschema
     python scripts/validate.py
 
-Three things are checked, because three different kinds of edit go wrong:
+Four things are checked, because four different kinds of edit go wrong:
 
 1. Every file in examples/ validates against its schema.
 2. Every fenced JSON block in SPEC.md validates against its schema too.
@@ -16,6 +16,8 @@ Three things are checked, because three different kinds of edit go wrong:
    drift apart silently, and they drift in the direction nobody looks.
 3. Rules that cost an implementer something, and rules JSON Schema cannot
    express at all, are pinned by payloads that MUST fail.
+4. The agent identifier grammar (SPEC.md section 1.5) is written out in three
+   places, so those three are asserted to be one string.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -130,7 +132,10 @@ INVARIANTS = {
 # Rules that cost an implementer something are the ones most likely to be
 # quietly relaxed by a well-meaning edit, so each is pinned by a payload
 # that MUST fail. See SPEC.md sections 4.1.1, 4.1.3, 4.4 and 2.1.
-_AGENT = {"id": "a", "name": "A", "version": "1"}
+# `id` here is a valid identifier (§1.5) on purpose: every pin below that is
+# not about identifiers has to fail for the reason it names, and an invalid
+# id in the stub would be a second reason in all of them.
+_AGENT = {"id": "acme/a", "name": "A", "version": "1"}
 _CHECKED_AT = "2026-08-15T09:14:02Z"
 MUST_REJECT = [
     (
@@ -170,6 +175,35 @@ MUST_REJECT = [
         "run-request.schema.json",
         "a boolean input value, which no declared input type can produce",
         {"inputs": {"agree": True}},
+    ),
+    # §1.5's grammar exists so that comparison and path encoding have one
+    # answer each. Each of these is a string some other identifier scheme
+    # would have accepted, and accepting it here would put the divergence
+    # back: an uppercase id needs a folding rule, a bare name needs a default
+    # owner, and a percent-encoded one needs a decoding step §5.3.1 forbids.
+    (
+        "describe.schema.json",
+        "an agent id carrying uppercase, which comparison would have to fold",
+        {"postern": "0.1", "agent": {**_AGENT, "id": "Acme/Market-Research-Crew"},
+         "inputs": []},
+    ),
+    (
+        "describe.schema.json",
+        "an agent id with no owner part",
+        {"postern": "0.1", "agent": {**_AGENT, "id": "market-research-crew"},
+         "inputs": []},
+    ),
+    (
+        "describe.schema.json",
+        "an agent id one character past the 128-character bound",
+        {"postern": "0.1", "agent": {**_AGENT, "id": "acme/" + "a" * 124},
+         "inputs": []},
+    ),
+    (
+        "status.schema.json",
+        "an agent id whose separator is percent-encoded rather than a separator",
+        {"postern": "0.1", "level": 1, "state": "ready",
+         "agent": {"id": "acme%2Fmarket-research-crew"}},
     ),
     # Each of these omits exactly one required field. A payload missing two
     # would still be rejected, but by whichever rule fired first — and a pin
@@ -219,6 +253,36 @@ INVARIANT_MUST_FLAG = [
         {"inputs": [{"key": "segment"}], "examples": [{"inputs": {"depth": "quick"}}]},
     ),
 ]
+
+
+def _identifier_pattern() -> bool:
+    """SPEC.md §1.5 publishes the agent identifier grammar as a regular
+    expression, and two schemas carry it as a `pattern`. Three copies of one
+    rule is three places to edit and two chances to forget, and the symptom of
+    forgetting is the one §1.5 exists to prevent: two implementations that
+    disagree about which strings are identifiers.
+
+    Returns True when they disagree, so callers can accumulate.
+    """
+    carried = {
+        name: (_load("schemas", name)["properties"]["agent"]["properties"]["id"]
+               .get("pattern"))
+        for name in ("describe.schema.json", "status.schema.json")
+    }
+    if len(set(carried.values())) != 1:
+        print("FAIL  the schemas do not carry one agent id pattern")
+        for name, pattern in sorted(carried.items()):
+            print(f"        {name}: {pattern}")
+        return True
+
+    pattern = next(iter(carried.values()))
+    if pattern not in ROOT.joinpath("SPEC.md").read_text(encoding="utf-8"):
+        print("FAIL  SPEC.md does not publish the agent id pattern the schemas carry")
+        print(f"        {pattern}")
+        return True
+
+    print("ok    SPEC.md and both schemas carry one agent id pattern")
+    return False
 
 
 def _load(*parts: str) -> dict:
@@ -296,6 +360,9 @@ def main() -> int:
         else:
             failed = True
             print(f"FAIL  {rule.__name__} misses {description}")
+
+    print()
+    failed |= _identifier_pattern()
 
     return 1 if failed else 0
 
