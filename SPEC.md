@@ -428,9 +428,19 @@ Liveness, conformance level, and entitlement state.
 `active`, `revoked`, `unknown`, or `not_required` (§5.1).
 
 `entitlement.stale_after_seconds` is **REQUIRED** whenever
-`entitlement.state` is `active`. It declares how long the runner may
-continue to rely on the cached answer before re-checking, and is the honest
-upper bound on how long a revoked entitlement can keep working (§5.4).
+`entitlement.state` is `active` or `revoked` — wherever a check actually
+happened, and so wherever `checked_at` is required too. It declares how long
+the runner may continue to rely on the cached answer before re-checking, and
+is the honest upper bound on how long a revoked entitlement can keep working
+(§5.4).
+
+Requiring it for `revoked` as well is what makes that bound evaluable in
+both directions. A timestamp with no duration beside it tells a runner when
+it was refused and never when to ask again, so the restoration §5.4 obliges
+a distributor to support could not be observed. It is the same bound either
+way; what changes is who it protects — under `active`, how long a revoked
+entitlement can keep working, and under `revoked`, how long a restored one
+stays unusable.
 
 `entitlement.checked_at` is **REQUIRED** whenever `entitlement.state` is
 `active` or `revoked`. Both are answers a distributor actually gave, and
@@ -528,7 +538,10 @@ demanded it would be widely and quietly violated. What is required is that
 the window is *declared*: a distributor **MUST NOT** report a
 `stale_after_seconds` shorter than the longest staleness any of its caches
 can actually produce. A runner **MUST** re-check on the first request after
-`checked_at + stale_after_seconds`.
+`checked_at + stale_after_seconds`. That rule binds a `revoked` answer as
+much as an `active` one: restoration is only ever observed because a runner
+asks again, so the deadline is what makes the restore obligation above
+reachable rather than nominal.
 
 Because `checked_at` is the distributor's own read time rather than the
 runner's receipt time (§5.3), that deadline is anchored upstream: the
@@ -686,13 +699,6 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before first publication.
 
-- §5.5's indistinguishability rule covers token state, not only agents. An
-  unknown, revoked, or superseded token answers `404` with `not_found`, the
-  same as a valid token presented for an agent the buyer may not have, and
-  Postern defines no `401` — a status meaning "authenticate and try again"
-  would confirm the token was once real. §5.3's success rule gains the
-  failure branch it presupposed, and §7's "stop resolving" now names the
-  answer it stops with (§2.1, §5.3, §5.5, §7).
 - A client **MUST** tolerate an error `code` it does not recognise, so that
   adding a code stays an additive change (§2.1).
 - Added `not_implemented` (501). A Level 2 runner answers `stream` with it
@@ -739,6 +745,19 @@ and informative for everyone else. Postern is usable with no reference to it.*
   because §2.1 routes every failure through a non-2xx error envelope, and
   the partial-result case it might have grown into cannot be carried by a
   value an older client would read as a complete result (§4.2).
+- §5.5's indistinguishability rule covers token state, not only agents. An
+  unknown, revoked, or superseded token answers `404` with `not_found`, the
+  same as a valid token presented for an agent the buyer may not have, and
+  Postern defines no `401` — a status meaning "authenticate and try again"
+  would confirm the token was once real. §5.3's success rule gains the
+  failure branch it presupposed, and §7's "stop resolving" now names the
+  answer it stops with (§2.1, §5.3, §5.5, §7).
+- `entitlement.stale_after_seconds` is now **REQUIRED** for `revoked` as
+  well as `active`, matching `checked_at`: it is required wherever a check
+  actually happened. Without it a runner held a timestamp and no deadline,
+  so §5.4's re-check rule could not be evaluated for a `revoked` answer and
+  the restoration §5.4 obliges a distributor to support could never be
+  observed (§4.4, §5.4).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

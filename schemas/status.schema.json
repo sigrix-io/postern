@@ -55,7 +55,7 @@
             "properties": { "state": { "const": "revoked" } },
             "required": ["state"]
           },
-          "then": { "required": ["checked_at"] }
+          "then": { "required": ["checked_at", "stale_after_seconds"] }
         }
       ]
     },

@@ -131,6 +131,7 @@ INVARIANTS = {
 # quietly relaxed by a well-meaning edit, so each is pinned by a payload
 # that MUST fail. See SPEC.md sections 4.1.1, 4.1.3, 4.4 and 2.1.
 _AGENT = {"id": "a", "name": "A", "version": "1"}
+_CHECKED_AT = "2026-08-15T09:14:02Z"
 MUST_REJECT = [
     (
         "describe.schema.json",
@@ -170,15 +171,26 @@ MUST_REJECT = [
         "a boolean input value, which no declared input type can produce",
         {"inputs": {"agree": True}},
     ),
+    # Each of these omits exactly one required field. A payload missing two
+    # would still be rejected, but by whichever rule fired first — and a pin
+    # that can pass for the wrong reason stops guarding the rule it names.
     (
         "status.schema.json",
         "an active entitlement with no declared staleness bound",
-        {"postern": "0.1", "level": 3, "state": "ready", "entitlement": {"state": "active"}},
+        {"postern": "0.1", "level": 3, "state": "ready",
+         "entitlement": {"state": "active", "checked_at": _CHECKED_AT}},
     ),
     (
         "status.schema.json",
         "a revoked entitlement with no timestamp to re-check from",
-        {"postern": "0.1", "level": 3, "state": "ready", "entitlement": {"state": "revoked"}},
+        {"postern": "0.1", "level": 3, "state": "ready",
+         "entitlement": {"state": "revoked", "stale_after_seconds": 60}},
+    ),
+    (
+        "status.schema.json",
+        "a revoked entitlement with no deadline to re-check after",
+        {"postern": "0.1", "level": 3, "state": "ready",
+         "entitlement": {"state": "revoked", "checked_at": _CHECKED_AT}},
     ),
     (
         "error.schema.json",
