@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://sigrix.io/schemas/postern/0.1/error.schema.json",
+  "$id": "https://postern.dev/schemas/0.1/error.schema.json",
   "title": "Postern error response",
   "description": "Body of every non-2xx Postern response. See SPEC.md section 2.1. The root is closed: nothing may sit beside error, so this envelope has one extension point rather than two, and a client finds the whole failure under one key. That constrains what a conforming implementation emits — a client MUST NOT reject a response for carrying a sibling it does not recognise.",
   "type": "object",

@@ -7,9 +7,9 @@ change for either to break:
 1. Documents cited but not controlled — Agent Plugins, MCP, RFCs. A reader
    at 2am follows one and lands on a 404, and the specification looks
    abandoned whether or not it is.
-2. The schema `$id`s in schemas/. A JSON Schema `$id` is an identifier and
-   is not required to be dereferenceable, but publishing an `https://` URI
-   that does not resolve invites the assumption that it should.
+2. The schema `$id`s in schemas/. JSON Schema does not require an `$id` to
+   be dereferenceable, but Postern's are meant to resolve (VERSIONING.md),
+   so a 404 on one of those is a hosting task rather than a citation to fix.
 
     python scripts/check_links.py
 
@@ -112,15 +112,15 @@ def _note(citations: list[str]) -> str:
 
     A URL cited in prose is a promise to a reader and a 404 is a defect. A
     URL that appears only in schemas/ is a schema `$id`, where the same 404
-    means something narrower and currently undecided — so say which one this
-    is, rather than leaving a maintainer to work it out from a red job.
+    is a hosting task on a known base — so say which one this is, rather than
+    leaving a maintainer to work it out from a red job.
     """
     if all(where.startswith("schemas/") for where in citations):
         return (
-            "this is a schema $id — an identifier, which JSON Schema does not "
-            "require to be dereferenceable. Whether Postern's must resolve is "
-            "an open decision (#25); if the answer is no, drop schemas/ from "
-            "_sources()."
+            "this is a schema $id, and Postern's are meant to resolve "
+            "(VERSIONING.md, 'Schema identifiers'). Serve the file at that "
+            "base. Until postern.dev is registered and serving, this job is "
+            "red here on purpose, and registering it gates publication."
         )
     return ""
 
