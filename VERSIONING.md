@@ -15,6 +15,20 @@ A client reads the `postern` field to know what it is talking to. It **must
 not** infer the specification version from the path prefix, which is
 deliberately coarser.
 
+**Amending this document before its first publication is not a version
+event.** The rule above moves the version when normative content changes,
+and it exists to protect implementations that already hold a copy. Before
+the first public release there are none, so the corrections made in that
+window belong to the version being prepared rather than turning it into a
+successor describing a release nobody ever saw. [Appendix
+A](SPEC.md#appendix-a--changes) lists them under *Unreleased* for that
+reason.
+
+This is the one carve-out, and it closes at publication. Afterwards every
+normative change moves the version with no equivalent exception — the first
+reader to pin to a published version is exactly the dependent the rule is
+written for, and by then the exception would be describing them.
+
 ## Before 1.0
 
 **Nothing is stable. Any `0.x` release may break any other `0.x` release.**
