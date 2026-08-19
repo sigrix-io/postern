@@ -33,7 +33,7 @@
         "state": {
           "type": "string",
           "enum": ["active", "revoked", "unknown", "not_required"],
-          "description": "not_required means no distributor is configured; the runner MUST NOT refuse to run on entitlement grounds."
+          "description": "not_required means no distributor is configured; the runner MUST NOT refuse to run on entitlement grounds. unknown means the runner cannot presently vouch: inside a declared grace period, or never having obtained an answer (SPEC.md section 5.7). checked_at tells those two apart."
         },
         "checked_at": {
           "type": "string",
@@ -43,7 +43,12 @@
         "stale_after_seconds": {
           "type": "integer",
           "minimum": 0,
-          "description": "REQUIRED when state is active. The honest upper bound on how long a revoked entitlement can keep working."
+          "description": "REQUIRED when state is active or revoked. With grace_seconds it bounds how long a revoked entitlement can keep working."
+        },
+        "grace_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The grace the distributor declared for an unreachable check (SPEC.md sections 5.3, 5.7), where the runner has been told one. A client needs it beside checked_at to say when an agent running through an outage stops."
         }
       },
       "additionalProperties": true,
