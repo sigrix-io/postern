@@ -580,6 +580,7 @@ Authorization: Bearer <token>
 
 ```json
 {
+  "postern": "0.1",
   "state": "active",
   "agent_id": "acme/market-research-crew",
   "checked_at": "2026-08-15T09:14:02Z",
@@ -587,20 +588,46 @@ Authorization: Bearer <token>
 }
 ```
 
+Every member above is **REQUIRED**.
+[`entitlement.schema.json`](schemas/entitlement.schema.json) is the
+machine-readable form.
+
+`postern` carries the specification version, as it does in every payload a
+runner returns. This response was the one success payload in the protocol
+without it, and a distributor's version is inferable from nothing else:
+[VERSIONING.md](VERSIONING.md) makes the field the only sanctioned way to
+know what you are talking to, and makes the `/postern/v0/` prefix
+deliberately coarser than the version it stands beside. An error envelope
+still carries no version, because its root is closed (§2.1) — a failure has
+no contract to interpret.
+
 `state` is `active` or `revoked`. A distributor **MUST** resolve the token
 to a buyer and answer only for that buyer; there **MUST NOT** be a
 parameter, header or path segment by which a caller can widen the answer
 beyond the buyer the token identifies.
 
+`agent_id` **MUST** be the identifier the request addressed (§5.3.1),
+octet-for-octet. It is an echo of the question, not the result of a lookup:
+a distributor answering with a different identifier has answered a different
+question, and a runner **SHOULD** treat a mismatch as a failed check rather
+than reconcile it.
+
 A token that does not resolve — unknown, revoked, or superseded by rotation
 — is answered under §5.5 rather than distinguished. There is no third state
 here: a check either answers for a buyer or answers `404`.
 
-A distributor **MAY** serve this from a cache, and **MUST** declare the
-cache bound as `stale_after_seconds`.
+A distributor **MAY** serve this from a cache, and where one exists
+`stale_after_seconds` **MUST** declare its bound. A distributor answering
+from a fresh read sends the field all the same: it is not only a cache
+declaration, and the requirement above is not conditional on there being a
+cache. §5.4 obliges a runner to re-check after
+`checked_at + stale_after_seconds`, and §4.4 obliges it to report the bound
+in `status` for `active` and `revoked` alike, so a distributor omitting it
+makes its runner nonconformant and leaves a revoked entitlement with no
+stated moment at which it stops being honoured.
 
-`checked_at` is **REQUIRED**, an RFC 3339 timestamp, and means *the moment
-the distributor last consulted the authority* — not the moment it answered.
+`checked_at` is an RFC 3339 timestamp, and means *the moment the
+distributor last consulted the authority* — not the moment it answered.
 A distributor serving from a cache reports the age of the underlying read,
 not the age of the response.
 
@@ -736,7 +763,20 @@ percent-encoded, and `400` with `bad_request` for a string that does not
 match §1.5's grammar.
 
 - `200` — the bundle, `application/zip`, conforming to §6. The response
-  **SHOULD** carry a `Digest: sha-256=<base64>` header.
+  **SHOULD** carry a representation digest
+  ([RFC 9530](https://www.rfc-editor.org/rfc/rfc9530)):
+
+  ```
+  Repr-Digest: sha-256=:IAtqOIW3wX6iOiAGisKhISlQIEGkXVPSgiHZn2g1/7c=:
+  ```
+
+  `Repr-Digest` rather than `Content-Digest`, because what a client verifies
+  is the bundle it keeps rather than the bytes of one hop: a content-coding
+  or a range request changes the second and leaves the first alone, and a
+  large download plausibly uses both. The colons are structured-field
+  syntax rather than decoration. RFC 9530 obsoletes RFC 3230's
+  `Digest: sha-256=<base64>`, which this specification carried until now.
+
 - `404` — no such agent, or not entitled (§5.5).
 - `410` with code `withdrawn` — previously entitled, and the agent has since
   been withdrawn. The body **SHOULD** carry the date access ends as
@@ -913,6 +953,25 @@ and informative for everyone else. Postern is usable with no reference to it.*
   makes a missing branch indistinguishable from a correct refusal, so no
   client will ever report it (§5.5). `agent.id` carries the pattern and the
   bound in `describe.schema.json` and `status.schema.json` (§4.1, §4.4).
+- The entitlement check has a schema, and its response carries `postern`
+  like every other success payload in the protocol. It was the only one
+  without a version marker, and a distributor's version is inferable from
+  nothing else — [VERSIONING.md](VERSIONING.md) forbids reading it off the
+  path prefix. Freezing the shape settled two things the prose had left
+  loose: `stale_after_seconds` is sent whether or not the distributor
+  caches, because §5.4's re-check deadline and §4.4's `status` report both
+  need it and neither is conditional on a cache existing; and `agent_id`
+  echoes the identifier the request addressed, octet-for-octet, so a
+  mismatch is a failed check rather than something to reconcile. The
+  `validate.py` skip over the §5.3 block is gone with it — that payload was
+  checked by nothing until now (§5.3).
+- `Digest: sha-256=<base64>` becomes
+  `Repr-Digest: sha-256=:<base64>:` on a bundle response. RFC 3230 was
+  obsoleted by [RFC 9530](https://www.rfc-editor.org/rfc/rfc9530) before
+  this specification shipped, and the replacement is a structured field, so
+  the colons are syntax rather than decoration. `Repr-Digest` rather than
+  `Content-Digest` because a client verifies the bundle it keeps, not the
+  bytes of one hop (§5.6).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

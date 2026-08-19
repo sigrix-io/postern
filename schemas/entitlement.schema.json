@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sigrix.io/schemas/postern/0.1/entitlement.schema.json",
+  "title": "Postern entitlement check response",
+  "description": "Response body of GET {distributor}/postern/v0/entitlements/{owner}/{name}, the only success payload a distributor returns. See SPEC.md section 5.3. Every member is required: a runner cannot evaluate section 5.4's re-check deadline without all of checked_at, stale_after_seconds and the state they qualify.",
+  "type": "object",
+  "required": ["postern", "state", "agent_id", "checked_at", "stale_after_seconds"],
+  "properties": {
+    "postern": {
+      "type": "string",
+      "const": "0.1",
+      "description": "Specification version this payload conforms to. A client MUST NOT infer it from the /postern/v0/ path prefix, which is deliberately coarser (VERSIONING.md)."
+    },
+    "state": {
+      "type": "string",
+      "enum": ["active", "revoked"],
+      "description": "The two answers a check can give. There is no third: a token that does not resolve, an agent that does not exist, and an agent the buyer is not entitled to are all answered 404 rather than distinguished (SPEC.md section 5.5). status's unknown and not_required are runner states and never appear here."
+    },
+    "agent_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+      "maxLength": 128,
+      "description": "Agent identifier (SPEC.md section 1.5), echoing the identifier the request addressed octet-for-octet. A different identifier here answers a different question."
+    },
+    "checked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339. The moment the distributor last consulted the authority, NOT the moment it answered: a distributor serving from a cache reports the age of the underlying read. A runner propagates it into status unchanged and MUST NOT re-stamp it, which is what stops the two caches stacking (SPEC.md sections 5.3, 5.4)."
+    },
+    "stale_after_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How long the answer may be relied on, counted from checked_at. Sent whether or not the distributor caches, because a runner's re-check deadline and its status report both need it. MUST NOT be shorter than the longest staleness any of the distributor's caches can produce."
+    }
+  },
+  "additionalProperties": true
+}
