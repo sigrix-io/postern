@@ -9,7 +9,7 @@ Four places, and they move at different speeds:
 | **Specification version** | `0.1` | Any change to this document's normative content. |
 | **Path prefix** | `/postern/v0/` | Only on a breaking revision. `v0` covers every `0.x`. |
 | **`postern` field** in payloads | `"postern": "0.1"` | Tracks the specification version exactly. |
-| **Schema `$id`** | `https://postern.dev/schemas/0.1/describe.schema.json` | Tracks the specification version exactly. A new version publishes a new directory; see below. |
+| **Schema `$id`** | `https://sigrix.io/schemas/postern/0.1/describe.schema.json` | Tracks the specification version exactly. A new version publishes a new directory; see below. |
 
 A client reads the `postern` field to know what it is talking to. It **must
 not** infer the specification version from the path prefix, which is
@@ -59,17 +59,20 @@ Two rules make "additive only" mean something:
 
 ## Schema identifiers
 
-Every schema in [`schemas/`](schemas) declares an `$id` on `postern.dev`, at
-`/schemas/<specification version>/<file name>` — the table above has a worked
-one. Four commitments come with that, written here rather than in the schemas
-because the person who needs them is a maintainer two years from now.
+Every schema in [`schemas/`](schemas) declares an `$id` on `sigrix.io`, at
+`/schemas/postern/<specification version>/<file name>` — the table above has a
+worked one. Four commitments come with that, written here rather than in the
+schemas because the person who needs them is a maintainer two years from now.
 
-**The base belongs to the project, not to a vendor.** These identifiers lived
-under `sigrix.io` until this was settled. A specification that is
-Apache-2.0, requires no Sigrix service anywhere in the protocol, and treats
-[§8](SPEC.md#8-sigrix-profile) as a profile any distributor may ignore
-should not answer "who controls this" with a domain name. Sigrix authored Postern and says so; the licence and
-[CONTRIBUTING.md](CONTRIBUTING.md) are where that belongs.
+**The base is a name, not an endorsement.** These identifiers resolve on
+`sigrix.io` because Sigrix authored Postern and can commit to serving them for
+as long as the specification exists — and an identifier that nobody serves is
+worse than one shaped like a vendor. It creates no dependency in either
+direction: the schemas ship in [`schemas/`](schemas) and are usable without
+ever fetching one, [§5.1](SPEC.md#51-the-distributor-is-optional) makes a
+distributor optional outright, and [§8](SPEC.md#8-sigrix-profile) is a profile
+any distributor may ignore. Nothing in the protocol requires a Sigrix service,
+and the base does not change that.
 
 **The version in the path is the specification version**, exactly as the
 `postern` field is, and unlike the `/postern/v0/` path prefix, which is
@@ -90,10 +93,9 @@ broken specification rather than an unhosted one. Serving these files at
 that base is therefore a maintenance obligation, and
 [`scripts/check_links.py`](scripts/check_links.py) checks it weekly.
 
-> **Not true yet.** `postern.dev` is not registered as this is written.
-> Registering it and serving the schemas is a prerequisite for making the
-> repository public — publishing an identifier base nobody has claimed
-> leaves it claimable by somebody else. Until then the weekly link job is
+> **Not true yet.** The files are not served at that base as this is written.
+> Serving them is a prerequisite for making the repository public, because a
+> published `$id` cannot move afterwards. Until then the weekly link job is
 > red on these URLs, on purpose and with a note saying so.
 
 ## The four-verb ceiling

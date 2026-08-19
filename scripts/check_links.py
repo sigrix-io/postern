@@ -54,8 +54,8 @@ RESERVED_TLDS = (".example", ".invalid", ".localhost", ".test")
 # sentence. Two shapes arrive here, because the terminator set above ends a
 # match at `<` but not at an ellipsis:
 #
-#     https://postern.dev/schemas/0.1/…            the mark is inside the URL
-#     https://postern.dev/schemas/0.1/<name>.json  the mark ended the match
+#     https://sigrix.io/schemas/postern/0.1/…            the mark is inside the URL
+#     https://sigrix.io/schemas/postern/0.1/<name>.json  the mark ended the match
 #
 # The second is the one worth the code. It leaves behind a URL that looks
 # real — a clean directory path nobody wrote and nothing serves — and it
@@ -123,12 +123,12 @@ def _is_illustrative(url: str, follower: str) -> bool:
 # markdown link, the autolink and the JSON member are the three ways a real
 # URL ends in this repository.
 CLASSIFIER_CASES = [
-    ("https://postern.dev/schemas/0.1/…", " ", True),
-    ("https://postern.dev/schemas/0.1/", "<", True),
+    ("https://sigrix.io/schemas/postern/0.1/…", " ", True),
+    ("https://sigrix.io/schemas/postern/0.1/", "<", True),
     ("https://example.org/{owner}", "\n", True),
     ("https://www.rfc-editor.org/rfc/rfc9530", ")", False),
     ("https://sigrix.io", ">", False),
-    ("https://postern.dev/schemas/0.1/error.schema.json", '"', False),
+    ("https://sigrix.io/schemas/postern/0.1/error.schema.json", '"', False),
 ]
 
 
@@ -175,8 +175,8 @@ def _note(citations: list[str]) -> str:
         return (
             "this is a schema $id, and Postern's are meant to resolve "
             "(VERSIONING.md, 'Schema identifiers'). Serve the file at that "
-            "base. Until postern.dev is registered and serving, this job is "
-            "red here on purpose, and registering it gates publication."
+            "base. Until the files are served there, this job is red here "
+            "on purpose, and serving them gates publication."
         )
     return ""
 

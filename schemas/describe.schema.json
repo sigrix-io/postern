@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://postern.dev/schemas/0.1/describe.schema.json",
+  "$id": "https://sigrix.io/schemas/postern/0.1/describe.schema.json",
   "title": "Postern describe response",
   "description": "Response body of GET /postern/v0/describe. See SPEC.md section 4.1.",
   "type": "object",
