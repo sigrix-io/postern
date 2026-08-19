@@ -8,7 +8,7 @@ aspirational: run it before opening a pull request.
     pip install jsonschema
     python scripts/validate.py
 
-Five things are checked, because five different kinds of edit go wrong:
+Six things are checked, because six different kinds of edit go wrong:
 
 1. Every file in examples/ validates against its schema.
 2. Every fenced JSON block in SPEC.md validates against its schema too.
@@ -20,6 +20,9 @@ Five things are checked, because five different kinds of edit go wrong:
    SPEC.md and in three schemas, so all four are asserted to be one string.
 5. Every `format` the schemas declare is one this validator can actually
    assert, because jsonschema ignores the ones it has no library for.
+6. The specification version is mirrored in payloads, schema identifiers and
+   prose, and VERSIONING.md requires them to track it exactly. They are
+   asserted to be one string, so a bump is either complete or caught.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -29,6 +32,7 @@ reference implementation here yet.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import sys
@@ -360,6 +364,30 @@ INVARIANT_MUST_FLAG = [
 ]
 
 
+# The specification version is mirrored in three shapes: a `postern` member,
+# the version segment of a schema `$id`, and prose. VERSIONING.md requires the
+# first two to track the specification version exactly, so a bump is either
+# complete or wrong — there is no state in which some of these are right.
+#
+# The first two are found by pattern rather than listed, so a file added later
+# is covered without anyone remembering to come back here. Prose has no shape
+# to match on, so those three are named.
+_VERSION_IN_ID = re.compile(r"/schemas/postern/([^/]+)/")
+_VERSION_IN_FIELD = re.compile(r'"postern":\s*"([^"]*)"')
+
+# VERSIONING.md writes the `$id` shape out with the version as a placeholder.
+# It is documenting the form, not mirroring the value.
+_VERSION_PLACEHOLDER = re.compile(r"^<.+>$")
+
+_VERSIONED_SUFFIXES = {".json", ".md", ".txt", ".yml", ".yaml"}
+
+_VERSION_IN_PROSE = [
+    ("SPEC.md", re.compile(r"^\*\*Version (\S+) · Draft\*\*", re.MULTILINE)),
+    ("README.md", re.compile(r"· Version (\S+) · Draft ·")),
+    ("README.md", re.compile(r"Version (\S+) is\s+published early")),
+]
+
+
 # Where each schema keeps the agent identifier. Two shapes, one grammar.
 _IDENTIFIER_POINTERS = {
     "describe.schema.json": ("agent", "id"),
@@ -396,6 +424,83 @@ def _identifier_pattern() -> bool:
         return True
 
     print("ok    SPEC.md and all three schemas carry one agent id pattern")
+    return False
+
+
+def _version_mirrors() -> bool:
+    """One specification version, written in more places than fit in a head.
+
+    VERSIONING.md requires the `postern` member and the schema `$id` to track
+    the specification version exactly. Nothing enforced that, and the mirrors
+    outnumber the places anyone thinks to look — a change list written by hand
+    during review named four of the seven files under examples/ alone. The
+    ones that get missed are the ones no other check reaches: examples/
+    stream.txt carries a version inside an SSE payload that has no schema,
+    schemas/README.md cites an `$id`, and prose mentions it three times.
+
+    The schemas' `postern` const is the anchor rather than one more mirror to
+    compare. It is the one already protected — every example validates against
+    it — so a const that moved alone has failed further up this run, and
+    measuring the rest against it means this check has a single opinion about
+    what the version is.
+
+    Returns True when a mirror disagrees, so callers can accumulate.
+    """
+    anchors = {}
+    for path in sorted(ROOT.glob("schemas/*.schema.json")):
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        const = schema.get("properties", {}).get("postern", {}).get("const")
+        if const is not None:
+            anchors[path.name] = const
+
+    if not anchors:
+        print("FAIL  no schema declares a postern const to measure against")
+        return True
+
+    if len(set(anchors.values())) != 1:
+        print("FAIL  the schemas do not agree on the specification version")
+        for name, const in sorted(anchors.items()):
+            print(f"        {name}: {const}")
+        return True
+
+    version = next(iter(anchors.values()))
+    found = []
+
+    for directory, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = sorted(name for name in dirnames if name != ".git")
+        for filename in sorted(filenames):
+            path = pathlib.Path(directory, filename)
+            if path.suffix not in _VERSIONED_SUFFIXES:
+                continue
+            where = path.relative_to(ROOT)
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for number, line in enumerate(lines, 1):
+                for pattern in (_VERSION_IN_ID, _VERSION_IN_FIELD):
+                    for value in pattern.findall(line):
+                        if _VERSION_PLACEHOLDER.match(value):
+                            continue
+                        found.append((f"{where}:{number}", value))
+
+    for name, pattern in _VERSION_IN_PROSE:
+        source = ROOT.joinpath(name).read_text(encoding="utf-8")
+        matches = list(pattern.finditer(source))
+        if not matches:
+            print(f"FAIL  {name} carries no version marker matching this check")
+            print(f"        looked for: {pattern.pattern}")
+            print("        Reword the file or _VERSION_IN_PROSE, not neither.")
+            return True
+        for match in matches:
+            line = source.count("\n", 0, match.start()) + 1
+            found.append((f"{name}:{line}", match.group(1)))
+
+    drifted = sorted((where, value) for where, value in found if value != version)
+    if drifted:
+        print(f"FAIL  the schemas say version {version}, and these do not:")
+        for where, value in drifted:
+            print(f"        {where}: {value}")
+        return True
+
+    print(f"ok    {len(found)} mirrors of the specification version say {version}")
     return False
 
 
@@ -507,6 +612,7 @@ def main() -> int:
 
     print()
     failed |= _identifier_pattern()
+    failed |= _version_mirrors()
 
     return 1 if failed else 0
 
