@@ -45,6 +45,12 @@ PAIRS = [
     ("run-response.schema.json", "run-response.json"),
     ("status.schema.json", "status.json"),
     ("error.schema.json", "error.json"),
+    # Two error examples rather than one. The envelope is the same, but the
+    # 410 withdrawal is the only defined response that carries a member
+    # under `detail` (§5.6's `access_ends_at`), and a schema pair is what
+    # keeps a payload the specification describes in prose from being one
+    # nobody ever built.
+    ("error.schema.json", "error-withdrawn.json"),
 ]
 
 FENCE = re.compile(r"^```json\n(.*?)^```", re.MULTILINE | re.DOTALL)
