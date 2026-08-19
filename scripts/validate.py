@@ -8,7 +8,7 @@ aspirational: run it before opening a pull request.
     pip install jsonschema
     python scripts/validate.py
 
-Four things are checked, because four different kinds of edit go wrong:
+Five things are checked, because five different kinds of edit go wrong:
 
 1. Every file in examples/ validates against its schema.
 2. Every fenced JSON block in SPEC.md validates against its schema too.
@@ -18,6 +18,8 @@ Four things are checked, because four different kinds of edit go wrong:
    express at all, are pinned by payloads that MUST fail.
 4. The agent identifier grammar (SPEC.md section 1.5) is written out in
    SPEC.md and in three schemas, so all four are asserted to be one string.
+5. Every `format` the schemas declare is one this validator can actually
+   assert, because jsonschema ignores the ones it has no library for.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -37,6 +39,13 @@ except ImportError:  # pragma: no cover - the message is the whole point
     sys.exit("jsonschema is not installed. Run: pip install jsonschema")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# `format` is an annotation by default, and jsonschema asserts only the
+# formats it has a library for — silently ignoring the rest. Both halves
+# matter: without the checker nothing is asserted, and with it a format
+# nobody installed a library for still is not. See _formats_are_asserted.
+FORMAT_CHECKER = jsonschema.FormatChecker()
+FORMAT = re.compile(r'"format":\s*"([^"]+)"')
 
 # examples/stream.txt is an annotated SSE transcript rather than a single
 # JSON document, so it has no schema of its own. Its `done` payload is the
@@ -299,6 +308,29 @@ MUST_REJECT = [
         "an entitlement answer whose agent_id is percent-encoded",
         {**_ENTITLEMENT, "agent_id": "acme%2Fmarket-research-crew"},
     ),
+    # §5.6 says access_ends_at is RFC 3339 so a client can say something true
+    # about it, and until the checker was installed a distributor could answer
+    # "soon". These three are the assertion itself: one for the member §5.6
+    # names, and two for the timestamps §4.4 and §5.3 already declared and
+    # nothing was reading.
+    (
+        "error.schema.json",
+        "a withdrawal date that is not a timestamp",
+        {"error": {"code": "withdrawn", "message": "x",
+                   "detail": {"access_ends_at": "15/08/2027"}}},
+    ),
+    (
+        "status.schema.json",
+        "a checked_at that is not a timestamp",
+        {"postern": "0.1", "level": 3, "state": "ready",
+         "entitlement": {"state": "active", "checked_at": "yesterday",
+                         "stale_after_seconds": 60}},
+    ),
+    (
+        "entitlement.schema.json",
+        "a checked_at that is nearly RFC 3339, with a space for the T",
+        {**_ENTITLEMENT, "checked_at": "2026-08-15 09:14:02Z"},
+    ),
     (
         "error.schema.json",
         "an error code outside the defined set",
@@ -367,6 +399,33 @@ def _identifier_pattern() -> bool:
     return False
 
 
+def _formats_are_asserted() -> bool:
+    """Every `format` the schemas declare must be one FORMAT_CHECKER checks.
+
+    A schema declaring `date-time` against a checker with no date-time
+    library accepts every string ever written and looks exactly like a schema
+    that works — the specification says RFC 3339, the file says `date-time`,
+    the run says ok, and nothing anywhere has looked at the value. The
+    libraries are pinned in scripts/requirements.txt; this is what notices
+    when one is missing, or when a schema starts using a format none of them
+    covers.
+
+    Returns True when a declared format is unchecked, so callers accumulate.
+    """
+    declared = set()
+    for path in sorted(ROOT.glob("schemas/*.json")):
+        declared |= set(FORMAT.findall(path.read_text(encoding="utf-8")))
+
+    unchecked = sorted(declared - set(FORMAT_CHECKER.checkers))
+    if unchecked:
+        print(f"FAIL  schemas/ declares formats nothing asserts: {unchecked}")
+        print("        pip install -r scripts/requirements.txt")
+        return True
+
+    print(f"ok    every format schemas/ declares is asserted: {sorted(declared)}")
+    return False
+
+
 def _load(*parts: str) -> dict:
     return json.loads(ROOT.joinpath(*parts).read_text(encoding="utf-8"))
 
@@ -378,7 +437,7 @@ def _check(where: str, document: dict, schema_name: str) -> bool:
     """
     schema = _load("schemas", schema_name)
     jsonschema.Draft202012Validator.check_schema(schema)
-    validator = jsonschema.Draft202012Validator(schema)
+    validator = jsonschema.Draft202012Validator(schema, format_checker=FORMAT_CHECKER)
 
     problems = [
         f"{list(error.path)}: {error.message}"
@@ -400,7 +459,8 @@ def _check(where: str, document: dict, schema_name: str) -> bool:
 
 
 def main() -> int:
-    failed = False
+    failed = _formats_are_asserted()
+    print()
 
     for schema_name, example_name in PAIRS:
         failed |= _check(
@@ -429,7 +489,9 @@ def main() -> int:
 
     print()
     for schema_name, description, payload in MUST_REJECT:
-        validator = jsonschema.Draft202012Validator(_load("schemas", schema_name))
+        validator = jsonschema.Draft202012Validator(
+            _load("schemas", schema_name), format_checker=FORMAT_CHECKER
+        )
         if list(validator.iter_errors(payload)):
             print(f"ok    rejects {description}")
         else:

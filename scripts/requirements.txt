@@ -7,3 +7,11 @@
 # scripts/check_links.py needs nothing from this file — it is standard
 # library only, so a scheduled link check has no supply chain of its own.
 jsonschema==4.26.0
+
+# `format` is an annotation unless jsonschema has a library for the specific
+# format, and it ignores the ones it cannot check rather than complaining. So
+# a schema declaring `date-time` without these installed accepts every string
+# ever written while looking exactly like a schema that works. validate.py
+# fails if a format declared in schemas/ is one nothing here can assert.
+rfc3339-validator==0.1.4
+rfc3986-validator==0.1.1
