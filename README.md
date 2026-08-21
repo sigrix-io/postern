@@ -38,6 +38,22 @@ UI, another agent. Anything that can serve HTTP can be an agent, in any
 language. No SDK is required, and none is planned; if you want one for your
 language, the specification is right there and pull requests are welcome.
 
+```mermaid
+flowchart LR
+    C["<b>Client</b><br/>CLI · IDE plugin · web UI<br/>another agent"]
+    R["<b>Runner</b><br/>one agent, one port"]
+    D["<b>Distributor</b><br/>optional"]
+    E["<b>Machine environment</b><br/>OPENAI_API_KEY, ..."]
+
+    C -->|"describe · status · run · stream<br/>loopback · no auth defined · no agent id"| R
+    R -->|"entitlements · bundles<br/>HTTPS · Authorization: Bearer"| D
+    E -.->|"values load here, and cross<br/>neither edge above"| R
+```
+
+The dotted edge is the one that carries no protocol traffic, and it is the
+subject of the next two sections. More diagrams, including the entitlement
+state machine, are in [`docs/`](docs).
+
 ## What it does not do
 
 Postern does not define a packaging format. Agents are packaged as [Agent
@@ -93,7 +109,8 @@ by the caller at all — is still conformant and still describable:
 | 3 | Stream | + `stream` |
 
 Machine-readable schemas are in [`schemas/`](schemas), worked payloads in
-[`examples/`](examples).
+[`examples/`](examples), and diagrams of the whole surface in
+[`docs/`](docs).
 
 ## Status
 

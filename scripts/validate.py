@@ -8,7 +8,7 @@ aspirational: run it before opening a pull request.
     pip install jsonschema
     python scripts/validate.py
 
-Six things are checked, because six different kinds of edit go wrong:
+Seven things are checked, because seven different kinds of edit go wrong:
 
 1. Every file in examples/ validates against its schema.
 2. Every fenced JSON block in SPEC.md validates against its schema too.
@@ -23,6 +23,9 @@ Six things are checked, because six different kinds of edit go wrong:
 6. The specification version is mirrored in payloads, schema identifiers and
    prose, and VERSIONING.md requires them to track it exactly. They are
    asserted to be one string, so a bump is either complete or caught.
+7. Every section docs/ points at is a section SPEC.md still has. The pages
+   there are pictures of the specification, and a picture that cites a
+   section number nobody kept is worse than no picture.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -563,6 +566,57 @@ def _check(where: str, document: dict, schema_name: str) -> bool:
     return False
 
 
+# docs/ carries non-normative pictures of the specification, and the section
+# numbers are the only thing tying each one to the text that governs it.
+SECTION_REF = re.compile(r"§(\d+(?:\.\d+)*)")
+SPEC_HEADING = re.compile(r"^#{2,4}\s+(\d+(?:\.\d+)*)\.?\s", re.MULTILINE)
+
+
+def _docs_cite_real_sections() -> bool:
+    """Every section docs/ points at is a section SPEC.md still has.
+
+    The pages under docs/ are non-normative, which is exactly what makes a
+    stale reference there cheap to leave in and expensive to follow. A reader
+    who clicks through to a numbered section and finds something else has been
+    told the picture is out of date, without being told how far — and unlike
+    the schemas, nothing else in this repository reads those numbers.
+
+    Renumbering is the edit this catches. Adding a section is harmless and
+    rewording one is invisible here, but §5.3.1 was inserted below a §5.3 that
+    was already being cited, and the next insertion is the one that moves a
+    number somebody drew a diagram around.
+
+    Returns True when a reference resolves to nothing, so callers can
+    accumulate.
+    """
+    headings = set(SPEC_HEADING.findall((ROOT / "SPEC.md").read_text(encoding="utf-8")))
+
+    pages = sorted(
+        path
+        for path in (ROOT / "docs").rglob("*")
+        if path.suffix in {".md", ".html"}
+    )
+    if not pages:
+        print("ok    docs/ has no pages to check")
+        return False
+
+    failed = False
+    for path in pages:
+        cited = set(SECTION_REF.findall(path.read_text(encoding="utf-8")))
+        missing = sorted(
+            cited - headings, key=lambda ref: [int(part) for part in ref.split(".")]
+        )
+        where = path.relative_to(ROOT)
+        if missing:
+            failed = True
+            named = ", ".join("§" + ref for ref in missing)
+            print(f"FAIL  {where} cites sections SPEC.md does not have: {named}")
+        else:
+            print(f"ok    {where} — {len(cited)} section references resolve")
+
+    return failed
+
+
 def main() -> int:
     failed = _formats_are_asserted()
     print()
@@ -613,6 +667,9 @@ def main() -> int:
     print()
     failed |= _identifier_pattern()
     failed |= _version_mirrors()
+
+    print()
+    failed |= _docs_cite_real_sections()
 
     return 1 if failed else 0
 
