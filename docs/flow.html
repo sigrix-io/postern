@@ -1,0 +1,1002 @@
+<title>Postern Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&amp;family=JetBrains+Mono:wght@400;600&amp;family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&amp;display=swap">
+
+<style>
+:root{
+  --ground:#EDEFF1; --surface:#F7F8FA; --sunk:#E2E5E9;
+  --ink:#14181D; --ink-2:#454E59; --iron:#6B7480;
+  --rule:#CDD2D8; --rule-2:#DDE1E5;
+  --gate:#16624F; --gate-wash:#16624F1A;
+  --bar:#9C3D1B;  --bar-wash:#9C3D1B1A;
+  --brass:#7A5C0E; --brass-wash:#7A5C0E1A;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Newsreader",Georgia,"Times New Roman",serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --measure:68ch;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1215; --surface:#161B20; --sunk:#080B0D;
+    --ink:#E6E9EC; --ink-2:#A2ACB6; --iron:#7E8894;
+    --rule:#2A3138; --rule-2:#20262B;
+    --gate:#4FBF9E; --gate-wash:#4FBF9E1F;
+    --bar:#E58455;  --bar-wash:#E584551F;
+    --brass:#D6B04A; --brass-wash:#D6B04A1F;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1215; --surface:#161B20; --sunk:#080B0D;
+  --ink:#E6E9EC; --ink-2:#A2ACB6; --iron:#7E8894;
+  --rule:#2A3138; --rule-2:#20262B;
+  --gate:#4FBF9E; --gate-wash:#4FBF9E1F;
+  --bar:#E58455;  --bar-wash:#E584551F;
+  --brass:#D6B04A; --brass-wash:#D6B04A1F;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--body); font-size:18px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+:focus-visible{outline:2px solid var(--gate); outline-offset:3px; border-radius:2px}
+
+/* ---------- shell ---------- */
+.wrap{max-width:1180px; margin:0 auto; padding:0 24px}
+.col{max-width:var(--measure); margin-left:auto; margin-right:auto}
+
+nav.bar{
+  position:sticky; top:0; z-index:10; background:var(--ground);
+  border-bottom:1px solid var(--rule);
+}
+nav.bar .inner{
+  max-width:1180px; margin:0 auto; padding:11px 24px;
+  display:flex; align-items:baseline; gap:22px; flex-wrap:wrap;
+}
+nav.bar b{
+  font-family:var(--display); font-weight:700; font-size:14px;
+  letter-spacing:.02em;
+}
+nav.bar b span{color:var(--iron); font-weight:500}
+nav.bar ul{
+  display:flex; gap:16px; list-style:none; margin:0; padding:0; flex-wrap:wrap;
+}
+nav.bar a{
+  font-family:var(--mono); font-size:11px; letter-spacing:.04em;
+  color:var(--iron); text-decoration:none; text-transform:uppercase;
+  border-bottom:1px solid transparent; padding-bottom:1px;
+}
+nav.bar a:hover{color:var(--ink); border-bottom-color:var(--gate)}
+
+/* ---------- masthead ---------- */
+header.mast{padding:76px 0 20px}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--iron); margin:0 0 20px;
+}
+h1{
+  font-family:var(--display); font-weight:700; font-size:clamp(38px,6vw,62px);
+  line-height:1.02; letter-spacing:-.022em; margin:0 0 22px; text-wrap:balance;
+}
+.standfirst{font-size:21px; line-height:1.55; color:var(--ink-2); margin:0 0 30px}
+.standfirst em{font-style:italic; color:var(--ink)}
+
+.ledger{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule);
+  margin:34px 0 8px;
+}
+.ledger div{background:var(--ground); padding:14px 16px}
+.ledger dt{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--iron); margin:0 0 7px;
+}
+.ledger dd{
+  margin:0; font-family:var(--display); font-weight:700;
+  font-size:26px; line-height:1; letter-spacing:-.01em;
+}
+.ledger dd small{
+  display:block; font-family:var(--body); font-weight:400; font-size:14px;
+  color:var(--ink-2); letter-spacing:0; margin-top:7px; line-height:1.4;
+}
+
+/* ---------- sections ---------- */
+section{padding:44px 0 8px; scroll-margin-top:60px}
+h2{
+  font-family:var(--display); font-weight:700; font-size:clamp(25px,3.3vw,34px);
+  line-height:1.13; letter-spacing:-.018em; margin:0 0 6px; text-wrap:balance;
+}
+h2 .marker{
+  display:block; font-family:var(--mono); font-weight:400; font-size:11px;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--gate);
+  margin-bottom:12px;
+}
+h3{
+  font-family:var(--display); font-weight:700; font-size:18px;
+  letter-spacing:-.006em; margin:34px 0 8px;
+}
+p{margin:0 0 17px}
+.lede{font-size:19.5px; color:var(--ink-2); margin-bottom:22px}
+a{color:var(--ink); text-decoration-color:var(--iron); text-underline-offset:2px}
+a:hover{text-decoration-color:var(--gate)}
+code{
+  font-family:var(--mono); font-size:.84em; background:var(--sunk);
+  padding:1.5px 4.5px; border-radius:3px; word-break:break-word;
+}
+strong{font-weight:600}
+.hr{border:0; border-top:1px solid var(--rule); margin:52px auto 0; max-width:var(--measure)}
+
+/* ---------- figures ---------- */
+figure{
+  margin:34px auto; max-width:1120px; background:var(--surface);
+  border:1px solid var(--rule); padding:26px 26px 20px;
+}
+figure .scroll{overflow-x:auto; overflow-y:hidden}
+figure svg{display:block; width:100%; min-width:660px; height:auto}
+figcaption{
+  margin-top:18px; padding-top:14px; border-top:1px solid var(--rule-2);
+  font-size:15px; line-height:1.55; color:var(--ink-2); max-width:74ch;
+}
+figcaption b{
+  font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--iron); font-weight:400;
+  display:block; margin-bottom:5px;
+}
+
+/* svg text roles */
+.fig text{fill:var(--ink); font-family:var(--display)}
+.t-ttl{font-size:14px; font-weight:700; letter-spacing:-.01em}
+.t-sub{font-family:var(--mono)!important; font-size:9.5px; fill:var(--iron)}
+.t-lbl{font-family:var(--mono)!important; font-size:10px; fill:var(--ink-2)}
+.t-mini{font-family:var(--mono)!important; font-size:9px; fill:var(--iron); letter-spacing:.06em}
+.t-band{font-family:var(--mono)!important; font-size:10.5px; fill:var(--iron); letter-spacing:.12em; text-transform:uppercase}
+.t-node{font-size:12.5px; font-weight:500}
+.t-code{font-family:var(--mono)!important; font-size:11px; font-weight:600}
+
+.box{fill:var(--surface); stroke:var(--iron); stroke-width:1.2}
+.box-q{fill:none; stroke:var(--iron); stroke-width:1.2}
+.dash{stroke-dasharray:4 4}
+.line{stroke:var(--ink-2); stroke-width:1.3; fill:none}
+.line-thin{stroke:var(--iron); stroke-width:1; fill:none}
+.life{stroke:var(--iron); stroke-width:1; stroke-dasharray:3 5; opacity:.7}
+.band{fill:var(--sunk); opacity:.55}
+
+.s-gate{stroke:var(--gate)} .f-gate{fill:var(--gate)} .w-gate{fill:var(--gate-wash)}
+.s-bar{stroke:var(--bar)}   .f-bar{fill:var(--bar)}   .w-bar{fill:var(--bar-wash)}
+.s-brass{stroke:var(--brass)} .f-brass{fill:var(--brass)} .w-brass{fill:var(--brass-wash)}
+.m-ink{fill:var(--ink-2)} .m-iron{fill:var(--iron)}
+.m-gate{fill:var(--gate)} .m-bar{fill:var(--bar)} .m-brass{fill:var(--brass)}
+.term{stroke-width:1.4; fill:var(--surface)}
+
+/* ---------- tables ---------- */
+.twrap{overflow-x:auto; margin:26px auto; max-width:1120px}
+table{border-collapse:collapse; width:100%; font-size:15px; min-width:560px}
+caption{
+  text-align:left; font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--iron); padding-bottom:11px;
+}
+th,td{
+  text-align:left; padding:9px 14px 9px 0; border-bottom:1px solid var(--rule-2);
+  vertical-align:top;
+}
+thead th{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--iron); font-weight:400;
+  border-bottom:1px solid var(--rule);
+}
+tbody td:first-child{font-family:var(--mono); font-size:13px; white-space:nowrap}
+.num{font-variant-numeric:tabular-nums}
+
+.chip{
+  display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600;
+  letter-spacing:.06em; padding:2px 7px; border:1px solid currentColor;
+  border-radius:2px; white-space:nowrap;
+}
+.c-gate{color:var(--gate); background:var(--gate-wash)}
+.c-bar{color:var(--bar); background:var(--bar-wash)}
+.c-brass{color:var(--brass); background:var(--brass-wash)}
+.c-iron{color:var(--iron)}
+
+.matrix td,.matrix th{text-align:center; padding:11px 8px; border-right:1px solid var(--rule-2)}
+.matrix td:first-child,.matrix th:first-child{text-align:left; padding-left:0; white-space:nowrap}
+.matrix tbody td:first-child{font-family:var(--display); font-size:15px; font-weight:700}
+.matrix .lv{font-family:var(--mono); font-size:11px; color:var(--iron); display:block; font-weight:400}
+
+/* ---------- notes ---------- */
+.notes{counter-reset:n; margin:26px auto 0; max-width:var(--measure); padding:0; list-style:none}
+.notes>li{
+  counter-increment:n; position:relative; padding:20px 0 20px 54px;
+  border-top:1px solid var(--rule-2);
+}
+.notes>li::before{
+  content:counter(n,decimal-leading-zero); position:absolute; left:0; top:22px;
+  font-family:var(--mono); font-size:11px; color:var(--gate); letter-spacing:.06em;
+}
+.notes h3{margin:0 0 7px; font-size:17px}
+.notes p{margin:0 0 10px; font-size:16.5px; color:var(--ink-2)}
+.notes p:last-child{margin-bottom:0}
+.notes .cite{
+  font-family:var(--mono); font-size:11px; color:var(--iron); letter-spacing:.04em;
+}
+
+.pull{
+  border-left:2px solid var(--gate); padding:4px 0 4px 20px; margin:26px 0;
+  font-size:19px; line-height:1.5;
+}
+.pull code{font-size:.8em}
+
+footer{
+  margin-top:66px; border-top:1px solid var(--rule); padding:26px 0 60px;
+  font-family:var(--mono); font-size:11.5px; color:var(--iron); line-height:1.85;
+}
+footer a{color:var(--iron)}
+</style>
+
+<nav class="bar">
+  <div class="inner">
+    <b>Postern <span>v0 · draft</span></b>
+    <ul>
+      <li><a href="#surfaces">Surfaces</a></li>
+      <li><a href="#run">A run</a></li>
+      <li><a href="#gate">The gate</a></li>
+      <li><a href="#window">The window</a></li>
+      <li><a href="#blind">One answer</a></li>
+      <li><a href="#stream">Stream</a></li>
+      <li><a href="#notes">Reading notes</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="col">
+    <p class="eyebrow">Flow analysis · derived from SPEC.md · non-normative</p>
+    <h1>Six pictures of a four-verb protocol</h1>
+    <p class="standfirst">Postern is 1,187 lines of prose and no diagrams. Almost all of its
+    difficulty sits in one place — <em>the state machine deciding whether a run is
+    allowed</em> — and that machine is described across five sub-sections and one
+    eight-row table. This is that machine, drawn.</p>
+
+    <dl class="ledger">
+      <div><dt>Runner verbs</dt><dd>4<small><code>describe</code> · <code>run</code> · <code>stream</code> · <code>status</code></small></dd></div>
+      <div><dt>Distributor paths</dt><dd>2<small><code>entitlements</code> · <code>bundles</code></small></dd></div>
+      <div><dt>Conformance levels</dt><dd>3<small>cumulative; a level is discoverable</small></dd></div>
+      <div><dt>Error codes</dt><dd>8<small>closed enum on emit, open on receive</small></dd></div>
+      <div><dt>Run outcomes</dt><dd>3<small>run · refused · cannot tell</small></dd></div>
+    </dl>
+  </div>
+</header>
+
+<hr class="hr">
+
+<section id="surfaces">
+  <div class="col">
+    <h2><span class="marker">A · §2, §4, §5 — Topology</span>Two surfaces, joined at the runner</h2>
+    <p class="lede">Postern looks like one protocol and behaves like two, with opposite
+    security models, meeting in a single process.</p>
+
+    <p>Everything a client touches is unauthenticated, loopback-bound, and carries
+    <strong>no agent identifier at all</strong> — §2.2 makes the port the agent's address, so
+    a runner serves exactly one agent and none of the four verbs needs to name it.
+    Everything the runner touches upstream is the inverse: HTTPS-only, bearer-authenticated,
+    and addressed by a two-segment identifier.</p>
+
+    <p>The runner is where those two models are reconciled, and it is also the only party
+    holding state. A client is stateless by construction; a distributor answers each check
+    fresh. The runner is the one that caches an answer, persists it across a restart,
+    and computes the deadlines. Every hard rule in §5 is a rule about what the runner
+    remembers.</p>
+  </div>
+
+  <figure>
+    <div class="scroll">
+      <svg class="fig" viewBox="0 0 1000 452" role="img" aria-label="Three parties: a client speaking unauthenticated loopback HTTP to a runner, and the runner speaking authenticated HTTPS to an optional distributor. Credentials are loaded into the runner from the machine environment and never cross either protocol edge.">
+        <defs>
+          <marker id="f1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-ink"/></marker>
+          <marker id="f1g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-gate"/></marker>
+        </defs>
+
+        <!-- client -->
+        <rect class="box" x="20" y="120" width="180" height="122" rx="5"/>
+        <text class="t-ttl" x="110" y="158" text-anchor="middle">Client</text>
+        <text class="t-sub" x="110" y="180" text-anchor="middle">CLI · IDE · web UI</text>
+        <text class="t-sub" x="110" y="195" text-anchor="middle">· another agent</text>
+        <text class="t-mini" x="110" y="221" text-anchor="middle">holds a list of ports</text>
+
+        <!-- runner -->
+        <rect class="box" x="400" y="120" width="210" height="122" rx="5"/>
+        <text class="t-ttl" x="505" y="158" text-anchor="middle">Runner</text>
+        <text class="t-sub" x="505" y="180" text-anchor="middle">one agent, one port</text>
+        <text class="t-mini" x="505" y="207" text-anchor="middle">the only party that</text>
+        <text class="t-mini" x="505" y="221" text-anchor="middle">holds state</text>
+
+        <!-- distributor -->
+        <rect class="box dash" x="810" y="120" width="170" height="122" rx="5"/>
+        <text class="t-ttl" x="895" y="158" text-anchor="middle">Distributor</text>
+        <text class="t-sub" x="895" y="180" text-anchor="middle">optional · §5.1</text>
+        <text class="t-mini" x="895" y="207" text-anchor="middle">answers for a</text>
+        <text class="t-mini" x="895" y="221" text-anchor="middle">catalogue</text>
+
+        <!-- edge 1 -->
+        <text class="t-lbl" x="302" y="82" text-anchor="middle">HTTP/1.1 · 127.0.0.1</text>
+        <text class="t-mini" x="302" y="99" text-anchor="middle">no auth defined · no agent id</text>
+        <line class="line" x1="206" y1="170" x2="392" y2="170" marker-end="url(#f1a)"/>
+        <line class="line" x1="392" y1="200" x2="206" y2="200" marker-end="url(#f1a)"/>
+        <text class="t-lbl" x="302" y="268" text-anchor="middle">GET describe · GET status</text>
+        <text class="t-lbl" x="302" y="285" text-anchor="middle">POST run · POST stream</text>
+
+        <!-- edge 2 -->
+        <text class="t-lbl" x="710" y="82" text-anchor="middle">HTTPS required</text>
+        <text class="t-mini" x="710" y="99" text-anchor="middle">Authorization: Bearer &lt;token&gt;</text>
+        <line class="line" x1="616" y1="170" x2="802" y2="170" marker-end="url(#f1a)"/>
+        <line class="line" x1="802" y1="200" x2="616" y2="200" marker-end="url(#f1a)"/>
+        <text class="t-lbl" x="710" y="268" text-anchor="middle">GET entitlements/{owner}/{name}</text>
+        <text class="t-lbl" x="710" y="285" text-anchor="middle">GET bundles/{owner}/{name}</text>
+
+        <!-- environment -->
+        <rect class="box dash s-gate" x="400" y="352" width="210" height="72" rx="5"/>
+        <text class="t-node f-gate" x="505" y="380" text-anchor="middle">Machine environment</text>
+        <text class="t-sub" x="505" y="402" text-anchor="middle">OPENAI_API_KEY · SERPER_…</text>
+        <line class="line s-gate" x1="505" y1="350" x2="505" y2="248" marker-end="url(#f1g)"/>
+        <text class="t-lbl f-gate" x="632" y="378">describe declares the names;</text>
+        <text class="t-lbl f-gate" x="632" y="395">the values enter here, and</text>
+        <text class="t-lbl f-gate" x="632" y="412">cross neither edge above</text>
+
+        <!-- side annotations -->
+        <text class="t-band" x="302" y="36" text-anchor="middle">execution surface</text>
+        <text class="t-band" x="710" y="36" text-anchor="middle">entitlement surface</text>
+        <line class="line-thin" x1="150" y1="46" x2="454" y2="46"/>
+        <line class="line-thin" x1="558" y1="46" x2="862" y2="46"/>
+      </svg>
+    </div>
+    <figcaption><b>Figure 1 · Topology</b>Two protocol edges with inverted properties. The green
+    path is the one that carries no protocol traffic at all: §4.1.3 lets <code>describe</code>
+    declare credential <em>names</em>, and forbids any payload or bundle from carrying a
+    <em>value</em>. That is what makes “your keys stay on your machine” checkable rather than
+    promised — there is nowhere in the picture for a secret to travel.</figcaption>
+  </figure>
+</section>
+
+<hr class="hr">
+
+<section id="run">
+  <div class="col">
+    <h2><span class="marker">B · §2, §3, §4 — Lifecycle</span>A run, end to end</h2>
+    <p class="lede">Four verbs, but only two of them can ever be refused on entitlement grounds.</p>
+
+    <p>The ordering below is not mandated anywhere — a client may call the verbs in any
+    order — but it is the only ordering that lets a client know what it is doing before it
+    does it. <code>status</code> reports the conformance level, so a client learns whether
+    <code>run</code> and <code>stream</code> exist at all; <code>describe</code> reports the input
+    contract, so it learns what to send. Both are required to answer at Level 1 and both are
+    required to answer without an entitlement, which is precisely what lets a client render
+    an agent it cannot yet run.</p>
+
+    <p>The entitlement check is invisible from the client's side. It happens runner-side,
+    only when the cached answer has expired, and its failure surfaces to the client as an
+    ordinary error on <code>run</code> or <code>stream</code>.</p>
+  </div>
+
+  <figure>
+    <div class="scroll">
+      <svg class="fig" viewBox="0 0 980 596" role="img" aria-label="Sequence diagram across client, runner and distributor lanes, grouped into four phases: optional subprocess discovery, learning the agent via status and describe, the runner's own entitlement check against the distributor, and execution via run or stream.">
+        <defs>
+          <marker id="f2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-ink"/></marker>
+          <marker id="f2i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-iron"/></marker>
+          <marker id="f2g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-gate"/></marker>
+        </defs>
+
+        <!-- bands -->
+        <rect class="band" x="118" y="54" width="862" height="66"/>
+        <rect class="band" x="118" y="130" width="862" height="128"/>
+        <rect class="band" x="118" y="268" width="862" height="96"/>
+        <rect class="band" x="118" y="374" width="862" height="176"/>
+
+        <text class="t-band" x="106" y="74" text-anchor="end">discover</text>
+        <text class="t-mini" x="106" y="91" text-anchor="end">optional · §2</text>
+
+        <text class="t-band" x="106" y="150" text-anchor="end">learn</text>
+        <text class="t-mini" x="106" y="167" text-anchor="end">answers without</text>
+        <text class="t-mini" x="106" y="181" text-anchor="end">an entitlement</text>
+        <text class="t-mini" x="106" y="195" text-anchor="end">§4.1, §4.4</text>
+
+        <text class="t-band" x="106" y="288" text-anchor="end">check</text>
+        <text class="t-mini" x="106" y="305" text-anchor="end">only once the</text>
+        <text class="t-mini" x="106" y="319" text-anchor="end">window expires</text>
+        <text class="t-mini" x="106" y="333" text-anchor="end">§5.4</text>
+
+        <text class="t-band" x="106" y="394" text-anchor="end">execute</text>
+        <text class="t-mini" x="106" y="411" text-anchor="end">the only verbs</text>
+        <text class="t-mini" x="106" y="425" text-anchor="end">the gate stops</text>
+
+        <!-- lanes -->
+        <rect class="box" x="140" y="12" width="130" height="30" rx="4"/>
+        <text class="t-node" x="205" y="32" text-anchor="middle">Client</text>
+        <rect class="box" x="470" y="12" width="130" height="30" rx="4"/>
+        <text class="t-node" x="535" y="32" text-anchor="middle">Runner</text>
+        <rect class="box dash" x="800" y="12" width="130" height="30" rx="4"/>
+        <text class="t-node" x="865" y="32" text-anchor="middle">Distributor</text>
+        <line class="life" x1="205" y1="44" x2="205" y2="562"/>
+        <line class="life" x1="535" y1="44" x2="535" y2="562"/>
+        <line class="life" x1="865" y1="44" x2="865" y2="562"/>
+
+        <!-- discover -->
+        <text class="t-lbl" x="370" y="74" text-anchor="middle">launch: command, args, env</text>
+        <line class="line" x1="207" y1="82" x2="531" y2="82" marker-end="url(#f2a)"/>
+        <text class="t-lbl" x="370" y="102" text-anchor="middle">stdout: POSTERN_PORT=&lt;port&gt;</text>
+        <line class="line line-thin dash" x1="533" y1="110" x2="209" y2="110" marker-end="url(#f2i)"/>
+
+        <!-- learn -->
+        <text class="t-lbl" x="370" y="150" text-anchor="middle">GET /postern/v0/status</text>
+        <line class="line" x1="207" y1="158" x2="531" y2="158" marker-end="url(#f2a)"/>
+        <text class="t-lbl" x="370" y="178" text-anchor="middle">level · state · entitlement · credentials</text>
+        <line class="line" x1="533" y1="186" x2="209" y2="186" marker-end="url(#f2a)"/>
+        <text class="t-lbl" x="370" y="214" text-anchor="middle">GET /postern/v0/describe</text>
+        <line class="line" x1="207" y1="222" x2="531" y2="222" marker-end="url(#f2a)"/>
+        <text class="t-lbl" x="370" y="242" text-anchor="middle">inputs · output · capabilities · credentials</text>
+        <line class="line" x1="533" y1="250" x2="209" y2="250" marker-end="url(#f2a)"/>
+
+        <!-- check -->
+        <text class="t-lbl" x="700" y="290" text-anchor="middle">GET /entitlements/{owner}/{name}</text>
+        <text class="t-mini" x="700" y="305" text-anchor="middle">Authorization: Bearer &lt;token&gt;</text>
+        <line class="line" x1="537" y1="313" x2="861" y2="313" marker-end="url(#f2a)"/>
+        <text class="t-lbl" x="700" y="333" text-anchor="middle">state · checked_at · stale_after · grace</text>
+        <line class="line" x1="863" y1="341" x2="539" y2="341" marker-end="url(#f2a)"/>
+
+        <!-- execute -->
+        <text class="t-lbl" x="370" y="394" text-anchor="middle">POST /postern/v0/run  {"inputs": {…}}</text>
+        <line class="line" x1="207" y1="402" x2="531" y2="402" marker-end="url(#f2a)"/>
+        <text class="t-lbl" x="370" y="422" text-anchor="middle">200 · run_id · output · usage</text>
+        <line class="line s-gate" x1="533" y1="430" x2="209" y2="430" marker-end="url(#f2g)"/>
+
+        <line class="line-thin dash" x1="140" y1="446" x2="960" y2="446"/>
+        <text class="t-mini" x="370" y="462" text-anchor="middle">— or, at Level 3 —</text>
+
+        <text class="t-lbl" x="370" y="484" text-anchor="middle">POST /postern/v0/stream</text>
+        <line class="line" x1="207" y1="492" x2="531" y2="492" marker-end="url(#f2a)"/>
+        <text class="t-lbl" x="370" y="512" text-anchor="middle">event: start → step* → delta*</text>
+        <line class="line line-thin" x1="533" y1="520" x2="209" y2="520" marker-end="url(#f2i)"/>
+        <text class="t-lbl" x="370" y="540" text-anchor="middle">event: done  (the run body)</text>
+        <line class="line s-gate" x1="533" y1="548" x2="209" y2="548" marker-end="url(#f2g)"/>
+
+        <text class="t-mini" x="960" y="402" text-anchor="end">gated ↓</text>
+        <text class="t-mini" x="960" y="492" text-anchor="end">gated ↓</text>
+      </svg>
+    </div>
+    <figcaption><b>Figure 2 · Lifecycle</b>The discovery band is optional — a client that already
+    knows the port skips it. The check band fires on the runner's own schedule, not the client's,
+    and a client never sees it happen; it only sees the cached verdict reflected in
+    <code>status.entitlement</code>. Only the two arrows marked <em>gated</em> can be refused for
+    entitlement reasons.</figcaption>
+  </figure>
+
+  <div class="twrap">
+    <table class="matrix">
+      <caption>Conformance is cumulative, and a verb above the level is a permanent 501 — never a degraded answer</caption>
+      <thead>
+        <tr><th>Level</th><th><code>describe</code></th><th><code>status</code></th><th><code>run</code></th><th><code>stream</code></th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Describe<span class="lv">level 1</span></td>
+          <td><span class="chip c-gate">served</span></td>
+          <td><span class="chip c-gate">served</span></td>
+          <td><span class="chip c-bar">501</span></td>
+          <td><span class="chip c-bar">501</span></td>
+        </tr>
+        <tr>
+          <td>Execute<span class="lv">level 2</span></td>
+          <td><span class="chip c-gate">served</span></td>
+          <td><span class="chip c-gate">served</span></td>
+          <td><span class="chip c-gate">served</span></td>
+          <td><span class="chip c-bar">501</span></td>
+        </tr>
+        <tr>
+          <td>Stream<span class="lv">level 3</span></td>
+          <td><span class="chip c-gate">served</span></td>
+          <td><span class="chip c-gate">served</span></td>
+          <td><span class="chip c-gate">served</span></td>
+          <td><span class="chip c-gate">served</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>The <code>501</code> cells matter more than they look. §3 forbids a Level 2 runner from
+    answering <code>stream</code> with a single-shot response, because a client that asked for a
+    stream and silently received one event cannot distinguish “not supported” from “finished
+    instantly”. And the code has to be <code>not_implemented</code> rather than
+    <code>unavailable</code>: a level is a permanent property, so inviting a retry that can never
+    succeed would be a lie about the runner rather than about the request.</p>
+  </div>
+
+  <div class="twrap">
+    <table>
+      <caption>The eight codes, and which half of the protocol can construct each</caption>
+      <thead>
+        <tr><th>Code</th><th>HTTP</th><th>Emitted by</th><th>Means</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>bad_request</code></td><td class="num">400</td><td><span class="chip c-iron">runner</span> <span class="chip c-iron">distributor</span></td><td>Malformed body, an input failing <code>describe</code>'s validation, or an identifier off §1.5's grammar.</td></tr>
+        <tr><td><code>not_found</code></td><td class="num">404</td><td><span class="chip c-iron">runner</span> <span class="chip c-iron">distributor</span></td><td>The overloaded one. On a distributor: no such agent, <em>or</em> not entitled, <em>or</em> the token is dead. On a runner: an unimplemented path, saying nothing about the agent.</td></tr>
+        <tr><td><code>not_entitled</code></td><td class="num">403</td><td><span class="chip c-iron">runner</span></td><td>A local runner reporting its own state to its own client. Unconstructible on a distributor — §5.5 forbids it there.</td></tr>
+        <tr><td><code>withdrawn</code></td><td class="num">410</td><td><span class="chip c-iron">distributor</span></td><td>Was entitled; the agent has since been withdrawn. Carries <code>detail.access_ends_at</code>.</td></tr>
+        <tr><td><code>missing_credential</code></td><td class="num">424</td><td><span class="chip c-iron">runner</span></td><td>A credential named by <code>describe</code> is absent from the environment.</td></tr>
+        <tr><td><code>agent_error</code></td><td class="num">500</td><td><span class="chip c-iron">runner</span></td><td>The agent ran and failed.</td></tr>
+        <tr><td><code>not_implemented</code></td><td class="num">501</td><td><span class="chip c-iron">runner</span></td><td>Above the declared conformance level. Retrying will not help, ever.</td></tr>
+        <tr><td><code>unavailable</code></td><td class="num">503</td><td><span class="chip c-iron">runner</span> <span class="chip c-iron">distributor</span></td><td>Not ready. Retrying may help.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>A code marked for one side is not merely unusual on the other — it is
+    <em>unconstructible</em> there, so a client receiving one has learned something about the
+    responder rather than about its request. There is deliberately no <code>401</code> anywhere
+    in the protocol; §5.5 explains why, and Figure 5 draws it.</p>
+  </div>
+</section>
+
+<hr class="hr">
+
+<style>
+  .tbox{stroke-width:1.5}
+  .hatch{fill:var(--sunk)}
+</style>
+
+<section id="gate">
+  <div class="col">
+    <h2><span class="marker">C · §5.1, §5.4, §5.7 — The gate</span>Everything §5 says, as one walk</h2>
+    <p class="lede">Eight rows of table, five sub-sections and two nested time bounds reduce to a
+    single traversal with three possible endings.</p>
+
+    <p>This is the part of Postern an implementer actually has to get right, and it is the part
+    the prose spreads furthest. §5.1 handles the no-distributor case, §5.4 sets the re-check
+    deadline, §5.7.1 adds grace, §5.7.3 handles a runner that has never been told anything, and
+    §5.7.4 handles a <code>404</code>. The table at the end of §5.7.4 collects the results but not
+    the order in which the questions are asked.</p>
+
+    <p>Asked in order, they terminate in exactly three ways — and the specification names the rule
+    underneath them itself.</p>
+
+    <div class="pull">“Unreachable answers <code>unavailable</code>; refused answers
+    <code>not_entitled</code>.” A runner that cannot find out invites a retry. A runner that has
+    been told no does not pretend the answer might change.</div>
+  </div>
+
+  <figure>
+    <div class="scroll">
+      <svg class="fig" viewBox="0 0 920 716" role="img" aria-label="Decision tree for whether a runner may execute run or stream. Six questions in sequence — distributor configured, any check ever succeeded, was the last answer a refusal, inside the staleness window, is the distributor reachable, inside the grace period — terminating in run, 403 not entitled, or 503 unavailable.">
+        <defs>
+          <marker id="f3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-ink"/></marker>
+        </defs>
+
+        <text class="t-lbl" x="215" y="18" text-anchor="middle">POST /run or /stream arrives</text>
+        <line class="line" x1="215" y1="26" x2="215" y2="42" marker-end="url(#f3a)"/>
+
+        <!-- row 1 -->
+        <rect class="box-q" x="60" y="46" width="310" height="54" rx="5"/>
+        <text class="t-node" x="215" y="70" text-anchor="middle">Is a distributor configured?</text>
+        <text class="t-sub" x="215" y="88" text-anchor="middle">§5.1</text>
+        <line class="line" x1="372" y1="73" x2="534" y2="73" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="453" y="65" text-anchor="middle">no</text>
+        <rect class="tbox w-gate s-gate" x="540" y="46" width="360" height="54" rx="5"/>
+        <text class="t-code f-gate" x="558" y="70">RUN</text>
+        <text class="t-sub" x="558" y="88">entitlement.state = not_required</text>
+        <line class="line" x1="215" y1="100" x2="215" y2="142" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="226" y="126">yes</text>
+
+        <!-- row 2 -->
+        <rect class="box-q" x="60" y="146" width="310" height="54" rx="5"/>
+        <text class="t-node" x="215" y="170" text-anchor="middle">Has a check ever succeeded?</text>
+        <text class="t-sub" x="215" y="188" text-anchor="middle">§5.7.3</text>
+        <line class="line" x1="372" y1="173" x2="534" y2="173" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="453" y="165" text-anchor="middle">no</text>
+        <rect class="tbox w-brass s-brass" x="540" y="146" width="360" height="54" rx="5"/>
+        <text class="t-code f-brass" x="558" y="170">503 · unavailable</text>
+        <text class="t-sub" x="558" y="188">state = unknown, with no checked_at</text>
+        <line class="line" x1="215" y1="200" x2="215" y2="242" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="226" y="226">yes</text>
+
+        <!-- row 3 -->
+        <rect class="box-q" x="60" y="246" width="310" height="54" rx="5"/>
+        <text class="t-node" x="215" y="270" text-anchor="middle">Was the last answer a refusal?</text>
+        <text class="t-sub" x="215" y="288" text-anchor="middle">revoked, or a 404 · §5.7.4</text>
+        <line class="line" x1="372" y1="273" x2="534" y2="273" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="453" y="265" text-anchor="middle">yes</text>
+        <rect class="tbox w-bar s-bar" x="540" y="246" width="360" height="54" rx="5"/>
+        <text class="t-code f-bar" x="558" y="270">403 · not_entitled</text>
+        <text class="t-sub" x="558" y="288">state = revoked · no grace applies</text>
+        <line class="line" x1="215" y1="300" x2="215" y2="342" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="226" y="326">no</text>
+
+        <!-- row 4 -->
+        <rect class="box-q" x="60" y="346" width="310" height="54" rx="5"/>
+        <text class="t-node" x="215" y="370" text-anchor="middle">Inside checked_at + stale_after?</text>
+        <text class="t-sub" x="215" y="388" text-anchor="middle">§5.4</text>
+        <line class="line" x1="372" y1="373" x2="534" y2="373" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="453" y="365" text-anchor="middle">yes</text>
+        <rect class="tbox w-gate s-gate" x="540" y="346" width="360" height="54" rx="5"/>
+        <text class="t-code f-gate" x="558" y="370">RUN</text>
+        <text class="t-sub" x="558" y="388">state = active</text>
+        <line class="line" x1="215" y1="400" x2="215" y2="442" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="226" y="426">no</text>
+
+        <!-- row 5 -->
+        <rect class="box-q" x="60" y="446" width="310" height="54" rx="5"/>
+        <text class="t-node" x="215" y="470" text-anchor="middle">Can the distributor be reached?</text>
+        <text class="t-sub" x="215" y="488" text-anchor="middle">5xx, DNS, TLS, timeout, bad body = no</text>
+        <line class="line" x1="372" y1="473" x2="534" y2="473" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="453" y="465" text-anchor="middle">yes</text>
+        <rect class="tbox dash" x="540" y="446" width="360" height="54" rx="5" fill="none" stroke="currentColor" opacity=".55"/>
+        <text class="t-code" x="558" y="470">re-check now</text>
+        <text class="t-sub" x="558" y="488">then re-enter this chart at the top</text>
+        <line class="line" x1="215" y1="500" x2="215" y2="542" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="226" y="526">no</text>
+
+        <!-- row 6 -->
+        <rect class="box-q" x="60" y="546" width="310" height="54" rx="5"/>
+        <text class="t-node" x="215" y="570" text-anchor="middle">Inside + grace_seconds as well?</text>
+        <text class="t-sub" x="215" y="588" text-anchor="middle">§5.7.1 · 0 is a valid declaration</text>
+        <line class="line" x1="372" y1="573" x2="534" y2="573" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="453" y="565" text-anchor="middle">yes</text>
+        <rect class="tbox w-gate s-gate" x="540" y="546" width="360" height="54" rx="5"/>
+        <text class="t-code f-gate" x="558" y="570">RUN</text>
+        <text class="t-sub" x="558" y="588">state = unknown, with checked_at</text>
+        <line class="line" x1="215" y1="600" x2="215" y2="642" marker-end="url(#f3a)"/>
+        <text class="t-mini" x="226" y="626">no</text>
+
+        <!-- final -->
+        <rect class="tbox w-brass s-brass" x="60" y="646" width="310" height="54" rx="5"/>
+        <text class="t-code f-brass" x="78" y="670">503 · unavailable</text>
+        <text class="t-sub" x="78" y="688">state = unknown, past window and grace</text>
+
+        <text class="t-band" x="900" y="628" text-anchor="end">describe and status keep answering</text>
+        <text class="t-mini" x="900" y="646" text-anchor="end">throughout every branch above — §4.1 and §4.4</text>
+        <text class="t-mini" x="900" y="662" text-anchor="end">put both below the gate, so a runner that</text>
+        <text class="t-mini" x="900" y="678" text-anchor="end">cannot run its agent still says what it is</text>
+      </svg>
+    </div>
+    <figcaption><b>Figure 3 · The entitlement gate</b>Three endings, colour-coded throughout this
+    page: green runs, rust refuses, brass cannot tell. Note where the two <em>brass</em> endings
+    sit — one at the very top of the walk and one at the very bottom — and that both report
+    <code>unknown</code>. §4.4 separates them by whether <code>checked_at</code> is present, which
+    is the subtlest requirement in the document.</figcaption>
+  </figure>
+</section>
+
+<hr class="hr">
+
+<section id="window">
+  <div class="col">
+    <h2><span class="marker">D · §5.3, §5.4 — The window</span>Why <code>checked_at</code> is the distributor's clock</h2>
+    <p class="lede">One sentence in §5.3 stops two caches from stacking, and it is the sentence
+    most likely to be implemented backwards.</p>
+
+    <p><code>checked_at</code> means <em>the moment the distributor last consulted the
+    authority</em> — not the moment it answered, and emphatically not the moment the runner
+    received the answer. A distributor serving from its own cache reports the age of the
+    underlying read.</p>
+
+    <p>The obvious alternative — let the runner stamp its own clock on receipt — validates
+    identically and produces a silently longer window. The distributor's cache age becomes
+    invisible to everyone, the two caches run back to back, and <code>stale_after_seconds</code>
+    describes half of the real worst case while claiming to describe all of it.</p>
+  </div>
+
+  <figure>
+    <div class="scroll">
+      <svg class="fig" viewBox="0 0 960 372" role="img" aria-label="Two timelines compared. In the specified design, checked_at anchors at the distributor's own read, so the staleness window and grace period together are the whole worst case. In the rejected design, the runner stamps its own receipt time, so the distributor's cache age is added invisibly on top of the declared window.">
+        <defs>
+          <marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-iron"/></marker>
+        </defs>
+
+        <!-- shared guide -->
+        <line class="line-thin dash" x1="500" y1="46" x2="500" y2="300" opacity=".8"/>
+        <line class="line-thin dash" x1="130" y1="46" x2="130" y2="300" opacity=".8"/>
+
+        <!-- ROW A -->
+        <text class="t-band f-gate" x="0" y="26">as specified</text>
+        <text class="t-lbl" x="130" y="26">checked_at is the moment the distributor consulted the authority</text>
+
+        <rect class="w-gate s-gate" x="130" y="56" width="370" height="28" stroke-width="1.4"/>
+        <text class="t-sub f-gate" x="315" y="75" text-anchor="middle">stale_after_seconds</text>
+        <rect class="w-brass s-brass" x="500" y="56" width="220" height="28" stroke-width="1.4"/>
+        <text class="t-sub f-brass" x="610" y="75" text-anchor="middle">grace_seconds</text>
+        <line class="line-thin dash" x1="722" y1="70" x2="830" y2="70" marker-end="url(#f4a)"/>
+        <text class="t-mini f-bar" x="836" y="74">stops</text>
+
+        <text class="t-mini" x="130" y="102" text-anchor="middle">checked_at</text>
+        <text class="t-mini" x="500" y="102" text-anchor="middle">re-check due</text>
+        <text class="t-mini" x="720" y="102" text-anchor="middle">hard stop</text>
+
+        <path class="line-thin" d="M130,116 v9 h590 v-9"/>
+        <path class="line-thin" d="M425,125 v9"/>
+        <text class="t-lbl" x="425" y="150" text-anchor="middle">the whole worst case — both terms declared by the distributor, both knowable to it in advance</text>
+
+        <!-- divider -->
+        <line class="line-thin" x1="0" y1="176" x2="960" y2="176" opacity=".5"/>
+
+        <!-- ROW B -->
+        <text class="t-band f-bar" x="0" y="206">rejected</text>
+        <text class="t-lbl" x="130" y="206">if the runner stamped its own receipt time instead</text>
+
+        <rect class="hatch line-thin dash" x="130" y="228" width="160" height="28" stroke="currentColor" opacity=".85"/>
+        <text class="t-mini" x="210" y="247" text-anchor="middle">cache age</text>
+        <rect class="w-gate s-gate" x="290" y="228" width="370" height="28" stroke-width="1.4"/>
+        <text class="t-sub f-gate" x="395" y="247" text-anchor="middle">stale_after_seconds</text>
+        <rect class="w-bar s-bar" x="500" y="228" width="160" height="28" stroke-width="1.4"/>
+        <text class="t-mini f-bar" x="580" y="247" text-anchor="middle">overhang</text>
+
+        <text class="t-mini" x="130" y="274" text-anchor="middle">authority read</text>
+        <text class="t-mini" x="290" y="274" text-anchor="middle">runner stamps now</text>
+        <text class="t-mini" x="500" y="274" text-anchor="middle">honest deadline</text>
+        <text class="t-mini" x="660" y="274" text-anchor="middle">actual stop</text>
+
+        <path class="line-thin s-bar" d="M130,288 v9 h530 v-9"/>
+        <path class="line-thin s-bar" d="M395,297 v9"/>
+        <text class="t-lbl f-bar" x="395" y="322" text-anchor="middle">real worst case = cache age + stale_after — and the first term is invisible to the caller</text>
+
+        <text class="t-mini" x="960" y="352" text-anchor="end">a restart is not a new window: §5.7.2 requires checked_at to be persisted alongside and both deadlines re-evaluated against it</text>
+      </svg>
+    </div>
+    <figcaption><b>Figure 4 · Anchoring</b>The two timelines share an axis: <code>t=0</code> is the
+    moment the authority was consulted, in both. The green bars are the same length. Everything
+    that differs is the rust overhang — the distributor's own cache age, added on top of a bound
+    that claims to include it. This is also what makes persistence across a restart safe:
+    an answer that carries its own expiry does not need discarding, so a runner that reboots
+    offline still holds something it can evaluate.</figcaption>
+  </figure>
+</section>
+
+<hr class="hr">
+
+<section id="blind">
+  <div class="col">
+    <h2><span class="marker">E · §5.5, §7 — The blind spot</span>Four questions, one answer</h2>
+    <p class="lede">Postern defines no <code>401</code> and forbids <code>403</code> on a
+    distributor. That is a deliberate loss of information, and it costs its own implementers
+    the most.</p>
+
+    <p>A <code>403</code> confirms that an agent exists. Over a guessable identifier space that
+    turns the entitlement endpoint into an enumeration oracle for a private catalogue, so §5.5
+    collapses four distinct situations into one identical response — including, notably, the
+    distributor's <em>own routing bugs</em>. A listing type nobody wrote a case for authenticates
+    normally and then <code>404</code>s a buyer who owns the thing, byte for byte the way a
+    correct refusal does.</p>
+
+    <p>Which is why §5.5 ends with an obligation that has nothing to do with the wire format: a
+    distributor <strong>MUST</strong> cover each branch of its internal resolution with a test of
+    its own, out of band — one per branch, not one per happy path. No client will ever report
+    this class of bug, because no client can see it.</p>
+  </div>
+
+  <figure>
+    <div class="scroll">
+      <svg class="fig" viewBox="0 0 920 404" role="img" aria-label="Four distinct situations — no such agent, buyer not entitled, dead token, and the distributor's own routing miss — all converge on one identical 404 not_found response. A fifth case, an identifier that fails the grammar, escapes to 400 bad_request because it is computed from the request string alone.">
+        <defs>
+          <marker id="f5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-bar"/></marker>
+          <marker id="f5g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-gate"/></marker>
+        </defs>
+
+        <text class="t-band" x="20" y="16">four different situations</text>
+        <text class="t-band" x="900" y="16" text-anchor="end">one indistinguishable answer</text>
+
+        <rect class="box" x="20" y="36" width="300" height="42" rx="4"/>
+        <text class="t-lbl" x="36" y="62">No such agent in the catalogue</text>
+        <rect class="box" x="20" y="90" width="300" height="42" rx="4"/>
+        <text class="t-lbl" x="36" y="116">It exists — this buyer is not entitled</text>
+        <rect class="box" x="20" y="144" width="300" height="42" rx="4"/>
+        <text class="t-lbl" x="36" y="170">Token unknown, revoked or rotated</text>
+        <rect class="box" x="20" y="198" width="300" height="42" rx="4"/>
+        <text class="t-lbl" x="36" y="218">The distributor's own routing miss</text>
+        <text class="t-mini" x="36" y="233">a branch nobody wrote a case for</text>
+
+        <line class="line-thin s-bar" x1="322" y1="57"  x2="464" y2="132"/>
+        <line class="line-thin s-bar" x1="322" y1="111" x2="464" y2="132"/>
+        <line class="line-thin s-bar" x1="322" y1="165" x2="464" y2="132"/>
+        <line class="line-thin s-bar" x1="322" y1="219" x2="464" y2="132"/>
+        <circle class="f-bar" cx="468" cy="132" r="4"/>
+        <line class="line s-bar" x1="474" y1="132" x2="552" y2="132" marker-end="url(#f5a)"/>
+
+        <rect class="tbox w-bar s-bar" x="558" y="82" width="342" height="100" rx="5"/>
+        <text class="t-code f-bar" x="576" y="108">404 · not_found</text>
+        <text class="t-sub" x="576" y="130">"This agent is not available to you. It may</text>
+        <text class="t-sub" x="576" y="146">not exist, or your token may not grant access."</text>
+        <text class="t-mini" x="576" y="168">no status, no code and no field separates them</text>
+
+        <text class="t-mini" x="468" y="200" text-anchor="middle">§5.5</text>
+        <text class="t-mini" x="576" y="204">Postern defines no 401 — saying "authenticate</text>
+        <text class="t-mini" x="576" y="219">and retry" would itself confirm the token was real</text>
+
+        <line class="line-thin" x1="20" y1="262" x2="900" y2="262" opacity=".5"/>
+        <text class="t-band f-gate" x="20" y="288">the one escape</text>
+
+        <rect class="box s-gate" x="20" y="304" width="300" height="42" rx="4"/>
+        <text class="t-lbl" x="36" y="330">Identifier fails §1.5's grammar</text>
+        <line class="line s-gate" x1="322" y1="325" x2="552" y2="325" marker-end="url(#f5g)"/>
+        <text class="t-mini f-gate" x="437" y="317" text-anchor="middle">safe to distinguish</text>
+
+        <rect class="tbox w-gate s-gate" x="558" y="298" width="342" height="56" rx="5"/>
+        <text class="t-code f-gate" x="576" y="322">400 · bad_request</text>
+        <text class="t-sub" x="576" y="340">computed from the request string alone</text>
+        <text class="t-mini" x="900" y="376" text-anchor="end">the distributor MUST NOT consult its catalogue to produce it, MUST NOT vary it by whether a corrected form exists</text>
+      </svg>
+    </div>
+    <figcaption><b>Figure 5 · Indistinguishability</b>The escape hatch at the bottom is the whole
+    of the diagnostic surface a caller gets. It works precisely because it never touches the
+    catalogue: a caller who typed <code>Acme/Market-Research-Crew</code> learns the string is
+    wrong, rather than being told — indistinguishably — that they may not own it.</figcaption>
+  </figure>
+</section>
+
+<hr class="hr">
+
+<section id="stream">
+  <div class="col">
+    <h2><span class="marker">F · §4.3 — Stream</span>The event contract</h2>
+    <p class="lede">Five event types, two hard rules about ordering, and one invariant that makes
+    progressive rendering trustworthy.</p>
+
+    <p><code>stream</code> takes the same request body as <code>run</code> and returns
+    <code>text/event-stream</code>. Its list of event types is explicitly designed to grow —
+    a client <strong>MUST</strong> ignore an unrecognised event name rather than aborting, which
+    is how the list extends without a version bump.</p>
+  </div>
+
+  <figure>
+    <div class="scroll">
+      <svg class="fig" viewBox="0 0 940 272" role="img" aria-label="The stream event contract: a required start event, then zero or more optional step and delta events in any order, then exactly one terminal done or error event. Below, the invariant that concatenating every delta text in order equals the final output value.">
+        <defs>
+          <marker id="f6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-ink"/></marker>
+          <marker id="f6g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-gate"/></marker>
+        </defs>
+
+        <rect class="tbox w-gate s-gate" x="20" y="58" width="128" height="48" rx="4"/>
+        <text class="t-code f-gate" x="84" y="80" text-anchor="middle">start</text>
+        <text class="t-mini" x="84" y="96" text-anchor="middle">MUST be first</text>
+        <line class="line" x1="150" y1="82" x2="204" y2="82" marker-end="url(#f6a)"/>
+
+        <rect class="box-q dash" x="208" y="38" width="290" height="88" rx="5"/>
+        <rect class="box" x="226" y="52" width="104" height="28" rx="3"/>
+        <text class="t-code" x="278" y="71" text-anchor="middle">step</text>
+        <rect class="box" x="226" y="88" width="104" height="28" rx="3"/>
+        <text class="t-code" x="278" y="107" text-anchor="middle">delta</text>
+        <text class="t-mini" x="346" y="70">OPTIONAL · zero or more</text>
+        <text class="t-mini" x="346" y="86">interleaved in any order</text>
+        <text class="t-mini" x="346" y="110">unknown names: ignore</text>
+        <line class="line" x1="500" y1="82" x2="528" y2="82"/>
+        <path class="line" d="M528,82 V60 H552" marker-end="url(#f6a)"/>
+        <path class="line" d="M528,82 V118 H552" marker-end="url(#f6a)"/>
+
+        <rect class="tbox w-gate s-gate" x="558" y="38" width="196" height="44" rx="4"/>
+        <text class="t-code f-gate" x="576" y="60">done</text>
+        <text class="t-sub" x="576" y="75">the full run body, §4.2</text>
+        <rect class="tbox w-bar s-bar" x="558" y="96" width="196" height="44" rx="4"/>
+        <text class="t-code f-bar" x="576" y="118">error</text>
+        <text class="t-sub" x="576" y="133">the §2.1 envelope</text>
+        <text class="t-mini" x="770" y="84">exactly one, and last</text>
+        <text class="t-mini" x="770" y="100">— never both, never neither</text>
+
+        <line class="line-thin" x1="20" y1="164" x2="920" y2="164" opacity=".5"/>
+
+        <rect class="w-gate s-gate" x="20" y="190" width="86"  height="26" stroke-width="1.2"/>
+        <text class="t-mini" x="63"  y="207" text-anchor="middle">delta 1</text>
+        <rect class="w-gate s-gate" x="110" y="190" width="140" height="26" stroke-width="1.2"/>
+        <text class="t-mini" x="180" y="207" text-anchor="middle">delta 2</text>
+        <rect class="w-gate s-gate" x="254" y="190" width="106" height="26" stroke-width="1.2"/>
+        <text class="t-mini" x="307" y="207" text-anchor="middle">delta 3</text>
+        <line class="line s-gate" x1="190" y1="220" x2="190" y2="236" marker-end="url(#f6g)"/>
+        <rect class="tbox w-gate s-gate" x="20" y="240" width="340" height="26"/>
+        <text class="t-mini f-gate" x="190" y="257" text-anchor="middle">done · output.value</text>
+
+        <text class="t-lbl" x="392" y="196">If any delta is emitted, concatenating every delta.text</text>
+        <text class="t-lbl" x="392" y="214">in order MUST equal the final output.value.</text>
+        <text class="t-mini" x="392" y="238">A runner that cannot produce incremental text emits none —</text>
+        <text class="t-mini" x="392" y="254">start then done is a conformant Level 3 stream.</text>
+      </svg>
+    </div>
+    <figcaption><b>Figure 6 · Stream</b>The concatenation invariant is what makes the
+    stream worth consuming: a client can render <code>delta</code>s as they arrive and know the
+    result it displayed is the result it will be handed. Without it, progressive output would be
+    a preview a client had to throw away and replace.</figcaption>
+  </figure>
+</section>
+
+<hr class="hr">
+
+<section id="notes">
+  <div class="col">
+    <h2><span class="marker">G — Reading notes</span>Five things the drawing surfaced</h2>
+    <p class="lede">Three are properties worth knowing before implementing. Two are places where
+    two conforming implementations could reasonably differ.</p>
+  </div>
+
+  <ol class="notes">
+    <li>
+      <h3>All of the difficulty lives in one component</h3>
+      <p>A client holds no protocol state; a distributor answers each check fresh. The runner is
+      the only party that caches an answer, persists it across a restart and evaluates deadlines
+      against it. That means the whole of §5 — every <strong>MUST</strong> about windows, grace,
+      persistence and re-checking — collapses into a single unit that can be built and tested
+      without any HTTP at all: feed it a clock and a sequence of check outcomes, assert the state
+      and the verdict. Figure 3 is that unit's test matrix.</p>
+      <p class="cite">§5.4, §5.7.2, §5.7.3</p>
+    </li>
+    <li>
+      <h3><code>unknown</code> is two states, told apart by an absent field</h3>
+      <p>“Inside grace, still running, with a deadline” and “never checked, cannot start” are both
+      reported as <code>entitlement.state: "unknown"</code>, and the only thing separating them is
+      whether <code>checked_at</code> is present. The specification argues this costs nothing —
+      and in the protocol it doesn't — but it is a real hazard in a typed client, where an
+      <code>Optional</code> timestamp that defaults to <em>now</em> on deserialise silently
+      converts “cannot start” into “running, with a fresh window”. Both shapes validate against
+      <code>status.schema.json</code>. This is the one place I would insist on a test rather than
+      a type.</p>
+      <p class="cite">§4.4, §5.7.3</p>
+    </li>
+    <li>
+      <h3>A first-ever check that answers <code>404</code> has no <code>stale_after_seconds</code> to reuse</h3>
+      <p>§5.7.4 sends a <code>404</code> straight to <code>revoked</code> — it is an answer, not an
+      outage, so §5.7.3's never-checked path does not catch it. §4.4 then <strong>requires</strong>
+      both <code>checked_at</code> and <code>stale_after_seconds</code> whenever the state is
+      <code>revoked</code>, and §5.7.4 resolves the first with the runner's own receipt time and
+      the second by reusing “the last <code>stale_after_seconds</code> the distributor gave it”.</p>
+      <p>A runner whose very <em>first</em> check returns <code>404</code> has never been given
+      one. The rule is a <strong>SHOULD</strong>, so falling back to its own cadence is
+      conformant — but nothing says so, and the alternative reading (omit the field) is
+      nonconformant against §4.4. One clarifying clause would close it.</p>
+      <p class="cite">§4.4, §5.7.4</p>
+    </li>
+    <li>
+      <h3><code>Idempotency-Key</code> support is undiscoverable</h3>
+      <p>§4.2 says <code>run</code> is not idempotent, that a runner <strong>MAY</strong> honour an
+      <code>Idempotency-Key</code> header, and that the behaviour when it does not is to execute
+      again. There is no field in <code>describe.capabilities</code> or in <code>status</code>
+      that declares support, so a client whose request timed out cannot know whether retrying is
+      safe or whether it is paying twice.</p>
+      <p>That matters most for exactly the agents §4.1.2 asks a client to warn about — the ones
+      whose <code>write_tools</code> spend money or mutate state outside the workspace. The two
+      sections are solving adjacent halves of the same user-facing problem and do not reference
+      each other. An optional <code>capabilities.idempotent_retry</code> boolean would be additive
+      and would close it inside the existing verb.</p>
+      <p class="cite">§4.1.2, §4.2</p>
+    </li>
+    <li>
+      <h3>The <code>delta</code> invariant has no stated failure behaviour</h3>
+      <p>Concatenated <code>delta.text</code> <strong>MUST</strong> equal <code>done</code>'s
+      <code>output.value</code>. The specification is unusually careful elsewhere about what a
+      client does when something does not match its expectations — unrecognised error codes,
+      unrecognised event names, unrecognised <code>validation</code> members, unrecognised input
+      types all have explicit receive-side rules. This one does not: a client that accumulated
+      deltas and then received a different <code>output.value</code> is on its own.</p>
+      <p>Most likely deliberate, since it is a runner bug rather than a protocol state. But
+      “prefer <code>done</code>” is one sentence, and it would stop two clients from disagreeing
+      about what the user sees.</p>
+      <p class="cite">§4.3</p>
+    </li>
+  </ol>
+
+  <div class="col">
+    <p style="margin-top:34px">Notes 3, 4 and 5 are reader questions rather than defects —
+    the kind <a href="https://github.com/sigrix-io/postern/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>
+    calls “the most useful reports we get: ambiguity found by a reader is ambiguity found before
+    it is baked into implementations.”</p>
+  </div>
+</section>
+
+<footer>
+  <div class="col">
+    Postern v0 · draft · flow analysis derived from <a href="https://github.com/sigrix-io/postern/blob/main/SPEC.md">SPEC.md</a>,
+    <a href="https://github.com/sigrix-io/postern/tree/main/schemas">schemas/</a> and
+    <a href="https://github.com/sigrix-io/postern/tree/main/examples">examples/</a>.<br>
+    Non-normative. Where this page and the specification disagree, the specification is right.<br>
+    Section references are to SPEC.md as of this reading. Apache-2.0.
+  </div>
+</footer>
+
+</div>
