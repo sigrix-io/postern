@@ -38,6 +38,13 @@ UI, another agent. Anything that can serve HTTP can be an agent, in any
 language. No SDK is required, and none is planned; if you want one for your
 language, the specification is right there and pull requests are welcome.
 
+A web UI is the one of those with a condition attached, because a browser
+will not let a page read a local runner's answer unless the runner allows
+the page's origin. [§2.3](SPEC.md#23-browser-clients) says what a runner
+owes a browser client, and why the default is to refuse: a runner defines
+no authentication, so an origin check is the only thing standing between
+`run` and every page the user happens to visit.
+
 ```mermaid
 flowchart LR
     C["<b>Client</b><br/>CLI · IDE plugin · web UI<br/>another agent"]

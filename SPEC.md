@@ -175,7 +175,10 @@ All paths are prefixed with the protocol version: `/postern/v0/…`. The prefix
 changes only on a breaking revision.
 
 Request and response bodies are `application/json; charset=utf-8`, except
-`stream`, which is `text/event-stream` (§4.3).
+`stream`, which is `text/event-stream` (§4.3). That is a statement about
+encoding here and a **MUST** about refusal in §2.3, for a reason that has
+nothing to do with parsing: the media type of a `run` body is what decides
+whether a browser asks permission before sending it.
 
 A runner **MAY** additionally be launched as a subprocess and discovered
 through a launch specification (`command`, `args`, `env`), the same shape
@@ -262,6 +265,148 @@ Serving several agents means running several runners. A client that wants a
 catalogue holds a list of ports; a client that wants two agents to work
 together calls both. Composition is the client's — the addressing form of
 the orchestration non-goal in §1.2.
+
+### 2.3 Browser clients
+
+A client running in a browser is subject to the same-origin policy, and the
+other client kinds in §1.4 are not. A web UI served from
+`https://app.example.com` — or from a local dev server on some other port —
+that calls `http://127.0.0.1:8765/postern/v0/describe` is making a
+cross-origin request, and a runner that says nothing about CORS is
+unreachable from that client while answering every one of its requests
+correctly.
+
+Two mechanisms are involved, and the difference between them is the whole
+shape of this section:
+
+- `describe` and `status` are `GET`s a browser sends without asking
+  permission. The runner receives them and answers them; the browser then
+  **discards the answer** unless it carries `Access-Control-Allow-Origin`.
+  The call happened. Only the reading of it was refused.
+- `run` and `stream` are `POST`s carrying `application/json`, which is not
+  something a browser will send cross-origin unasked. It sends a preflight
+  `OPTIONS` first and **never sends the `POST` at all** unless that
+  preflight is answered permissively.
+
+So a cross-origin read is stopped *after* it has run and a cross-origin
+`run` is stopped *before*, which is survivable only because the two verbs on
+the wrong side of that line are reads: §4.1 requires `describe` to be
+side-effect free, and `status` reports state rather than changing any.
+Postern's side-effecting verbs are the ones that preflight. The rest of this
+section is about not giving that up.
+
+**Answering the preflight.** A runner **MUST** answer `OPTIONS` on
+`/postern/v0/run` and `/postern/v0/stream`. It **SHOULD** answer `OPTIONS`
+on `describe` and `status` too, for a client that sends a request header
+outside the browser's safelist and so preflights its `GET` as well.
+
+A preflight **MUST** be side-effect free and **MUST NOT** require
+credentials or an entitlement. It is not the verb behind it, and its answer
+does not depend on the runner's conformance level: a Level 1 runner
+preflighted for `run` answers the preflight like any other, so that the
+`POST` behind it arrives and can be refused `501` with `not_implemented`
+(§3) — a readable answer the client can act on, where a refused preflight
+would leave it with an opaque failure that names nothing.
+
+Where the runner allows the origin, that answer carries:
+
+| Header | Value |
+|---|---|
+| `Access-Control-Allow-Origin` | the requesting origin, echoed octet-for-octet |
+| `Access-Control-Allow-Methods` | `POST, OPTIONS` — `GET, OPTIONS` for `describe` and `status` |
+| `Access-Control-Allow-Headers` | `Content-Type`, plus `Idempotency-Key` where the runner honours it (§4.2) |
+| `Vary` | `Origin` |
+
+on any 2xx status; `204` is the usual choice.
+
+`Access-Control-Allow-Origin` and `Vary: Origin` **MUST** ride the actual
+response as well, and not only the preflight. The two are refused
+separately: a preflight authorises the request, and a `run` whose response
+arrives without the header is discarded by the browser exactly as an
+unpermitted one would be — the agent having run.
+
+`Vary` is not decoration, and it earns its place on the actual response
+rather than on the preflight. A browser keys its preflight cache by origin
+already; a shared cache sitting between the page and the runner keys on the
+URL, so a runner that echoes an origin without `Vary: Origin` invites that
+cache to hand the first caller's permission to the second.
+
+No `Access-Control-Expose-Headers` is required, because Postern puts nothing
+in a response header a client has to read. `Content-Type` is legible to a
+page already, and every other answer this protocol gives is in the body.
+
+`Access-Control-Max-Age` is **OPTIONAL** and worth sending. Without it a
+browser preflights every single `run`, which doubles the request count on
+the one verb a user is already waiting on.
+
+**Which origins to allow is the runner's decision.** Postern specifies only
+the two ends of it. A runner **MUST NOT** allow an origin it was not
+configured to allow, and **MUST NOT** ship `Access-Control-Allow-Origin: *`
+as a default.
+A wildcard is a configuration an operator may legitimately choose; it is not
+one a runner may choose on their behalf. §7 gives the reasoning at length,
+and the short form is that a runner defines no authentication, so the origin
+check is the entirety of its access control against a browser.
+
+A runner refusing an origin **SHOULD** answer the preflight `204` with no
+`Access-Control-Allow-Origin`, rather than an error status. The browser
+blocks the call either way and the page can read the body of neither, so
+§2.1's envelope buys nothing here — while a `403` invites whoever reads the
+network log to go looking for an entitlement problem that does not exist.
+
+A runner **SHOULD NOT** send `Access-Control-Allow-Credentials`. Postern
+defines no cookie and no browser-presented token, so the header can only
+admit ambient credentials this protocol never asked for.
+
+`Origin: null` **MUST NOT** be treated as an origin a configuration can
+name. Sandboxed documents, `file://` pages and several redirect chains all
+send it, so allowing `null` allows all of them at once: it is a wildcard
+wearing the shape of one specific origin.
+
+**A preflight only holds if `run` refuses a request that skips it.** What
+makes `run` preflight is `application/json`. A browser sends a cross-origin
+`POST` with no preflight at all when the `Content-Type` is one of the three
+its safelist admits — and `text/plain` is one of them, and a JSON body
+labelled `text/plain` is still a JSON body.
+
+A runner that parses whatever it is handed therefore has no preflight at
+all. A page on any origin posts `text/plain` to `/postern/v0/run`, the
+browser sends it without asking anyone, and the agent runs — spending money
+and invoking `write_tools` (§4.1.2) — before any origin decision has been
+reached. That the page cannot read the response is no consolation: the side
+effect was the attack, and it has already happened.
+
+A runner **MUST** therefore reject a `run` or `stream` request whose
+`Content-Type` media type is not `application/json`, answering `400` with
+`bad_request`, and **MUST** do so before executing the agent. Parameters do
+not enter into it — `application/json` and `application/json; charset=utf-8`
+are the same media type, and §2 requires a client to send the second without
+making the first nonconformant to receive.
+
+This is the one rule here that binds a runner nobody will ever point a
+browser at. It is a **MUST** anyway, because the runner does not get to know
+that, and it costs a client already sending the header §2 requires exactly
+nothing.
+
+**Two things a browser client should expect.** `stream` cannot be consumed
+with `EventSource`: that API issues a `GET` and sets no request headers,
+while `stream` is a `POST` carrying a JSON body (§4.3). A browser client
+reads the events out of `fetch`'s response body itself. The wire format in
+§4.3 is unchanged — only the reader is.
+
+And an allowed origin may not be the last word. Browsers separately restrict
+requests from a public origin to a loopback or private address, under a
+mechanism of their own that is still moving at the time of writing: Chrome
+preflights such a request with `Access-Control-Request-Private-Network` and
+wants `Access-Control-Allow-Private-Network: true` in reply, and is
+reshaping that into a user-granted permission. A runner **MAY** answer that
+header. A client **MUST NOT** assume an allowed origin settles the question,
+and neither party can settle it here — it is the browser's policy about the
+local network rather than Postern's about its own protocol.
+
+None of this reaches §5. A distributor's endpoints are called by a runner
+and never by a page — a browser holds no token (§7) — so a distributor
+carries no CORS obligation under this specification.
 
 ---
 
@@ -426,7 +571,9 @@ Request:
 
 `inputs` is a map keyed by `describe`'s input keys. A runner **MUST** reject
 a request omitting a `required` input, or failing a declared `validation`,
-with `bad_request` — and **SHOULD** name the offending key in `message`.
+with `bad_request` — and **SHOULD** name the offending key in `message`. It
+**MUST** reject a body that is not `application/json` with the same code,
+before reading the body at all (§2.3).
 
 Response:
 
@@ -1021,6 +1168,21 @@ Two distributors' namespaces coexisting in one bundle is valid.
   Runners that do so **MUST** require authentication of their own; Postern does
   not specify it, because a runner reachable from off-machine is outside the
   threat model this version addresses.
+- **A browser is a client the user did not choose.** The bullet above is
+  about who can reach the port. Every page the user visits can reach it — a
+  loopback runner is one `fetch` away from any origin on the web, and what
+  has been keeping those calls out is the same-origin policy rather than the
+  network. So `Access-Control-Allow-Origin: *` on a runner does not widen
+  the exposure above; it opens a second one, granted to every origin on the
+  web instead of to the local network, against a surface with no
+  authentication and a `write_tools` list (§4.1.2) at the end of it. §2.3 is
+  the answer, and it defaults to refusing for this reason. Note what the
+  browser does and does not buy there: a cross-origin `describe` or `status`
+  is *served* and then withheld from the page, which costs nothing only
+  because both are side-effect free, while `run` and `stream` are stopped
+  before they are served — but only for as long as they preflight, which is
+  why §2.3 obliges a runner to *refuse* a body that is not
+  `application/json` rather than merely to expect one.
 - **Credentials never traverse the protocol.** §4.1.3 is a security
   property, not a convenience. A `describe` or bundle carrying a credential
   value is nonconformant, and a client encountering one **SHOULD** refuse to
@@ -1181,6 +1343,18 @@ and informative for everyone else. Postern is usable with no reference to it.*
   not run at all, reports `unknown` with no `checked_at`, and answers `503`
   `unavailable`. The rule under both: unreachable answers `unavailable`,
   refused answers `not_entitled` (§5.7).
+- Browser clients have a defined answer: a runner **MUST** answer the
+  `OPTIONS` preflight on `run` and `stream`, and the origin policy behind it
+  is the operator's, defaulting to refusal rather than to
+  `Access-Control-Allow-Origin: *`. The specification named a web UI as a
+  client kind and said nothing about CORS, so a fully conforming runner
+  could be unreachable from one — while the obvious remedy, a wildcard,
+  would hand `run` and its `write_tools` to every page the user visits.
+  A runner **MUST** now also reject a `run` or `stream` body whose
+  `Content-Type` is not `application/json`: `application/json` is what makes
+  the request preflight at all, and a runner accepting `text/plain` executes
+  the agent for any origin without one, which is the whole of the preceding
+  rule undone (§2.3, §7).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
