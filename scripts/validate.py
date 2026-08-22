@@ -417,7 +417,7 @@ _VERSIONED_SUFFIXES = {".json", ".md", ".txt", ".yml", ".yaml"}
 _VERSION_IN_PROSE = [
     ("SPEC.md", re.compile(r"^\*\*Version (\S+) · Draft\*\*", re.MULTILINE)),
     ("README.md", re.compile(r"· Version (\S+) · Draft ·")),
-    ("README.md", re.compile(r"Version (\S+) is\s+published early")),
+    ("README.md", re.compile(r"Version (\S+) is\s+drafted\s+in the open")),
 ]
 
 
