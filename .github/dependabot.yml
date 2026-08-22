@@ -1,0 +1,39 @@
+# Keeps the two things this repository pins from ageing quietly.
+#
+# scripts/requirements.txt is pinned because a floating install lets an
+# unrelated release turn a green repository red. That trade has a second half
+# that was never set up: a pin only stays correct if something bumps it, and
+# left alone the validator drifts away from how current tooling reads these
+# schemas — the same failure pinning exists to prevent, arriving from the other
+# direction and with a green check the whole way.
+#
+# The `validate` job is what makes this safe rather than merely automatic. A
+# bump that breaks schema validation arrives as a red check on a pull request
+# nobody has merged, and because that check is required on `main`, it cannot
+# land without passing.
+#
+# Two GitHub behaviours worth knowing, both shared with the scheduled workflow
+# in links.yml: this file is read from the default branch, so editing it on a
+# branch changes nothing until it merges; and Dependabot needs the dependency
+# graph enabled on the repository, which is not something this file can assert.
+#
+# Deliberately no auto-merge. Whether these should merge themselves when green
+# is a judgement about how much unattended merging is wanted, and it belongs on
+# the record rather than defaulted into by a config nobody revisits.
+version: 2
+updates:
+  # The validator's own dependencies. scripts/check_links.py is standard
+  # library only, so it has no supply chain here to watch.
+  - package-ecosystem: "pip"
+    directory: "/scripts"
+    schedule:
+      interval: "weekly"
+
+  # Both workflows. This is what turns an action deprecation into a pull
+  # request, rather than a warning at the top of a log nobody reads until the
+  # runtime is withdrawn and checkout starts failing on whichever pull request
+  # happens to be open that day.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
