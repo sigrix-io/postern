@@ -28,6 +28,7 @@ that answers "who is asking", not "does this still exist".
 from __future__ import annotations
 
 import pathlib
+import html
 import re
 import sys
 import urllib.error
@@ -80,14 +81,39 @@ TIMEOUT = 20
 def _sources():
     """Yield (path relative to the repository root, text) for each source.
 
+    docs/ is here because its pages cite the specification, the schemas and
+    the contribution guide by absolute URL, and those citations rot exactly
+    like any other. It sat outside this glob when it was written, so the
+    seven URLs that arrived with the diagrams were checked by nothing — a
+    link job reporting green while a whole directory went unread is worse
+    than one that is honestly red, because the green is what stops anyone
+    looking.
+
+    HTML is read the same way markdown is: the URL pattern runs over raw
+    text and stops at a quote, so an `href` needs no parser of its own.
+
     examples/ is left out on purpose. Its URLs are illustrative payloads —
     a listing URL for an agent that does not exist — and demanding that they
     resolve would either fail forever or push the examples towards real
     endpoints, which is worse.
     """
-    paths = sorted(ROOT.glob("*.md")) + sorted(ROOT.glob("schemas/*.json"))
+    paths = (
+        sorted(ROOT.glob("*.md"))
+        + sorted(ROOT.glob("schemas/*.json"))
+        + sorted(ROOT.glob("docs/**/*.md"))
+        + sorted(ROOT.glob("docs/**/*.html"))
+    )
     for path in paths:
-        yield path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
+        if path.suffix == ".html":
+            # An HTML attribute must write `&` as `&amp;`, so the raw text of
+            # an href is not the URL a browser requests. Checking the encoded
+            # form asks the server about an address nobody uses: it can answer
+            # for one and not the other, in either direction, and the result
+            # reads as authoritative either way. Markdown is left alone —
+            # there the ampersand is already literal.
+            text = html.unescape(text)
+        yield path.relative_to(ROOT).as_posix(), text
 
 
 def _collect() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
