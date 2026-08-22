@@ -15,5 +15,9 @@
   "credentials": {
     "satisfied": true,
     "missing": []
+  },
+  "limits": {
+    "max_run_seconds": 900,
+    "max_concurrent_runs": 1
   }
 }

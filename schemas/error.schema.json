@@ -20,7 +20,8 @@
             "missing_credential",
             "agent_error",
             "not_implemented",
-            "unavailable"
+            "unavailable",
+            "run_timeout"
           ],
           "description": "The codes a conforming implementation emits. A client MUST tolerate a code outside this set, treating it as a generic failure of its HTTP status class (SPEC.md section 2.1) — this enum is not a licence to reject. not_entitled is only valid from a local runner reporting its own state. Distributors MUST answer not_found instead, so the entitlement endpoint cannot be used to enumerate a private catalogue."
         },
@@ -30,12 +31,17 @@
         },
         "detail": {
           "type": ["object", "string", "null"],
-          "description": "Structured data about this failure, and the envelope's extension point: because the root is closed, whatever a bare code and message cannot carry rides here. SPEC.md section 5.6 defines one member so far — access_ends_at, the RFC 3339 date a withdrawn agent's access ends. Constraining that member is not the same as constraining detail: there is no required and no additionalProperties here, so an unrelated detail is unaffected and future members are still expected.",
+          "description": "Structured data about this failure, and the envelope's extension point: because the root is closed, whatever a bare code and message cannot carry rides here. Two members are defined so far: access_ends_at, the RFC 3339 date a withdrawn agent's access ends (SPEC.md section 5.6), and max_run_seconds, the duration bound a stopped run exceeded (section 4.5). Constraining those members is not the same as constraining detail: there is no required and no additionalProperties here, so an unrelated detail is unaffected and future members are still expected.",
           "properties": {
             "access_ends_at": {
               "type": "string",
               "format": "date-time",
               "description": "SPEC.md section 5.6. The RFC 3339 date a withdrawn agent's access ends, so a client can say something true about it — which it cannot do with a string it has to guess the shape of."
+            },
+            "max_run_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "SPEC.md section 4.5. Accompanies run_timeout: the declared duration bound the run exceeded, the same integer status reports as limits.max_run_seconds, so a client can name the limit that stopped it."
             }
           }
         }
