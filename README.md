@@ -121,10 +121,12 @@ Machine-readable schemas are in [`schemas/`](schemas), worked payloads in
 
 ## Status
 
-**This is a draft, and nothing in it is stable yet.** Version 0.1 is
-published early and deliberately: a specification benefits most from being
-read while changing it is still free. Breaking changes will happen before
-1.0 and will be listed in [VERSIONING.md](VERSIONING.md).
+**This is a draft, and nothing in it is stable yet.** Version 0.1 is drafted
+in the open, deliberately: a specification benefits most from being read
+while changing it is still free. It is not released — there is no tag to pin
+to, and until there is, changes land under *Unreleased* rather than moving
+the version. Breaking changes will happen before 1.0, and
+[VERSIONING.md](VERSIONING.md) says which of them move what.
 
 There is no reference implementation in this repository yet.
 

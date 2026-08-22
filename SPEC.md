@@ -1427,7 +1427,7 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 ## Appendix A · Changes
 
-**Unreleased** — corrections made before first publication.
+**Unreleased** — corrections made before the first tagged release.
 
 - A client **MUST** tolerate an error `code` it does not recognise, so that
   adding a code stays an additive change (§2.1).
