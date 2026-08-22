@@ -50,6 +50,38 @@ version publishes a new directory rather than editing one in place — are in
 [VERSIONING.md](../VERSIONING.md#schema-identifiers). The files here are
 usable without ever fetching one.
 
+### Adding a schema adds a hosting step
+
+The fourth of those commitments is that the identifiers **resolve**. A file
+added here is therefore not finished when `validate.py` passes: until it is
+also served at that base, its `$id` is a 404, and VERSIONING.md is explicit
+that this reads as a broken specification rather than an unhosted one.
+
+Nothing in this repository can see that gap on the way in. `validate.py`
+validates a new schema perfectly well without knowing its identifier is a
+promise, and [`scripts/check_links.py`](../scripts/check_links.py) — which does
+check — runs weekly on a schedule, so it finds the omission some days after the
+merge rather than before it. The window between those two is where the `links`
+job goes red on `main` and nobody has done anything wrong.
+
+So a file added here carries three steps, and only the first is in the diff:
+
+1. **Give it an `$id` on the same base**, with the same specification version
+   in the path. `validate.py` checks that the version segment agrees with the
+   `postern` member; it cannot check anything past that.
+2. **Say in the pull request that a new `$id` needs serving**, so the
+   maintainer merging it knows a deploy is owed. This is the whole of the
+   handoff, and it is manual today — which is why the pull request template
+   asks for it.
+3. **A maintainer serves the file** at
+   `https://sigrix.io/schemas/postern/<specification version>/<file name>` and
+   re-runs the `links` workflow. It carries `workflow_dispatch` for exactly
+   this, so confirming the fix does not mean waiting until Monday.
+
+Removing step 3 by publishing `schemas/*.json` from this repository on merge
+is the durable answer and a larger question than any one schema; until that
+exists, step 2 is what stands between a new file here and a red `links` job.
+
 ## Checking them
 
 `scripts/validate.py` validates every example and every fenced JSON block in

@@ -96,7 +96,7 @@ argument is welcome; please read that section before making it.
 
 ## Pull requests
 
-The pull request template carries these four as a checklist, so they are in
+The pull request template carries these five as a checklist, so they are in
 front of you while you write the description rather than in a file you read
 once. Here is why each is asked for.
 
@@ -144,6 +144,17 @@ once. Here is why each is asked for.
   cites still resolve, runs weekly on a schedule instead. Someone else's
   outage is not a reason to block your change. You can run it locally if you
   are touching links; it needs no dependencies.
+- **Flag a new schema `$id` for serving.** A file added to
+  [`schemas/`](schemas) carries an identifier that
+  [VERSIONING.md](VERSIONING.md#schema-identifiers) commits to serving, and
+  serving it is a manual step outside this repository. Nothing here catches
+  the omission on the way in: `validate.py` validates the file without
+  knowing its `$id` is a promise, and `check_links.py` reports the 404 on the
+  following Monday, by which time the `links` job is red on `main` and the
+  cause is several merges back. Say in the description that a new `$id` needs
+  serving, so the maintainer merging it knows a deploy is owed.
+  [`schemas/README.md`](schemas/README.md#adding-a-schema-adds-a-hosting-step)
+  has the three steps and who owns each.
 - **Add an Appendix A entry** for anything normative.
 
 ## Writing style
