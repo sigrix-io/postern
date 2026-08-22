@@ -175,7 +175,10 @@ All paths are prefixed with the protocol version: `/postern/v0/…`. The prefix
 changes only on a breaking revision.
 
 Request and response bodies are `application/json; charset=utf-8`, except
-`stream`, which is `text/event-stream` (§4.3).
+`stream`, which is `text/event-stream` (§4.3). That is a statement about
+encoding here and a **MUST** about refusal in §2.3, for a reason that has
+nothing to do with parsing: the media type of a `run` body is what decides
+whether a browser asks permission before sending it.
 
 A runner **MAY** additionally be launched as a subprocess and discovered
 through a launch specification (`command`, `args`, `env`), the same shape
@@ -209,7 +212,8 @@ Every non-2xx response body **MUST** be:
 | `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment. |
 | `agent_error` | 500 | R | The agent ran and failed. |
 | `not_implemented` | 501 | R | The verb is defined by this specification but sits above the runner's conformance level (§3). Retrying will not help. |
-| `unavailable` | 503 | R · D | The runner or distributor is not ready. Retrying may help. |
+| `unavailable` | 503 | R · D | The runner or distributor is not ready. Retrying may help — a runner refusing a run because another is in flight answers this (§4.5). |
+| `run_timeout` | 504 | R | The run reached the runner's declared maximum duration and was stopped (§4.5). |
 
 **Side** says which half of the protocol emits a code: `R` for a runner
 (§4), `D` for a distributor (§5). A code marked for one side only is not
@@ -262,6 +266,148 @@ Serving several agents means running several runners. A client that wants a
 catalogue holds a list of ports; a client that wants two agents to work
 together calls both. Composition is the client's — the addressing form of
 the orchestration non-goal in §1.2.
+
+### 2.3 Browser clients
+
+A client running in a browser is subject to the same-origin policy, and the
+other client kinds in §1.4 are not. A web UI served from
+`https://app.example.com` — or from a local dev server on some other port —
+that calls `http://127.0.0.1:8765/postern/v0/describe` is making a
+cross-origin request, and a runner that says nothing about CORS is
+unreachable from that client while answering every one of its requests
+correctly.
+
+Two mechanisms are involved, and the difference between them is the whole
+shape of this section:
+
+- `describe` and `status` are `GET`s a browser sends without asking
+  permission. The runner receives them and answers them; the browser then
+  **discards the answer** unless it carries `Access-Control-Allow-Origin`.
+  The call happened. Only the reading of it was refused.
+- `run` and `stream` are `POST`s carrying `application/json`, which is not
+  something a browser will send cross-origin unasked. It sends a preflight
+  `OPTIONS` first and **never sends the `POST` at all** unless that
+  preflight is answered permissively.
+
+So a cross-origin read is stopped *after* it has run and a cross-origin
+`run` is stopped *before*, which is survivable only because the two verbs on
+the wrong side of that line are reads: §4.1 requires `describe` to be
+side-effect free, and `status` reports state rather than changing any.
+Postern's side-effecting verbs are the ones that preflight. The rest of this
+section is about not giving that up.
+
+**Answering the preflight.** A runner **MUST** answer `OPTIONS` on
+`/postern/v0/run` and `/postern/v0/stream`. It **SHOULD** answer `OPTIONS`
+on `describe` and `status` too, for a client that sends a request header
+outside the browser's safelist and so preflights its `GET` as well.
+
+A preflight **MUST** be side-effect free and **MUST NOT** require
+credentials or an entitlement. It is not the verb behind it, and its answer
+does not depend on the runner's conformance level: a Level 1 runner
+preflighted for `run` answers the preflight like any other, so that the
+`POST` behind it arrives and can be refused `501` with `not_implemented`
+(§3) — a readable answer the client can act on, where a refused preflight
+would leave it with an opaque failure that names nothing.
+
+Where the runner allows the origin, that answer carries:
+
+| Header | Value |
+|---|---|
+| `Access-Control-Allow-Origin` | the requesting origin, echoed octet-for-octet |
+| `Access-Control-Allow-Methods` | `POST, OPTIONS` — `GET, OPTIONS` for `describe` and `status` |
+| `Access-Control-Allow-Headers` | `Content-Type`, plus `Idempotency-Key` where the runner honours it (§4.2) |
+| `Vary` | `Origin` |
+
+on any 2xx status; `204` is the usual choice.
+
+`Access-Control-Allow-Origin` and `Vary: Origin` **MUST** ride the actual
+response as well, and not only the preflight. The two are refused
+separately: a preflight authorises the request, and a `run` whose response
+arrives without the header is discarded by the browser exactly as an
+unpermitted one would be — the agent having run.
+
+`Vary` is not decoration, and it earns its place on the actual response
+rather than on the preflight. A browser keys its preflight cache by origin
+already; a shared cache sitting between the page and the runner keys on the
+URL, so a runner that echoes an origin without `Vary: Origin` invites that
+cache to hand the first caller's permission to the second.
+
+No `Access-Control-Expose-Headers` is required, because Postern puts nothing
+in a response header a client has to read. `Content-Type` is legible to a
+page already, and every other answer this protocol gives is in the body.
+
+`Access-Control-Max-Age` is **OPTIONAL** and worth sending. Without it a
+browser preflights every single `run`, which doubles the request count on
+the one verb a user is already waiting on.
+
+**Which origins to allow is the runner's decision.** Postern specifies only
+the two ends of it. A runner **MUST NOT** allow an origin it was not
+configured to allow, and **MUST NOT** ship `Access-Control-Allow-Origin: *`
+as a default.
+A wildcard is a configuration an operator may legitimately choose; it is not
+one a runner may choose on their behalf. §7 gives the reasoning at length,
+and the short form is that a runner defines no authentication, so the origin
+check is the entirety of its access control against a browser.
+
+A runner refusing an origin **SHOULD** answer the preflight `204` with no
+`Access-Control-Allow-Origin`, rather than an error status. The browser
+blocks the call either way and the page can read the body of neither, so
+§2.1's envelope buys nothing here — while a `403` invites whoever reads the
+network log to go looking for an entitlement problem that does not exist.
+
+A runner **SHOULD NOT** send `Access-Control-Allow-Credentials`. Postern
+defines no cookie and no browser-presented token, so the header can only
+admit ambient credentials this protocol never asked for.
+
+`Origin: null` **MUST NOT** be treated as an origin a configuration can
+name. Sandboxed documents, `file://` pages and several redirect chains all
+send it, so allowing `null` allows all of them at once: it is a wildcard
+wearing the shape of one specific origin.
+
+**A preflight only holds if `run` refuses a request that skips it.** What
+makes `run` preflight is `application/json`. A browser sends a cross-origin
+`POST` with no preflight at all when the `Content-Type` is one of the three
+its safelist admits — and `text/plain` is one of them, and a JSON body
+labelled `text/plain` is still a JSON body.
+
+A runner that parses whatever it is handed therefore has no preflight at
+all. A page on any origin posts `text/plain` to `/postern/v0/run`, the
+browser sends it without asking anyone, and the agent runs — spending money
+and invoking `write_tools` (§4.1.2) — before any origin decision has been
+reached. That the page cannot read the response is no consolation: the side
+effect was the attack, and it has already happened.
+
+A runner **MUST** therefore reject a `run` or `stream` request whose
+`Content-Type` media type is not `application/json`, answering `400` with
+`bad_request`, and **MUST** do so before executing the agent. Parameters do
+not enter into it — `application/json` and `application/json; charset=utf-8`
+are the same media type, and §2 requires a client to send the second without
+making the first nonconformant to receive.
+
+This is the one rule here that binds a runner nobody will ever point a
+browser at. It is a **MUST** anyway, because the runner does not get to know
+that, and it costs a client already sending the header §2 requires exactly
+nothing.
+
+**Two things a browser client should expect.** `stream` cannot be consumed
+with `EventSource`: that API issues a `GET` and sets no request headers,
+while `stream` is a `POST` carrying a JSON body (§4.3). A browser client
+reads the events out of `fetch`'s response body itself. The wire format in
+§4.3 is unchanged — only the reader is.
+
+And an allowed origin may not be the last word. Browsers separately restrict
+requests from a public origin to a loopback or private address, under a
+mechanism of their own that is still moving at the time of writing: Chrome
+preflights such a request with `Access-Control-Request-Private-Network` and
+wants `Access-Control-Allow-Private-Network: true` in reply, and is
+reshaping that into a user-granted permission. A runner **MAY** answer that
+header. A client **MUST NOT** assume an allowed origin settles the question,
+and neither party can settle it here — it is the browser's policy about the
+local network rather than Postern's about its own protocol.
+
+None of this reaches §5. A distributor's endpoints are called by a runner
+and never by a page — a browser holds no token (§7) — so a distributor
+carries no CORS obligation under this specification.
 
 ---
 
@@ -413,6 +559,76 @@ This is the property that makes "your keys stay on your machine" checkable
 rather than promised: there is nowhere in the protocol for a secret to
 travel, and a bundle carrying one is nonconformant.
 
+#### 4.1.4 `output`
+
+Declares what the agent returns: a `type`, and an **OPTIONAL** `example`.
+§4.2's `run` response carries the same `type` beside the `value` it actually
+produced, and so does a stream's `done` payload (§4.3).
+
+`type` is `text` in v0, and that is a decision rather than an accident of
+the examples — the same decision §4.1.1 records for inputs, made for the
+same reason. `output.value` therefore carries a string, everywhere it
+appears. A second type, and the value shape it implies, can be added later:
+additive for a runner, which need never emit it, and free to withdraw
+nothing. What it costs a *client* is the subject of the rest of this
+section.
+
+**An unrecognised `output.type` is the one unknown in this protocol a client
+may not ignore.** Every other extensible surface tells a client to carry on
+regardless: an unrecognised error `code` is a generic failure of its status
+class (§2.1), an unrecognised `stream` event name is skipped (§4.3), an
+unrecognised input `type` is treated as `text`, and an unrecognised
+`validation` member is dropped (§4.1.1). None of those rules transfers here.
+Each governs something a client is entitled to ignore, and this is not that:
+`type` is what says how to read `value`, so a client that ignores it has not
+tolerated an unknown — it has misread a known.
+
+§4.2 already makes this argument, about a field it declined to add:
+
+> A signal a client must not miss cannot ride in a field a client is
+> entitled to ignore
+
+The input side is the instructive contrast, because it looks like the same
+question and is not. Falling back to `text` for an unrecognised *input* type
+is safe: the client renders a text box, the user types into it, and the
+**runner** validates what comes back — answering `bad_request` if it is
+wrong (§4.2). There is a second reader downstream. On the output side the
+client is the last reader, nothing checks its interpretation, and guessing
+`text` for bytes that are not text renders them as prose: silently, with no
+error anywhere, and looking for all the world like an agent that returned
+gibberish.
+
+So a client receiving an `output.type` it does not recognise:
+
+- **MUST NOT** present `value` as text.
+- **MUST NOT** report the run as having failed. §2.1 routes every failure
+  through a non-2xx envelope, so a `200` carrying an output type the client
+  cannot read is a run that *succeeded* beside a client that cannot render
+  it. Those are two different facts, and the second is the one the user
+  needs.
+- **SHOULD** say which type it was given, rather than only that something
+  went unrendered. It is the one piece of information that tells a user
+  whether to reach for a different client.
+- **MAY** pass `value` on unchanged to something that does understand it. A
+  client composing two agents (§2.2) relays a result it never has to read
+  itself.
+
+The same rule reaches `describe`, one step earlier and with a different
+consequence. A catalogue that reads a declared output type it does not
+recognise can still render the agent — its name, inputs, credentials and
+tools are all unaffected — and **MUST NOT** describe it as returning text.
+Rendering an agent and rendering it accurately are different things, and
+Level 1 (§3) exists for the second.
+
+**What a second type would owe.** Whoever adds one says what `value`
+carries for it, and what §4.3's `delta` means in its presence: that
+invariant is text-shaped — every `delta.text` concatenated in order equals
+`output.value` — so a non-text output needs either a translation of it or an
+explicit exemption. `describe.output.example` is a string today and needs
+the same answer. None of that is settled here. What is settled is that a
+client written against this section survives the addition, which is the
+property that has to exist first.
+
 ### 4.2 `POST /postern/v0/run`
 
 Executes the agent and returns the final result. A Level 1 runner does not
@@ -426,7 +642,9 @@ Request:
 
 `inputs` is a map keyed by `describe`'s input keys. A runner **MUST** reject
 a request omitting a `required` input, or failing a declared `validation`,
-with `bad_request` — and **SHOULD** name the offending key in `message`.
+with `bad_request` — and **SHOULD** name the offending key in `message`. It
+**MUST** reject a body that is not `application/json` with the same code,
+before reading the body at all (§2.3).
 
 Response:
 
@@ -491,6 +709,23 @@ A stream **MUST** end with exactly one `done` or one `error`. A client
 **MUST** ignore unrecognised event names rather than aborting, which is how
 this list grows without a version bump.
 
+`start` carries `run_id`, `delta` carries `text`, and a `step` carries at
+least `name` and `status` — one saying which step, the other which edge of
+it. `model_id` is absent for a step that calls no model.
+
+`latency_ms` is the step's elapsed time, and is reported on `finished`. A
+runner **MUST NOT** emit it on a `started` step, where there is nothing yet
+to measure; a client receiving one anyway **MUST** ignore it rather than
+reject the event. That asymmetry is the ordinary one — emit exactly the
+shape, accept more than it — and it is what keeps a meaningless field from
+becoming a conformance argument.
+
+[`stream-event.schema.json`](schemas/stream-event.schema.json) is the
+machine-readable form of those three payloads. `done` and `error` are not in
+it, because they carry bodies §4.2 and §2.1 already define. Nor is the SSE
+framing — the ordering rules above, and exactly one `done` or `error`
+last — which spans events and so lives here rather than in any schema.
+
 A Level 2 runner **MUST** answer `stream` with `501` and code
 `not_implemented` (§3), rather than falling back to a single-shot response —
 a client that asked for a stream and silently got one event cannot tell the
@@ -511,7 +746,8 @@ Liveness, conformance level, and entitlement state.
     "checked_at": "2026-08-15T09:14:02Z",
     "stale_after_seconds": 60
   },
-  "credentials": {"satisfied": true, "missing": []}
+  "credentials": {"satisfied": true, "missing": []},
+  "limits": {"max_run_seconds": 900, "max_concurrent_runs": 1}
 }
 ```
 
@@ -557,7 +793,145 @@ Re-stamping discards the anchor and silently restores the stacking that
 that carries no such value is a `404`, which cannot: there is nothing to
 discard there, and §5.7.4 says what a runner reports instead.
 
+`limits` is **OPTIONAL** and carries the bounds §4.5 puts on a run in
+flight. Both members are **OPTIONAL** in turn: `max_run_seconds` is the
+maximum duration the runner will let a run reach, **REQUIRED** where it
+imposes one at all and absent where it does not, and `max_concurrent_runs`
+is how many runs it will have in flight at once.
+
+They live in `status` rather than in `describe` because they belong to the
+deployment and not to the agent. Two runners serving the same agent may
+answer differently, and the same runner may answer differently after its
+operator reconfigures it — neither of which is a fact about what the agent
+takes as input, which is what `describe` is for.
+
+`max_concurrent_runs` is at least `1`. A runner that will run nothing says
+so with its `level` (§3) and a `501`, which tells a client that retrying is
+pointless; a `0` here would say the same thing in a second vocabulary, and
+in one a client would reasonably read as a temporary condition.
+
 `status` **MUST** answer at Level 1, and **MUST NOT** require credentials.
+
+### 4.5 The life of a run
+
+§4.2 and §4.3 say what a run is asked for and what it answers with. Neither
+says what becomes of one already in flight, and three questions fall out of
+that: what happens when the caller goes away, whether a runner may give up
+on a slow agent, and whether two runs may overlap.
+
+None of them is academic, because §4.1.2 establishes that a run may invoke
+tools that spend money and mutate state outside the workspace. Left
+unstated, whether closing a laptop lid stops that spending is decided
+per implementation, and a client cannot even ask.
+
+**A disconnected client is a cancelled run.** A runner **SHOULD** abort the
+agent when the client disconnects, on `run` and `stream` alike, and
+**SHOULD NOT** treat the disconnect as a reason to carry on to completion.
+Where it cannot abort promptly — a model call or an MCP tool call it does
+not control is in flight — it **SHOULD** abort at the next point it does
+control, rather than waiting for the run to end on its own.
+
+This is a **SHOULD** rather than a **MUST** for the reason §5.4 gives about
+instantaneous revocation: a runner cannot always interrupt what it is
+inside, and a requirement that cannot be met is one that gets quietly
+ignored, taking the rest of the rule with it. What is not optional is the
+part a runner does control — there is no callback in this protocol and no
+verb that delivers a result late, so a runner **MUST NOT** deliver the
+output of an abandoned run anywhere else, and discarding it is the only
+thing it can do with it.
+
+**An abort is not a rollback**, and a client **MUST NOT** read one as
+undoing anything. Whatever the agent did before it stopped is done: the
+money is spent, and every `write_tools` entry (§4.1.2) is a thing that may
+already have happened. Postern can stop an agent; nothing here can reverse
+one. That is also what makes a retry after a disconnect a genuinely
+different request from the first attempt, and the case `run`'s
+`Idempotency-Key` (§4.2) exists for — a client that disconnects, reconnects
+and asks again without one has asked for the work twice, and **SHOULD**
+expect to be charged for it twice.
+
+**`run_id` is not a handle.** It correlates a stream's events with its own
+`done` payload and with the runner's logs, and that is the whole of it: no
+verb takes one, so a client cannot present a `run_id` later and ask what
+became of it. This is a consequence of the four-verb ceiling
+([VERSIONING.md](VERSIONING.md)) rather than an oversight, and it is what
+makes abandonment simple to reason about — a run nobody is listening to has
+no observer left to report to.
+
+The `run` case makes the point sharper than `stream` does. `run_id` reaches
+a client only in the response body, so a client that disconnects from a
+`run` never learns the identifier of the run it started, and has nothing to
+correlate with even in the runner's own logs. A `stream` client at least
+received `start` (§4.3).
+
+A dropped `stream` that a client reopens is a **new run**, not a
+resumption. Postern defines no replay of missed events and reads no
+`Last-Event-ID`, so a reconnecting client starts an agent again — with
+everything the paragraph above says about double spending. A client
+reconnecting out of habit, because that is what an SSE client usually does,
+is the way this costs someone money.
+
+**A runner MAY give up on a slow agent.** Where it imposes a maximum run
+duration it **MUST** declare it as `limits.max_run_seconds` in `status`
+(§4.4), and **MUST NOT** declare a bound longer than the shortest one it can
+actually enforce — a limit a reverse proxy applies first makes the runner's
+own number a fiction, in the same way §5.4 forbids a `stale_after_seconds`
+shorter than a distributor's real cache. Absent, the field means the runner
+imposes no limit of its own.
+
+Exceeding it is answered `504` with code `run_timeout` (§2.1), which is a
+new code rather than either of the two that nearly fit. `agent_error` says
+the agent ran and failed, which sends a user to report a bug against an
+agent that was working; `unavailable` says the runner is not ready and
+invites a retry, when the runner was perfectly ready and an identical
+request will reach the same deadline again. The client's next move differs
+from both — run it again with less to do, or find a runner with a longer
+limit — which is the test for whether a code is worth adding.
+
+The body **SHOULD** carry the bound that was exceeded as
+`error.detail.max_run_seconds`, the same integer `status` declares. It rides
+inside `detail` because the envelope's root is closed (§2.1), for the reason
+§5.6 puts `access_ends_at` there — a client that is told which limit stopped
+the run can say something true about it, where one told only that something
+did has to guess.
+
+On `stream` the timeout arrives as an `error` **event** carrying that body,
+not as a status code: the response began `200 text/event-stream` when the
+first event was written, and nothing after that can change it. The stream
+then ends, satisfying §4.3's exactly-one-`done`-or-`error` rule normally.
+A disconnect is the one ending that satisfies it with neither, and that is
+not a violation — the rule governs what a runner writes to a live
+connection, and there is no longer one. §4.3's `delta` reconstruction rule
+is conditioned on a final `output.value` in the same way: a stream that
+emitted deltas and then timed out has produced no final output for them to
+add up to, and has broken nothing.
+
+**Whether runs may overlap is the runner's to decide**, and its answer is
+discoverable rather than assumed. A runner **MAY** refuse a `run` or
+`stream` while another is in flight, answering `503` with `unavailable`
+(§2.1) — which fits without a new code, because the runner genuinely is not
+ready and retrying genuinely may help, and because the client's move is the
+same one `unavailable` already asks for. A runner that permits overlap
+**SHOULD** declare how much as `limits.max_concurrent_runs`.
+
+Postern requires no `Retry-After` and a client is not obliged to read one. A
+runner **MAY** send the header as ordinary HTTP, but the protocol keeps
+nothing a client must read in a response header (§2.3) — a browser client
+cannot see one without being granted it explicitly, so a rule depending on
+it would hold for every client kind except the one §2.3 is about.
+
+**`status.state` observes; `limits` promises.** `running` means at least one
+run is in flight when `status` was answered. It does not promise the next
+`run` will be refused — a runner permitting overlap reports `running` while
+accepting more — and `ready` does not promise the next one will be accepted.
+The bound is `limits.max_concurrent_runs`, and even that is a ceiling rather
+than a reservation.
+
+So a client **MUST** be prepared for `503` on `run` or `stream` whatever
+`status` last told it. Reading `status` and starting a run are two calls
+rather than one, and the slot can go to somebody else in between; a client
+that treats a `ready` it read a moment ago as an admission ticket has built
+a race into itself.
 
 ---
 
@@ -1021,6 +1395,21 @@ Two distributors' namespaces coexisting in one bundle is valid.
   Runners that do so **MUST** require authentication of their own; Postern does
   not specify it, because a runner reachable from off-machine is outside the
   threat model this version addresses.
+- **A browser is a client the user did not choose.** The bullet above is
+  about who can reach the port. Every page the user visits can reach it — a
+  loopback runner is one `fetch` away from any origin on the web, and what
+  has been keeping those calls out is the same-origin policy rather than the
+  network. So `Access-Control-Allow-Origin: *` on a runner does not widen
+  the exposure above; it opens a second one, granted to every origin on the
+  web instead of to the local network, against a surface with no
+  authentication and a `write_tools` list (§4.1.2) at the end of it. §2.3 is
+  the answer, and it defaults to refusing for this reason. Note what the
+  browser does and does not buy there: a cross-origin `describe` or `status`
+  is *served* and then withheld from the page, which costs nothing only
+  because both are side-effect free, while `run` and `stream` are stopped
+  before they are served — but only for as long as they preflight, which is
+  why §2.3 obliges a runner to *refuse* a body that is not
+  `application/json` rather than merely to expect one.
 - **Credentials never traverse the protocol.** §4.1.3 is a security
   property, not a convenience. A `describe` or bundle carrying a credential
   value is nonconformant, and a client encountering one **SHOULD** refuse to
@@ -1055,7 +1444,7 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 ## Appendix A · Changes
 
-**Unreleased** — corrections made before first publication.
+**Unreleased** — corrections made before the first tagged release.
 
 - A client **MUST** tolerate an error `code` it does not recognise, so that
   adding a code stays an additive change (§2.1).
@@ -1181,6 +1570,66 @@ and informative for everyone else. Postern is usable with no reference to it.*
   not run at all, reports `unknown` with no `checked_at`, and answers `503`
   `unavailable`. The rule under both: unreachable answers `unavailable`,
   refused answers `not_entitled` (§5.7).
+- Browser clients have a defined answer: a runner **MUST** answer the
+  `OPTIONS` preflight on `run` and `stream`, and the origin policy behind it
+  is the operator's, defaulting to refusal rather than to
+  `Access-Control-Allow-Origin: *`. The specification named a web UI as a
+  client kind and said nothing about CORS, so a fully conforming runner
+  could be unreachable from one — while the obvious remedy, a wildcard,
+  would hand `run` and its `write_tools` to every page the user visits.
+  A runner **MUST** now also reject a `run` or `stream` body whose
+  `Content-Type` is not `application/json`: `application/json` is what makes
+  the request preflight at all, and a runner accepting `text/plain` executes
+  the agent for any origin without one, which is the whole of the preceding
+  rule undone (§2.3, §7).
+- A run in flight has a defined life (§4.5). A runner **SHOULD** abort the
+  agent when the client disconnects, on `run` and `stream` alike, and
+  **MUST NOT** deliver an abandoned run's output anywhere else — there being
+  no callback and no verb that takes a `run_id`, which is also why an abort
+  cannot be reported and a reopened `stream` is a new run rather than a
+  resumption. An abort is not a rollback: §4.1.2's `write_tools` name things
+  that may already have happened, and a retry without an `Idempotency-Key`
+  buys the work twice. Previously nothing said whether closing a laptop lid
+  stopped an agent from spending money (§4.2, §4.3, §4.5).
+- Added `run_timeout` (504), and with it a runner's right to impose a maximum
+  run duration. `agent_error` and `unavailable` both nearly fit and both
+  mislead — one reports a working agent as broken, the other invites a retry
+  into the same deadline. A runner imposing a limit **MUST** declare it as
+  `status.limits.max_run_seconds` and **MUST NOT** declare one longer than it
+  can enforce, and the refusal **SHOULD** carry it as
+  `error.detail.max_run_seconds` (§2.1, §4.4, §4.5).
+- Concurrency is the runner's to decide and discoverable rather than assumed:
+  it **MAY** refuse an overlapping run with `503` `unavailable`, needing no
+  new code because the client's move is the one that code already asks for,
+  and **SHOULD** declare `status.limits.max_concurrent_runs`.
+  `status.state: "running"` observes that a run is in flight and promises
+  nothing about admission — a client **MUST** be ready for `503` whatever
+  `status` last said, since the slot can go elsewhere between the two calls
+  (§4.4, §4.5).
+- `output` has a section of its own (§4.1.4). `text` is the v0 output type
+  by decision rather than by accident of the examples, matching what §4.1.1
+  already said for inputs — and an unrecognised `output.type` now has a
+  receive-side rule, which is the part that changes the contract rather than
+  recording it. It is deliberately not the rule the other four extensible
+  surfaces use: an error `code`, a `stream` event name, an input `type` and a
+  `validation` member are all things a client may ignore, and `output.type`
+  is what says how to read `value`, so ignoring it misreads a known rather
+  than tolerating an unknown. A client **MUST NOT** present `value` as text,
+  **MUST NOT** report the run as failed — a `200` it cannot render is a run
+  that succeeded — and **SHOULD** name the type it was given. The rule has to
+  exist before a second output type can, or the addition breaks every client
+  written against the closed set: the ordering the error-code enum already
+  paid for (§2.1, §4.1.1, §4.1.4).
+- `stream`'s event payloads have schemas, and its rules about them are
+  stated rather than implied by a table cell. A `step` carries at least
+  `name` and `status`; `latency_ms` is an elapsed time, so it is reported on
+  `finished` and a runner **MUST NOT** emit it on a `started` step, where
+  there is nothing yet to measure — a client receiving one anyway ignores it
+  rather than rejecting the event.
+  [`stream-event.schema.json`](schemas/stream-event.schema.json) covers the
+  three payloads this specification defines itself; `done` and `error` carry
+  bodies §4.2 and §2.1 already define, and the SSE framing spans events, so
+  neither is expressible there (§4.3).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

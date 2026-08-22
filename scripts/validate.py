@@ -8,7 +8,7 @@ aspirational: run it before opening a pull request.
     pip install jsonschema
     python scripts/validate.py
 
-Seven things are checked, because seven different kinds of edit go wrong:
+Eight things are checked, because eight different kinds of edit go wrong:
 
 1. Every file in examples/ validates against its schema.
 2. Every fenced JSON block in SPEC.md validates against its schema too.
@@ -26,6 +26,11 @@ Seven things are checked, because seven different kinds of edit go wrong:
 7. Every section docs/ points at is a section SPEC.md still has. The pages
    there are pictures of the specification, and a picture that cites a
    section number nobody kept is worse than no picture.
+8. examples/stream.txt is read as a transcript rather than trusted as prose:
+   every event payload in it validates against the schema for its event
+   name, and the delta texts concatenate to the done payload's output.value
+   — the one section 4.3 rule that spans events, and so the one no schema
+   can reach.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -54,24 +59,26 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 FORMAT_CHECKER = jsonschema.FormatChecker()
 FORMAT = re.compile(r'"format":\s*"([^"]+)"')
 
-# examples/stream.txt is an annotated SSE transcript rather than a single
-# JSON document, so it has no schema of its own. Its `done` payload is the
-# run response, which run-response.json already covers.
+# examples/stream.txt is an annotated SSE transcript rather than a single JSON
+# document, so it has no schema of its own — but its payloads do, and
+# _stream_transcript() below validates each one where it sits rather than
+# taking the transcript's word for it.
 PAIRS = [
     ("describe.schema.json", "describe.json"),
     ("run-request.schema.json", "run-request.json"),
     ("run-response.schema.json", "run-response.json"),
     ("status.schema.json", "status.json"),
     ("error.schema.json", "error.json"),
-    # Three error examples rather than one. The envelope is identical in each;
+    # Four error examples rather than one. The envelope is identical in each;
     # what differs is `detail`, and that is the part prose alone leaves
     # untested — a runner-side member (§4.1.3's env), a distributor-side one
-    # (§5.6's access_ends_at), and, for §5.5's 404, nothing at all. The last
-    # is the load-bearing one: a detail saying which of "no such agent", "not
-    # entitled" and "dead token" applied would undo the rule the response
-    # exists to keep.
+    # (§5.6's access_ends_at), §4.5's max_run_seconds, and, for §5.5's 404,
+    # nothing at all. The 404 is the load-bearing one: a detail saying which
+    # of "no such agent", "not entitled" and "dead token" applied would undo
+    # the rule the response exists to keep.
     ("error.schema.json", "error-withdrawn.json"),
     ("error.schema.json", "error-not-found.json"),
+    ("error.schema.json", "error-run-timeout.json"),
     # Both entitlement states rather than only `active`. They differ by one
     # value and validate identically, which is the point: §4.4 and §5.4 require
     # `checked_at` and `stale_after_seconds` of a `revoked` answer too, and an
@@ -85,6 +92,14 @@ PAIRS = [
     # exercises a runner reporting an entitlement it cannot presently vouch
     # for — which is the case a client is most likely to render wrongly.
     ("status.schema.json", "status-unknown.json"),
+    # The three event payloads §4.3 defines itself. `step` twice, because the
+    # started/finished distinction is the one that carries a rule: latency_ms
+    # is an elapsed time, so it belongs on the second and not the first, and
+    # an example of each is what makes that visible rather than only asserted.
+    ("stream-event.schema.json", "stream-event-start.json"),
+    ("stream-event.schema.json", "stream-event-step-started.json"),
+    ("stream-event.schema.json", "stream-event-step-finished.json"),
+    ("stream-event.schema.json", "stream-event-delta.json"),
 ]
 
 FENCE = re.compile(r"^```json\n(.*?)^```", re.MULTILINE | re.DOTALL)
@@ -188,6 +203,45 @@ def _without(member: str) -> dict:
 
 
 MUST_REJECT = [
+    (
+        "stream-event.schema.json",
+        "a step reporting elapsed time on a step that has only started",
+        {"name": "research", "status": "started", "latency_ms": 0},
+    ),
+    (
+        "stream-event.schema.json",
+        "a step event with no status, which cannot say which edge it is",
+        {"name": "research", "model_id": "gpt-4o-mini"},
+    ),
+    (
+        "run-response.schema.json",
+        "an output type outside the v0 set, which no runner may emit",
+        {
+            "postern": "0.1",
+            "run_id": "01JD8XW2Q9",
+            "output": {"type": "image", "value": "iVBORw0KGgo="},
+        },
+    ),
+    (
+        "status.schema.json",
+        "a runner declaring it accepts zero concurrent runs",
+        {
+            "postern": "0.1",
+            "level": 3,
+            "state": "ready",
+            "limits": {"max_concurrent_runs": 0},
+        },
+    ),
+    (
+        "status.schema.json",
+        "a maximum run duration of zero seconds, which no run can meet",
+        {
+            "postern": "0.1",
+            "level": 3,
+            "state": "ready",
+            "limits": {"max_run_seconds": 0},
+        },
+    ),
     (
         "describe.schema.json",
         "a select input that declares no options",
@@ -387,7 +441,7 @@ _VERSIONED_SUFFIXES = {".json", ".md", ".txt", ".yml", ".yaml"}
 _VERSION_IN_PROSE = [
     ("SPEC.md", re.compile(r"^\*\*Version (\S+) · Draft\*\*", re.MULTILINE)),
     ("README.md", re.compile(r"· Version (\S+) · Draft ·")),
-    ("README.md", re.compile(r"Version (\S+) is\s+published early")),
+    ("README.md", re.compile(r"Version (\S+) is\s+drafted\s+in the open")),
 ]
 
 
@@ -617,6 +671,118 @@ def _docs_cite_real_sections() -> bool:
     return failed
 
 
+# examples/stream.txt is the only example that is not a JSON document, and it
+# was the only one nothing checked. Its payloads are JSON all the same, and the
+# rule that matters most in §4.3 — deltas concatenating to the final output —
+# is invisible to every schema here, because it spans events rather than
+# sitting inside one. The transcript asserts it in prose in its own Notes
+# section, which is exactly the kind of claim that rots.
+_SSE_EVENT = re.compile(r"^event:\s*(\S+)\s*\n^data:\s*(.+)$", re.MULTILINE)
+
+# Which schema answers for each event name. `done` and `error` carry bodies
+# defined elsewhere, which is why they are not in stream-event.schema.json.
+_EVENT_SCHEMAS = {
+    "start": ("stream-event.schema.json", "start"),
+    "step": ("stream-event.schema.json", "step"),
+    "delta": ("stream-event.schema.json", "delta"),
+    "done": ("run-response.schema.json", None),
+    "error": ("error.schema.json", None),
+}
+
+
+def _subschema(schema: dict, pointer: str | None) -> dict:
+    """The whole schema, or one $def of it addressed by name.
+
+    Written as a $ref into the document rather than by lifting the $def out,
+    so a $def that refers to a sibling keeps resolving.
+    """
+    if pointer is None:
+        return schema
+    return {
+        "$schema": schema["$schema"],
+        "$defs": schema["$defs"],
+        "$ref": f"#/$defs/{pointer}",
+    }
+
+
+def _stream_transcript() -> bool:
+    """Read examples/stream.txt as a transcript, not as documentation.
+
+    Two things are asserted. Every `data:` payload validates against the
+    schema for its own `event:` name — so a transcript showing a payload no
+    runner may emit fails here rather than teaching it to someone. And the
+    `delta` texts concatenate to `done`'s `output.value`, which is §4.3's
+    load-bearing invariant and the one thing JSON Schema cannot see: it holds
+    across events, so no document-shaped check can reach it.
+
+    Returns True on failure, so callers can accumulate.
+    """
+    source = ROOT.joinpath("examples", "stream.txt").read_text(encoding="utf-8")
+    events = _SSE_EVENT.findall(source)
+    if not events:
+        print("FAIL  examples/stream.txt carries no event:/data: pairs")
+        print("        Reword the transcript or _SSE_EVENT, not neither.")
+        return True
+
+    failed = False
+    deltas: list[str] = []
+    final: str | None = None
+
+    for name, payload in events:
+        where = f"examples/stream.txt event:{name}"
+        try:
+            document = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            failed = True
+            print(f"FAIL  {where} is not valid JSON: {exc}")
+            continue
+
+        if name not in _EVENT_SCHEMAS:
+            failed = True
+            print(f"FAIL  {where} is an event name nothing here answers for.")
+            print("        Add it to _EVENT_SCHEMAS, or to §4.3's table first.")
+            continue
+
+        schema_name, pointer = _EVENT_SCHEMAS[name]
+        validator = jsonschema.Draft202012Validator(
+            _subschema(_load("schemas", schema_name), pointer),
+            format_checker=FORMAT_CHECKER,
+        )
+        errors = sorted(validator.iter_errors(document), key=lambda e: e.path)
+        if errors:
+            failed = True
+            print(f"FAIL  {where} -> schemas/{schema_name}")
+            for error in errors:
+                location = "/".join(str(part) for part in error.path) or "(root)"
+                print(f"        {location}: {error.message}")
+            continue
+
+        if name == "delta":
+            deltas.append(document["text"])
+        elif name == "done":
+            final = document["output"]["value"]
+
+    print(f"ok    examples/stream.txt — {len(events)} event payloads validate")
+
+    if deltas and final is None:
+        failed = True
+        print("FAIL  examples/stream.txt emits deltas and never reaches done")
+    elif deltas:
+        joined = "".join(deltas)
+        if joined != final:
+            failed = True
+            print("FAIL  examples/stream.txt deltas do not rebuild output.value")
+            print(f"        deltas  -> {joined!r}")
+            print(f"        done    -> {final!r}")
+        else:
+            print(
+                f"ok    examples/stream.txt — {len(deltas)} deltas"
+                " rebuild output.value"
+            )
+
+    return failed
+
+
 def main() -> int:
     failed = _formats_are_asserted()
     print()
@@ -667,6 +833,9 @@ def main() -> int:
     print()
     failed |= _identifier_pattern()
     failed |= _version_mirrors()
+
+    print()
+    failed |= _stream_transcript()
 
     print()
     failed |= _docs_cite_real_sections()

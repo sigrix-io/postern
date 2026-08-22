@@ -1,7 +1,7 @@
 # Postern in pictures
 
 Seven diagrams of [SPEC.md](../SPEC.md), for a reader deciding whether Postern is
-for them before committing to 1,187 lines of prose.
+for them before committing to 1,636 lines of prose.
 
 > [!NOTE]
 > **Non-normative.** Nothing on this page adds to the protocol, constrains an
@@ -137,8 +137,8 @@ flowchart TD
 ```
 
 Two components means two runners on two ports — §2.2 permits no other shape. The
-client carries the value across, and that works with no adapter because v0's
-output type is `text` and inputs take strings (§4.1.1). The reserved key `prompt`
+client carries the value across, and that works with no adapter because §4.1.4
+makes `text` the v0 output type by decision and inputs take strings (§4.1.1). The reserved key `prompt`
 denotes a single free-text brief where an agent has one, which is the natural
 landing spot for a chained value.
 
@@ -261,7 +261,7 @@ out.
 
 | | |
 |---|---|
-| The specification | [SPEC.md](../SPEC.md) — 1,187 lines, and the only thing that governs |
+| The specification | [SPEC.md](../SPEC.md) — 1,636 lines, and the only thing that governs |
 | Machine-readable payloads | [`schemas/`](../schemas), with worked instances in [`examples/`](../examples) |
 | What may change before 1.0 | [VERSIONING.md](../VERSIONING.md) |
 | A longer illustrated walk-through | [`flow.html`](flow.html) — open it in a browser; it adds the staleness-window and `404`-indistinguishability figures this page leaves out |

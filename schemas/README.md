@@ -14,7 +14,7 @@ a wider question than emitting ([§2.1](../SPEC.md#21-errors)):
 > *emits*, which is a narrower question than the set a client **MUST**
 > accept.
 
-Two places where that difference is load-bearing, and both are ones a
+Three places where that difference is load-bearing, and all three are ones a
 generated parser gets wrong by default:
 
 - **`error.code` is a closed enum.** §2.1 requires a client to treat an
@@ -23,9 +23,15 @@ generated parser gets wrong by default:
 - **`error.schema.json` is closed at its root** — the only schema here that
   is. §2.1 requires a client not to reject a response for carrying a sibling
   of `error`.
+- **`output.type` is a closed enum, and the one unknown a client may not
+  ignore either.** §4.1.4 requires a client not to reject an output type it
+  does not recognise — and, unlike the two above, not to shrug it off: it
+  **MUST NOT** present `value` as text. A generated parser gets this wrong
+  in both directions at once, rejecting what it should accept and, once
+  relaxed, reading bytes it cannot interpret as prose.
 
 So generating client types from these files produces a parser that rejects
-exactly what the specification spends two rules forbidding it to reject —
+exactly what the specification spends three rules forbidding it to reject —
 the parser [VERSIONING.md](../VERSIONING.md#before-10) describes, where *"a
 parser that rejects an unrecognised field converts every future minor
 release into a breaking one for its users."* Generate from them freely;

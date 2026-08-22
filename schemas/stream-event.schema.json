@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sigrix.io/schemas/postern/0.1/stream-event.schema.json",
+  "title": "Postern stream event payload",
+  "description": "The JSON carried on a data: line of POST /postern/v0/stream. See SPEC.md section 4.3. Three of the five event types are defined here; done carries the run response (run-response.schema.json) and error carries the error envelope (error.schema.json), both already schema'd, so neither is repeated. The SSE framing itself — the event:/data: lines, start being first, exactly one done or error last — is not expressible in JSON Schema and stays in prose, with examples/stream.txt as the worked transcript. Every definition below is open: section 4.3's growth story depends on a client ignoring what it does not recognise, and this file constrains what a conforming runner emits rather than what a client must accept.",
+  "oneOf": [
+    { "$ref": "#/$defs/start" },
+    { "$ref": "#/$defs/step" },
+    { "$ref": "#/$defs/delta" }
+  ],
+  "$defs": {
+    "start": {
+      "title": "start event payload",
+      "description": "MUST be first in a stream. Carries the run_id that the done payload repeats, which is how a client correlates a stream with its result and with the runner's logs.",
+      "type": "object",
+      "required": ["run_id"],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique within the runner's lifetime (SPEC.md section 4.2)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "step": {
+      "title": "step event payload",
+      "description": "OPTIONAL, zero or more. name and status are what make a step event readable at all — one says which step, the other which edge of it — so both are required. model_id is absent for a step that calls no model.",
+      "type": "object",
+      "required": ["name", "status"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "model_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["started", "finished"] },
+        "latency_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The step's elapsed time, reported on finished. A runner MUST NOT emit it on a started step, where there is nothing yet to measure; a client that receives one anyway MUST ignore it rather than reject the event (SPEC.md section 4.3)."
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "started" } },
+            "required": ["status"]
+          },
+          "then": { "not": { "required": ["latency_ms"] } }
+        }
+      ]
+    },
+    "delta": {
+      "title": "delta event payload",
+      "description": "OPTIONAL, zero or more. Incremental output. If any delta is emitted, concatenating every delta.text in order MUST equal the final output.value — an invariant no schema can express, because it spans events rather than sitting inside one. scripts/validate.py asserts it against examples/stream.txt instead.",
+      "type": "object",
+      "required": ["text"],
+      "properties": { "text": { "type": "string" } },
+      "additionalProperties": true
+    }
+  }
+}
