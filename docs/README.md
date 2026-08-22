@@ -138,9 +138,9 @@ flowchart TD
 
 Two components means two runners on two ports — §2.2 permits no other shape. The
 client carries the value across, and that works with no adapter because §4.1.4
-makes `text` the v0 output type by decision and inputs take strings (§4.1.1). The reserved key `prompt`
-denotes a single free-text brief where an agent has one, which is the natural
-landing spot for a chained value.
+makes `text` the v0 output type by decision and inputs take strings (§4.1.1).
+The reserved key `prompt` denotes a single free-text brief where an agent has
+one, which is the natural landing spot for a chained value.
 
 ### Or: the agent holds the client role
 
