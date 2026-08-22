@@ -63,15 +63,16 @@ PAIRS = [
     ("run-response.schema.json", "run-response.json"),
     ("status.schema.json", "status.json"),
     ("error.schema.json", "error.json"),
-    # Three error examples rather than one. The envelope is identical in each;
+    # Four error examples rather than one. The envelope is identical in each;
     # what differs is `detail`, and that is the part prose alone leaves
     # untested — a runner-side member (§4.1.3's env), a distributor-side one
-    # (§5.6's access_ends_at), and, for §5.5's 404, nothing at all. The last
-    # is the load-bearing one: a detail saying which of "no such agent", "not
-    # entitled" and "dead token" applied would undo the rule the response
-    # exists to keep.
+    # (§5.6's access_ends_at), §4.5's max_run_seconds, and, for §5.5's 404,
+    # nothing at all. The 404 is the load-bearing one: a detail saying which
+    # of "no such agent", "not entitled" and "dead token" applied would undo
+    # the rule the response exists to keep.
     ("error.schema.json", "error-withdrawn.json"),
     ("error.schema.json", "error-not-found.json"),
+    ("error.schema.json", "error-run-timeout.json"),
     # Both entitlement states rather than only `active`. They differ by one
     # value and validate identically, which is the point: §4.4 and §5.4 require
     # `checked_at` and `stale_after_seconds` of a `revoked` answer too, and an
@@ -188,6 +189,26 @@ def _without(member: str) -> dict:
 
 
 MUST_REJECT = [
+    (
+        "status.schema.json",
+        "a runner declaring it accepts zero concurrent runs",
+        {
+            "postern": "0.1",
+            "level": 3,
+            "state": "ready",
+            "limits": {"max_concurrent_runs": 0},
+        },
+    ),
+    (
+        "status.schema.json",
+        "a maximum run duration of zero seconds, which no run can meet",
+        {
+            "postern": "0.1",
+            "level": 3,
+            "state": "ready",
+            "limits": {"max_run_seconds": 0},
+        },
+    ),
     (
         "describe.schema.json",
         "a select input that declares no options",

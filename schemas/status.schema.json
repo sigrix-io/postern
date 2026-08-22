@@ -76,6 +76,23 @@
         "missing": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": true
+    },
+    "limits": {
+      "type": "object",
+      "description": "Bounds the runner puts on a run in flight (SPEC.md section 4.5). These belong to the deployment rather than to the agent, which is why they sit here and not in describe: two runners serving one agent may answer differently.",
+      "properties": {
+        "max_run_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The longest a run may take before the runner stops it with 504 run_timeout. REQUIRED where the runner imposes a limit at all, absent where it does not. A runner MUST NOT declare a bound longer than the shortest one it can actually enforce."
+        },
+        "max_concurrent_runs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many runs the runner will have in flight at once; beyond it, run and stream answer 503 unavailable. At least 1 — a runner that will run nothing says so with its level and a 501, which tells a client retrying is pointless, where a 0 here reads as a temporary condition."
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

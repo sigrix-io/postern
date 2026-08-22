@@ -212,7 +212,8 @@ Every non-2xx response body **MUST** be:
 | `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment. |
 | `agent_error` | 500 | R | The agent ran and failed. |
 | `not_implemented` | 501 | R | The verb is defined by this specification but sits above the runner's conformance level (§3). Retrying will not help. |
-| `unavailable` | 503 | R · D | The runner or distributor is not ready. Retrying may help. |
+| `unavailable` | 503 | R · D | The runner or distributor is not ready. Retrying may help — a runner refusing a run because another is in flight answers this (§4.5). |
+| `run_timeout` | 504 | R | The run reached the runner's declared maximum duration and was stopped (§4.5). |
 
 **Side** says which half of the protocol emits a code: `R` for a runner
 (§4), `D` for a distributor (§5). A code marked for one side only is not
@@ -658,7 +659,8 @@ Liveness, conformance level, and entitlement state.
     "checked_at": "2026-08-15T09:14:02Z",
     "stale_after_seconds": 60
   },
-  "credentials": {"satisfied": true, "missing": []}
+  "credentials": {"satisfied": true, "missing": []},
+  "limits": {"max_run_seconds": 900, "max_concurrent_runs": 1}
 }
 ```
 
@@ -704,7 +706,145 @@ Re-stamping discards the anchor and silently restores the stacking that
 that carries no such value is a `404`, which cannot: there is nothing to
 discard there, and §5.7.4 says what a runner reports instead.
 
+`limits` is **OPTIONAL** and carries the bounds §4.5 puts on a run in
+flight. Both members are **OPTIONAL** in turn: `max_run_seconds` is the
+maximum duration the runner will let a run reach, **REQUIRED** where it
+imposes one at all and absent where it does not, and `max_concurrent_runs`
+is how many runs it will have in flight at once.
+
+They live in `status` rather than in `describe` because they belong to the
+deployment and not to the agent. Two runners serving the same agent may
+answer differently, and the same runner may answer differently after its
+operator reconfigures it — neither of which is a fact about what the agent
+takes as input, which is what `describe` is for.
+
+`max_concurrent_runs` is at least `1`. A runner that will run nothing says
+so with its `level` (§3) and a `501`, which tells a client that retrying is
+pointless; a `0` here would say the same thing in a second vocabulary, and
+in one a client would reasonably read as a temporary condition.
+
 `status` **MUST** answer at Level 1, and **MUST NOT** require credentials.
+
+### 4.5 The life of a run
+
+§4.2 and §4.3 say what a run is asked for and what it answers with. Neither
+says what becomes of one already in flight, and three questions fall out of
+that: what happens when the caller goes away, whether a runner may give up
+on a slow agent, and whether two runs may overlap.
+
+None of them is academic, because §4.1.2 establishes that a run may invoke
+tools that spend money and mutate state outside the workspace. Left
+unstated, whether closing a laptop lid stops that spending is decided
+per implementation, and a client cannot even ask.
+
+**A disconnected client is a cancelled run.** A runner **SHOULD** abort the
+agent when the client disconnects, on `run` and `stream` alike, and
+**SHOULD NOT** treat the disconnect as a reason to carry on to completion.
+Where it cannot abort promptly — a model call or an MCP tool call it does
+not control is in flight — it **SHOULD** abort at the next point it does
+control, rather than waiting for the run to end on its own.
+
+This is a **SHOULD** rather than a **MUST** for the reason §5.4 gives about
+instantaneous revocation: a runner cannot always interrupt what it is
+inside, and a requirement that cannot be met is one that gets quietly
+ignored, taking the rest of the rule with it. What is not optional is the
+part a runner does control — there is no callback in this protocol and no
+verb that delivers a result late, so a runner **MUST NOT** deliver the
+output of an abandoned run anywhere else, and discarding it is the only
+thing it can do with it.
+
+**An abort is not a rollback**, and a client **MUST NOT** read one as
+undoing anything. Whatever the agent did before it stopped is done: the
+money is spent, and every `write_tools` entry (§4.1.2) is a thing that may
+already have happened. Postern can stop an agent; nothing here can reverse
+one. That is also what makes a retry after a disconnect a genuinely
+different request from the first attempt, and the case `run`'s
+`Idempotency-Key` (§4.2) exists for — a client that disconnects, reconnects
+and asks again without one has asked for the work twice, and **SHOULD**
+expect to be charged for it twice.
+
+**`run_id` is not a handle.** It correlates a stream's events with its own
+`done` payload and with the runner's logs, and that is the whole of it: no
+verb takes one, so a client cannot present a `run_id` later and ask what
+became of it. This is a consequence of the four-verb ceiling
+([VERSIONING.md](VERSIONING.md)) rather than an oversight, and it is what
+makes abandonment simple to reason about — a run nobody is listening to has
+no observer left to report to.
+
+The `run` case makes the point sharper than `stream` does. `run_id` reaches
+a client only in the response body, so a client that disconnects from a
+`run` never learns the identifier of the run it started, and has nothing to
+correlate with even in the runner's own logs. A `stream` client at least
+received `start` (§4.3).
+
+A dropped `stream` that a client reopens is a **new run**, not a
+resumption. Postern defines no replay of missed events and reads no
+`Last-Event-ID`, so a reconnecting client starts an agent again — with
+everything the paragraph above says about double spending. A client
+reconnecting out of habit, because that is what an SSE client usually does,
+is the way this costs someone money.
+
+**A runner MAY give up on a slow agent.** Where it imposes a maximum run
+duration it **MUST** declare it as `limits.max_run_seconds` in `status`
+(§4.4), and **MUST NOT** declare a bound longer than the shortest one it can
+actually enforce — a limit a reverse proxy applies first makes the runner's
+own number a fiction, in the same way §5.4 forbids a `stale_after_seconds`
+shorter than a distributor's real cache. Absent, the field means the runner
+imposes no limit of its own.
+
+Exceeding it is answered `504` with code `run_timeout` (§2.1), which is a
+new code rather than either of the two that nearly fit. `agent_error` says
+the agent ran and failed, which sends a user to report a bug against an
+agent that was working; `unavailable` says the runner is not ready and
+invites a retry, when the runner was perfectly ready and an identical
+request will reach the same deadline again. The client's next move differs
+from both — run it again with less to do, or find a runner with a longer
+limit — which is the test for whether a code is worth adding.
+
+The body **SHOULD** carry the bound that was exceeded as
+`error.detail.max_run_seconds`, the same integer `status` declares. It rides
+inside `detail` because the envelope's root is closed (§2.1), for the reason
+§5.6 puts `access_ends_at` there — a client that is told which limit stopped
+the run can say something true about it, where one told only that something
+did has to guess.
+
+On `stream` the timeout arrives as an `error` **event** carrying that body,
+not as a status code: the response began `200 text/event-stream` when the
+first event was written, and nothing after that can change it. The stream
+then ends, satisfying §4.3's exactly-one-`done`-or-`error` rule normally.
+A disconnect is the one ending that satisfies it with neither, and that is
+not a violation — the rule governs what a runner writes to a live
+connection, and there is no longer one. §4.3's `delta` reconstruction rule
+is conditioned on a final `output.value` in the same way: a stream that
+emitted deltas and then timed out has produced no final output for them to
+add up to, and has broken nothing.
+
+**Whether runs may overlap is the runner's to decide**, and its answer is
+discoverable rather than assumed. A runner **MAY** refuse a `run` or
+`stream` while another is in flight, answering `503` with `unavailable`
+(§2.1) — which fits without a new code, because the runner genuinely is not
+ready and retrying genuinely may help, and because the client's move is the
+same one `unavailable` already asks for. A runner that permits overlap
+**SHOULD** declare how much as `limits.max_concurrent_runs`.
+
+Postern requires no `Retry-After` and a client is not obliged to read one. A
+runner **MAY** send the header as ordinary HTTP, but the protocol keeps
+nothing a client must read in a response header (§2.3) — a browser client
+cannot see one without being granted it explicitly, so a rule depending on
+it would hold for every client kind except the one §2.3 is about.
+
+**`status.state` observes; `limits` promises.** `running` means at least one
+run is in flight when `status` was answered. It does not promise the next
+`run` will be refused — a runner permitting overlap reports `running` while
+accepting more — and `ready` does not promise the next one will be accepted.
+The bound is `limits.max_concurrent_runs`, and even that is a ceiling rather
+than a reservation.
+
+So a client **MUST** be prepared for `503` on `run` or `stream` whatever
+`status` last told it. Reading `status` and starting a run are two calls
+rather than one, and the slot can go to somebody else in between; a client
+that treats a `ready` it read a moment ago as an admission ticket has built
+a race into itself.
 
 ---
 
@@ -1355,6 +1495,30 @@ and informative for everyone else. Postern is usable with no reference to it.*
   the request preflight at all, and a runner accepting `text/plain` executes
   the agent for any origin without one, which is the whole of the preceding
   rule undone (§2.3, §7).
+- A run in flight has a defined life (§4.5). A runner **SHOULD** abort the
+  agent when the client disconnects, on `run` and `stream` alike, and
+  **MUST NOT** deliver an abandoned run's output anywhere else — there being
+  no callback and no verb that takes a `run_id`, which is also why an abort
+  cannot be reported and a reopened `stream` is a new run rather than a
+  resumption. An abort is not a rollback: §4.1.2's `write_tools` name things
+  that may already have happened, and a retry without an `Idempotency-Key`
+  buys the work twice. Previously nothing said whether closing a laptop lid
+  stopped an agent from spending money (§4.2, §4.3, §4.5).
+- Added `run_timeout` (504), and with it a runner's right to impose a maximum
+  run duration. `agent_error` and `unavailable` both nearly fit and both
+  mislead — one reports a working agent as broken, the other invites a retry
+  into the same deadline. A runner imposing a limit **MUST** declare it as
+  `status.limits.max_run_seconds` and **MUST NOT** declare one longer than it
+  can enforce, and the refusal **SHOULD** carry it as
+  `error.detail.max_run_seconds` (§2.1, §4.4, §4.5).
+- Concurrency is the runner's to decide and discoverable rather than assumed:
+  it **MAY** refuse an overlapping run with `503` `unavailable`, needing no
+  new code because the client's move is the one that code already asks for,
+  and **SHOULD** declare `status.limits.max_concurrent_runs`.
+  `status.state: "running"` observes that a run is in flight and promises
+  nothing about admission — a client **MUST** be ready for `503` whatever
+  `status` last said, since the slot can go elsewhere between the two calls
+  (§4.4, §4.5).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
