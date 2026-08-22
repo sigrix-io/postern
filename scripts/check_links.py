@@ -47,6 +47,17 @@ TRAILING = ".,;:!?"
 # under one of them is an illustration that is not supposed to resolve —
 # SPEC.md's worked example uses `example.com` for precisely that reason, and
 # checking it would report a failure that is actually correct behaviour.
+# A <link rel="preconnect"> or rel="dns-prefetch" href is an *origin* to open
+# a connection to, not a document to fetch. Asking whether it 200s is a
+# category error: fonts.gstatic.com serves no index and answers 404 by design,
+# while being a perfectly live origin the page depends on. Left in the checked
+# set they fail forever, which is how a job stops being read.
+CONNECTION_HINT = re.compile(
+    r"""<link\b[^>]*\brel\s*=\s*["'][^"']*"""
+    r"""\b(?:preconnect|dns-prefetch)\b[^"']*["'][^>]*>""",
+    re.IGNORECASE,
+)
+
 RESERVED_DOMAINS = ("example.com", "example.net", "example.org")
 RESERVED_TLDS = (".example", ".invalid", ".localhost", ".test")
 
@@ -119,14 +130,24 @@ def _sources():
 def _collect() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """Map every URL in those sources to the files citing it.
 
-    Returns (links, illustrations). They are separated here rather than
+    Returns (links, illustrations, hints). They are separated here rather than
     filtered away, so that a URL this script decides not to check still says
     so on the way past: a silent drop is how a real citation stops being
     checked without anyone noticing.
     """
     found: dict[str, list[str]] = {}
     illustrations: dict[str, list[str]] = {}
+    hints: dict[str, list[str]] = {}
     for where, text in _sources():
+        # Pulled out before the scan rather than filtered after it: the same
+        # origin can appear both as a hint and as a real stylesheet href, and
+        # only the tag it sits in tells them apart.
+        for tag in CONNECTION_HINT.findall(text):
+            for hint in URL.findall(tag):
+                citations = hints.setdefault(hint.rstrip(TRAILING), [])
+                if where not in citations:
+                    citations.append(where)
+        text = CONNECTION_HINT.sub("", text)
         for match in URL.finditer(text):
             url = match.group(0).rstrip(TRAILING)
             follower = text[match.end() : match.end() + 1]
@@ -134,7 +155,11 @@ def _collect() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
             citations = bucket.setdefault(url, [])
             if where not in citations:
                 citations.append(where)
-    return dict(sorted(found.items())), dict(sorted(illustrations.items()))
+    return (
+        dict(sorted(found.items())),
+        dict(sorted(illustrations.items())),
+        dict(sorted(hints.items())),
+    )
 
 
 def _is_illustrative(url: str, follower: str) -> bool:
@@ -158,6 +183,21 @@ CLASSIFIER_CASES = [
 ]
 
 
+# The same discipline for the connection-hint rule, and it needs it more: the
+# tags it matches are indistinguishable from an ordinary stylesheet link
+# except for one attribute, and the origin inside them also appears as a real
+# href in the same file. A rule that stopped matching would put two permanent
+# 404s back in the checked set; one that over-matched would silently stop
+# checking a stylesheet that can genuinely rot.
+HINT_CASES = [
+    ('<link rel="preconnect" href="https://fonts.googleapis.com">', True),
+    ('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>', True),
+    ('<link href="https://x.test" rel="dns-prefetch">', True),
+    ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?x=1">', False),
+    ('<a href="https://sigrix.io">postern</a>', False),
+]
+
+
 def _classifier_holds() -> bool:
     """Check the illustration rule before any network call. True on failure."""
     wrong = [
@@ -167,7 +207,16 @@ def _classifier_holds() -> bool:
     ]
     for url, follower in wrong:
         print(f"FAIL  the illustration rule mis-reads {url!r} before {follower!r}")
-    return bool(wrong)
+
+    misread = [
+        markup
+        for markup, is_hint in HINT_CASES
+        if bool(CONNECTION_HINT.search(markup)) != is_hint
+    ]
+    for markup in misread:
+        print(f"FAIL  the connection-hint rule mis-reads {markup!r}")
+
+    return bool(wrong) or bool(misread)
 
 
 def _is_reserved(url: str) -> bool:
@@ -241,7 +290,12 @@ def _check(url: str) -> tuple[str, str]:
 
 def main() -> int:
     failed = _classifier_holds()
-    links, illustrations = _collect()
+    links, illustrations, hints = _collect()
+
+    for url, citations in hints.items():
+        where = ", ".join(citations)
+        print(f"skip  {url} — a connection hint, so it names an origin rather "
+              f"than a document ({where})")
 
     for url, citations in illustrations.items():
         where = ", ".join(citations)
