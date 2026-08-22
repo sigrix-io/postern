@@ -1389,9 +1389,13 @@ Two distributors' namespaces coexisting in one bundle is valid.
 ## 7. Security considerations
 
 - **Bearer tokens over TLS only, except on loopback.** A distributor
-  **MUST** serve over HTTPS. A runner **MUST** refuse to send a token over
-  plaintext HTTP, **except** where the peer address of the connection
-  carrying it is a loopback address (`127.0.0.0/8`, `::1`).
+  **MUST** serve over HTTPS, and a runner **MUST** refuse to send a token
+  over plaintext HTTP. One exception applies to both halves, because a rule
+  relaxed on one side and absolute on the other would license a runner to
+  speak plaintext only to a peer that may not answer it: a distributor
+  reachable only on loopback **MAY** serve plaintext, and a runner **MAY**
+  send a token where the peer address of the connection carrying it is a
+  loopback address (`127.0.0.0/8`, `::1`).
 
   The exception is here because the rule without one does not survive
   contact with someone building a distributor. Developing against
@@ -1661,9 +1665,10 @@ and informative for everyone else. Postern is usable with no reference to it.*
   three payloads this specification defines itself; `done` and `error` carry
   bodies §4.2 and §2.1 already define, and the SSE framing spans events, so
   neither is expressible there (§4.3).
-- A runner may send its token over plaintext HTTP when the peer address is
-  loopback — the one case where the network the TLS rule exists to protect
-  is not there. The condition is the address connected to rather than the
+- The plaintext-token prohibition has a loopback exception, on both halves:
+  a distributor reachable only on loopback may serve plaintext, and a runner
+  may send its token when the peer address is loopback — the one case where
+  the network the TLS rule exists to protect is not there. The condition is the address connected to rather than the
   hostname configured, because a name is resolved by something the runner
   does not control and resolving before connecting leaves a gap between the
   two answers. A runner **SHOULD** say when it takes the exception, to its
