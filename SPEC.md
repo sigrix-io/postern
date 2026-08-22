@@ -559,6 +559,76 @@ This is the property that makes "your keys stay on your machine" checkable
 rather than promised: there is nowhere in the protocol for a secret to
 travel, and a bundle carrying one is nonconformant.
 
+#### 4.1.4 `output`
+
+Declares what the agent returns: a `type`, and an **OPTIONAL** `example`.
+§4.2's `run` response carries the same `type` beside the `value` it actually
+produced, and so does a stream's `done` payload (§4.3).
+
+`type` is `text` in v0, and that is a decision rather than an accident of
+the examples — the same decision §4.1.1 records for inputs, made for the
+same reason. `output.value` therefore carries a string, everywhere it
+appears. A second type, and the value shape it implies, can be added later:
+additive for a runner, which need never emit it, and free to withdraw
+nothing. What it costs a *client* is the subject of the rest of this
+section.
+
+**An unrecognised `output.type` is the one unknown in this protocol a client
+may not ignore.** Every other extensible surface tells a client to carry on
+regardless: an unrecognised error `code` is a generic failure of its status
+class (§2.1), an unrecognised `stream` event name is skipped (§4.3), an
+unrecognised input `type` is treated as `text`, and an unrecognised
+`validation` member is dropped (§4.1.1). None of those rules transfers here.
+Each governs something a client is entitled to ignore, and this is not that:
+`type` is what says how to read `value`, so a client that ignores it has not
+tolerated an unknown — it has misread a known.
+
+§4.2 already makes this argument, about a field it declined to add:
+
+> A signal a client must not miss cannot ride in a field a client is
+> entitled to ignore
+
+The input side is the instructive contrast, because it looks like the same
+question and is not. Falling back to `text` for an unrecognised *input* type
+is safe: the client renders a text box, the user types into it, and the
+**runner** validates what comes back — answering `bad_request` if it is
+wrong (§4.2). There is a second reader downstream. On the output side the
+client is the last reader, nothing checks its interpretation, and guessing
+`text` for bytes that are not text renders them as prose: silently, with no
+error anywhere, and looking for all the world like an agent that returned
+gibberish.
+
+So a client receiving an `output.type` it does not recognise:
+
+- **MUST NOT** present `value` as text.
+- **MUST NOT** report the run as having failed. §2.1 routes every failure
+  through a non-2xx envelope, so a `200` carrying an output type the client
+  cannot read is a run that *succeeded* beside a client that cannot render
+  it. Those are two different facts, and the second is the one the user
+  needs.
+- **SHOULD** say which type it was given, rather than only that something
+  went unrendered. It is the one piece of information that tells a user
+  whether to reach for a different client.
+- **MAY** pass `value` on unchanged to something that does understand it. A
+  client composing two agents (§2.2) relays a result it never has to read
+  itself.
+
+The same rule reaches `describe`, one step earlier and with a different
+consequence. A catalogue that reads a declared output type it does not
+recognise can still render the agent — its name, inputs, credentials and
+tools are all unaffected — and **MUST NOT** describe it as returning text.
+Rendering an agent and rendering it accurately are different things, and
+Level 1 (§3) exists for the second.
+
+**What a second type would owe.** Whoever adds one says what `value`
+carries for it, and what §4.3's `delta` means in its presence: that
+invariant is text-shaped — every `delta.text` concatenated in order equals
+`output.value` — so a non-text output needs either a translation of it or an
+explicit exemption. `describe.output.example` is a string today and needs
+the same answer. None of that is settled here. What is settled is that a
+client written against this section survives the addition, which is the
+property that has to exist first.
+
 ### 4.2 `POST /postern/v0/run`
 
 Executes the agent and returns the final result. A Level 1 runner does not
@@ -1519,6 +1589,20 @@ and informative for everyone else. Postern is usable with no reference to it.*
   nothing about admission — a client **MUST** be ready for `503` whatever
   `status` last said, since the slot can go elsewhere between the two calls
   (§4.4, §4.5).
+- `output` has a section of its own (§4.1.4). `text` is the v0 output type
+  by decision rather than by accident of the examples, matching what §4.1.1
+  already said for inputs — and an unrecognised `output.type` now has a
+  receive-side rule, which is the part that changes the contract rather than
+  recording it. It is deliberately not the rule the other four extensible
+  surfaces use: an error `code`, a `stream` event name, an input `type` and a
+  `validation` member are all things a client may ignore, and `output.type`
+  is what says how to read `value`, so ignoring it misreads a known rather
+  than tolerating an unknown. A client **MUST NOT** present `value` as text,
+  **MUST NOT** report the run as failed — a `200` it cannot render is a run
+  that succeeded — and **SHOULD** name the type it was given. The rule has to
+  exist before a second output type can, or the addition breaks every client
+  written against the closed set: the ordering the error-code enum already
+  paid for (§2.1, §4.1.1, §4.1.4).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

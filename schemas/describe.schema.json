@@ -36,7 +36,11 @@
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": { "type": "string", "enum": ["text"] },
+        "type": {
+          "type": "string",
+          "enum": ["text"],
+          "description": "The output types a conforming implementation emits. text is the v0 type by decision (SPEC.md section 4.1.4), so value carries a string. A client MUST NOT use this enum to reject a response — and unlike every other unknown in this protocol, an unrecognised output type may not simply be ignored either: a client MUST NOT present value as text, MUST NOT report the run as failed, and SHOULD say which type it was given."
+        },
         "example": { "type": "string" }
       },
       "additionalProperties": true
