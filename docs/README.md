@@ -1,6 +1,6 @@
 # Postern in pictures
 
-Five diagrams of [SPEC.md](../SPEC.md), for a reader deciding whether Postern is
+Seven diagrams of [SPEC.md](../SPEC.md), for a reader deciding whether Postern is
 for them before committing to 1,636 lines of prose.
 
 > [!NOTE]
@@ -137,13 +137,46 @@ flowchart TD
 ```
 
 Two components means two runners on two ports — §2.2 permits no other shape. The
-client carries the value across, and that works with no adapter because v0's
-output type is `text` and inputs take strings (§4.1.1). The reserved key `prompt`
+client carries the value across, and that works with no adapter because §4.1.4
+makes `text` the v0 output type by decision and inputs take strings (§4.1.1). The reserved key `prompt`
 denotes a single free-text brief where an agent has one, which is the natural
 landing spot for a chained value.
 
-An agent may itself hold the client role, calling the other directly. §1.2 allows
-it explicitly — it is two ordinary Postern relationships rather than an exception.
+### Or: the agent holds the client role
+
+§1.2 permits this outright — an agent may itself be a Postern client, and one agent
+calling another is two ordinary relationships rather than an exception. The
+composition moves into an agent you ship instead of an app you write.
+
+```mermaid
+flowchart TD
+    CALLER["<b>Caller</b><br/>sees one agent · one describe · one run"]
+    A["<b>Runner A</b> · :7801<br/><i>mid-run, acts as a Postern client</i><br/>holds B's port and B's token"]
+    B["<b>Runner B</b> · :7802<br/>own token · own env"]
+
+    CALLER -->|"1 · run"| A
+    A -->|"2 · run"| B
+    B -->|"3 · output.value"| A
+    A -->|"4 · output.value"| CALLER
+```
+
+You gain one surface for the caller, and nobody can wire the chain up wrongly.
+What it costs is worth knowing before you choose it:
+
+- **A refusal on B arrives as `agent_error`.** §2.1 reserves `403 not_entitled` for a
+  runner reporting its *own* state, so A cannot honestly relay B's. The caller gets a
+  `500` and no way to learn that an entitlement was the cause.
+- **The dependency is invisible in `describe`.** No field declares "I call another
+  Postern agent". The closest honest home is `capabilities.tools`, and `write_tools`
+  if reaching B spends money (§4.1.2).
+- **B's spend is not in A's `usage`.** `usage.cost_usd` is a runner's estimate of its
+  own run, so a caller summing runs under-counts.
+- **Streams must be merged, not forwarded.** §4.3 binds A: concatenating every
+  `delta.text` it emits must equal *A's* final `output.value`.
+
+Pick the client-orchestrated shape when both components are independently useful and
+the caller should see both. Pick this one when they only make sense together — and
+accept that failures inside the chain lose their names on the way out.
 
 ---
 
@@ -176,6 +209,51 @@ concatenating every `delta.text` in order equals the final `output.value`. A
 client can render deltas as they arrive and trust that what it displayed is what
 it will be handed. A runner that cannot produce incremental text emits none —
 `start` then `done` is a conformant Level 3 stream.
+
+---
+
+## 6 · Where Sigrix fits
+
+Postern is published by [Sigrix](https://sigrix.io), and §8 is a *profile* — normative
+for Sigrix as a distributor, informative for everyone else. Postern is usable with no
+reference to it.
+
+**No Sigrix endpoint is specified, anywhere.** The two distributor paths are written
+`{distributor}/postern/v0/…`, and that base is a runner's configuration; the
+specification never binds it to a host. `sigrix.io` carries the schema `$id` names and
+the contact addresses, and neither is a protocol endpoint —
+[VERSIONING.md](../VERSIONING.md) states outright that *nothing in the protocol
+requires a Sigrix service*. Sigrix is one **instance** of the Distributor box in
+diagram 1, not a fifth party.
+
+What §8 does pin down:
+
+| | |
+|---|---|
+| Bundle namespace | `org.sigrix`, carrying `agent_id` and `listing_url` (§6) |
+| Tokens | 32 random bytes, URL-safe base64, SHA-256 at rest; one active token per buyer, and rotation revokes every predecessor |
+| Declared window | `stale_after_seconds` 60, `grace_seconds` 86400 |
+| Withdrawal | `410 withdrawn`, with a twelve-month tail for buyers who owned the listing (§5.6) |
+
+Those two numbers are what diagram 3 branches on, and §5.4 makes their **sum** the
+honest bound rather than either alone:
+
+```mermaid
+flowchart LR
+    A["<b>checked_at</b><br/>the distributor's own read"] -->|"stale_after_seconds<br/>60s"| B["<b>re-check due</b>"]
+    B -->|"grace_seconds<br/>86400s"| C["<b>hard stop</b>"]
+
+    classDef stop fill:#9c3d1b,stroke:#7a2f14,stroke-width:1px,color:#ffffff
+    class C stop
+```
+
+So a revoked Sigrix entitlement can keep working for at most **86,460 seconds — just
+over 24 hours**. Both terms are the distributor's own, so the sum is knowable to it
+before it publishes either, and §5.4 requires that neither is understated.
+
+`checked_at` being the distributor's *read* time rather than the runner's receipt time
+is what keeps that sum honest; [`flow.html`](flow.html) draws the alternative it rules
+out.
 
 ---
 
