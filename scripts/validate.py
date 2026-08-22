@@ -190,6 +190,15 @@ def _without(member: str) -> dict:
 
 MUST_REJECT = [
     (
+        "run-response.schema.json",
+        "an output type outside the v0 set, which no runner may emit",
+        {
+            "postern": "0.1",
+            "run_id": "01JD8XW2Q9",
+            "output": {"type": "image", "value": "iVBORw0KGgo="},
+        },
+    ),
+    (
         "status.schema.json",
         "a runner declaring it accepts zero concurrent runs",
         {
