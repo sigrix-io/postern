@@ -709,6 +709,23 @@ A stream **MUST** end with exactly one `done` or one `error`. A client
 **MUST** ignore unrecognised event names rather than aborting, which is how
 this list grows without a version bump.
 
+`start` carries `run_id`, `delta` carries `text`, and a `step` carries at
+least `name` and `status` — one saying which step, the other which edge of
+it. `model_id` is absent for a step that calls no model.
+
+`latency_ms` is the step's elapsed time, and is reported on `finished`. A
+runner **MUST NOT** emit it on a `started` step, where there is nothing yet
+to measure; a client receiving one anyway **MUST** ignore it rather than
+reject the event. That asymmetry is the ordinary one — emit exactly the
+shape, accept more than it — and it is what keeps a meaningless field from
+becoming a conformance argument.
+
+[`stream-event.schema.json`](schemas/stream-event.schema.json) is the
+machine-readable form of those three payloads. `done` and `error` are not in
+it, because they carry bodies §4.2 and §2.1 already define. Nor is the SSE
+framing — the ordering rules above, and exactly one `done` or `error`
+last — which spans events and so lives here rather than in any schema.
+
 A Level 2 runner **MUST** answer `stream` with `501` and code
 `not_implemented` (§3), rather than falling back to a single-shot response —
 a client that asked for a stream and silently got one event cannot tell the
@@ -1603,6 +1620,16 @@ and informative for everyone else. Postern is usable with no reference to it.*
   exist before a second output type can, or the addition breaks every client
   written against the closed set: the ordering the error-code enum already
   paid for (§2.1, §4.1.1, §4.1.4).
+- `stream`'s event payloads have schemas, and its rules about them are
+  stated rather than implied by a table cell. A `step` carries at least
+  `name` and `status`; `latency_ms` is an elapsed time, so it is reported on
+  `finished` and a runner **MUST NOT** emit it on a `started` step, where
+  there is nothing yet to measure — a client receiving one anyway ignores it
+  rather than rejecting the event.
+  [`stream-event.schema.json`](schemas/stream-event.schema.json) covers the
+  three payloads this specification defines itself; `done` and `error` carry
+  bodies §4.2 and §2.1 already define, and the SSE framing spans events, so
+  neither is expressible there (§4.3).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
