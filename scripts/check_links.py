@@ -27,6 +27,7 @@ that answers "who is asking", not "does this still exist".
 
 from __future__ import annotations
 
+import ipaddress
 import pathlib
 import html
 import re
@@ -198,8 +199,21 @@ HINT_CASES = [
 ]
 
 
+# And for the loopback rule, which needs it for a third reason: it is a skip,
+# so an over-match does not fail loudly — it quietly stops checking a URL that
+# can genuinely rot. Both halves are pinned for that reason, the addresses
+# that must be skipped and the public hosts that must not be.
+LOOPBACK_CASES = [
+    ("http://127.0.0.1:8765/postern/v0/describe", True),
+    ("http://localhost:8765/postern/v0/status", True),
+    ("http://[::1]:8765/postern/v0/run", True),
+    ("https://sigrix.io/schemas/postern/0.1/status.schema.json", False),
+    ("https://agent-plugins.org", False),
+]
+
+
 def _classifier_holds() -> bool:
-    """Check the illustration rule before any network call. True on failure."""
+    """Check every classification rule before any network call. True on failure."""
     wrong = [
         (url, follower)
         for url, follower, illustrative in CLASSIFIER_CASES
@@ -216,7 +230,11 @@ def _classifier_holds() -> bool:
     for markup in misread:
         print(f"FAIL  the connection-hint rule mis-reads {markup!r}")
 
-    return bool(wrong) or bool(misread)
+    local = [url for url, loopback in LOOPBACK_CASES if _is_loopback(url) != loopback]
+    for url in local:
+        print(f"FAIL  the loopback rule mis-reads {url!r}")
+
+    return bool(wrong) or bool(misread) or bool(local)
 
 
 def _is_reserved(url: str) -> bool:
@@ -224,6 +242,29 @@ def _is_reserved(url: str) -> bool:
     return host.endswith(RESERVED_TLDS) or any(
         host == domain or host.endswith("." + domain) for domain in RESERVED_DOMAINS
     )
+
+
+def _is_loopback(url: str) -> bool:
+    """True for an address that only ever answers on the reader's own machine.
+
+    §2.2 makes the port the agent's address, so a worked example of a runner
+    has nowhere to live but loopback. None of them can answer here: nothing
+    listens on a CI runner, and if something did it would not be the reader's
+    runner. The reserved TLDs above cover `foo.localhost` and not the bare
+    name, which is the gap this closes.
+
+    §2.3 is where it showed: one sentence carries `https://app.example.com`
+    and `http://127.0.0.1:8765/postern/v0/describe` as the two ends of the
+    same cross-origin example, and only the first was being skipped.
+    """
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        # Not a literal address, so it is a name that has to resolve for real.
+        return False
 
 
 def _reach(url: str, method: str) -> tuple[int | None, str]:
@@ -306,6 +347,11 @@ def main() -> int:
         where = ", ".join(citations)
         if _is_reserved(url):
             print(f"skip  {url} — reserved for documentation ({where})")
+            continue
+
+        if _is_loopback(url):
+            reason = "loopback, so it names the reader's own machine"
+            print(f"skip  {url} — {reason} ({where})")
             continue
 
         state, reason = _check(url)
