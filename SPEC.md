@@ -1388,8 +1388,43 @@ Two distributors' namespaces coexisting in one bundle is valid.
 
 ## 7. Security considerations
 
-- **Bearer tokens over TLS only.** A distributor **MUST** serve over HTTPS.
-  A runner **MUST** refuse to send a token over plaintext HTTP.
+- **Bearer tokens over TLS only, except on loopback.** A distributor
+  **MUST** serve over HTTPS, and a runner **MUST** refuse to send a token
+  over plaintext HTTP. One exception applies to both halves, because a rule
+  relaxed on one side and absolute on the other would license a runner to
+  speak plaintext only to a peer that may not answer it: a distributor
+  reachable only on loopback **MAY** serve plaintext, and a runner **MAY**
+  send a token where the peer address of the connection carrying it is a
+  loopback address (`127.0.0.0/8`, `::1`).
+
+  The exception is here because the rule without one does not survive
+  contact with someone building a distributor. Developing against
+  `http://127.0.0.1:8080` is ordinary, and there is no network on that path
+  to intercept — anything positioned to read loopback traffic is already
+  running code on the machine, where the runner's own configuration holds
+  the token anyway. A **MUST** with no room for a legitimate case is not
+  obeyed but routed around: a flag that turns the check off, a self-signed
+  certificate with verification disabled, a fork. Each is wider than the
+  exception it stands in for, and each outlives the afternoon it was added
+  for. §5.4 declines to demand instantaneous revocation on the same
+  reasoning. It is for that reason not an operator opt-in either — a switch
+  that has to be on for ordinary local development is on in every
+  developer's configuration, and that is the habit which reaches
+  production, whereas an exception narrow enough to need no switch leaves
+  nothing to leave on.
+
+  **The condition is the address, not the name.** `localhost` is a name and
+  a resolver decides what it means; `127.0.0.1` needs no resolver at all. So
+  a runner **MUST NOT** decide this by matching the hostname it was
+  configured with, and **MUST** evaluate it against the address it is
+  actually connected to — resolving a name to loopback and then opening a
+  connection leaves a window in which the second answer differs from the
+  first.
+
+  A runner **SHOULD** report taking the exception to its operator, in a
+  startup line naming the base it is about to talk to in plaintext.
+  Deliberately not a field in `status`: a client cannot fix a distributor
+  base URL, and the person who can is not reading `status`.
 - **Loopback binding.** A runner binding a non-loopback interface exposes
   `run` to its network with no authentication defined by this specification.
   Runners that do so **MUST** require authentication of their own; Postern does
@@ -1630,6 +1665,14 @@ and informative for everyone else. Postern is usable with no reference to it.*
   three payloads this specification defines itself; `done` and `error` carry
   bodies §4.2 and §2.1 already define, and the SSE framing spans events, so
   neither is expressible there (§4.3).
+- The plaintext-token prohibition has a loopback exception, on both halves:
+  a distributor reachable only on loopback may serve plaintext, and a runner
+  may send its token when the peer address is loopback — the one case where
+  the network the TLS rule exists to protect is not there. The condition is the address connected to rather than the
+  hostname configured, because a name is resolved by something the runner
+  does not control and resolving before connecting leaves a gap between the
+  two answers. A runner **SHOULD** say when it takes the exception, to its
+  operator rather than in `status` (§7).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
