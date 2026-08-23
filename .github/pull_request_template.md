@@ -22,8 +22,7 @@ not — an unmentioned break is discovered by whoever built on the old shape.
 - [ ] **Breakage stated above**, or "Nothing."
 - [ ] **Examples and schemas updated**, and `python scripts/validate.py` passes
       locally. It runs in CI on every pull request too, including from forks.
-- [ ] **New schema `$id` flagged for serving**, if you added a file to
-      `schemas/`. Its identifier is a promise to resolve, and serving it is a
-      manual step outside this repository — say so here so the deploy is not
-      missed.
+- [ ] **Identifier change called out**, if you added or edited a file in
+      `schemas/`. The serving side picks it up on a schedule either way; saying
+      so here is what gets it landed the same day.
 - [ ] **Appendix A entry added**, if anything normative changed.

@@ -144,17 +144,18 @@ once. Here is why each is asked for.
   cites still resolve, runs weekly on a schedule instead. Someone else's
   outage is not a reason to block your change. You can run it locally if you
   are touching links; it needs no dependencies.
-- **Flag a new schema `$id` for serving.** A file added to
+- **Say when an identifier is new or changed.** A file added to or edited in
   [`schemas/`](schemas) carries an identifier that
   [VERSIONING.md](VERSIONING.md#schema-identifiers) commits to serving, and
-  serving it is a manual step outside this repository. Nothing here catches
-  the omission on the way in: `validate.py` validates the file without
-  knowing its `$id` is a promise, and `check_links.py` reports the 404 on the
-  following Monday, by which time the `links` job is red on `main` and the
-  cause is several merges back. Say in the description that a new `$id` needs
-  serving, so the maintainer merging it knows a deploy is owed.
-  [`schemas/README.md`](schemas/README.md#adding-a-schema-adds-a-hosting-step)
-  has the three steps and who owns each.
+  what does the serving is outside this repository. That no longer rests on
+  anyone remembering: the serving side pulls this repository on a schedule
+  and raises the difference itself (#85). Nothing here would catch it —
+  `check_links.py` asks whether an identifier resolves, which a *superseded*
+  schema does. The far-side merge is still a person though, so saying it in
+  the description is what gets the change landed the same day rather than the
+  next.
+  [`schemas/README.md`](schemas/README.md#a-schema-change-is-a-hosting-step)
+  has what a change owes and what it does not.
 - **Add an Appendix A entry** for anything normative.
 
 ## Writing style
