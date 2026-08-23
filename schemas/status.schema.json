@@ -38,12 +38,12 @@
         "checked_at": {
           "type": "string",
           "format": "date-time",
-          "description": "The distributor's own read time, propagated unchanged from the entitlement check. A runner MUST NOT re-stamp it with its own clock. REQUIRED when state is active or revoked."
+          "description": "The distributor's own read time, propagated unchanged from the entitlement check. A runner MUST NOT re-stamp it with its own clock. REQUIRED when state is active or revoked. A 404 carries no such value, and there the runner reports its own receipt time instead (SPEC.md section 5.7.4)."
         },
         "stale_after_seconds": {
           "type": "integer",
           "minimum": 0,
-          "description": "REQUIRED when state is active or revoked. With grace_seconds it bounds how long a revoked entitlement can keep working."
+          "description": "REQUIRED when state is active or revoked. With grace_seconds it bounds how long a revoked entitlement can keep working; under revoked it is instead when the runner re-checks. After a 404 the runner supplies its own re-check cadence, reusing the distributor's last value where it has one (SPEC.md section 5.7.4)."
         },
         "grace_seconds": {
           "type": "integer",

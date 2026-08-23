@@ -99,6 +99,16 @@ PAIRS = [
     # exercises a runner reporting an entitlement it cannot presently vouch
     # for — which is the case a client is most likely to render wrongly.
     ("status.schema.json", "status-unknown.json"),
+    # The other state §5.7 produces, and the one whose numbers may be nobody's
+    # but the runner's. After a `404` there is no distributor answer to take
+    # `checked_at` or `stale_after_seconds` from — §5.5 requires that body to
+    # be constant — so a runner reporting `revoked` supplies its own receipt
+    # time and its own re-check cadence (§5.7.4). The shape here is identical
+    # to one built from a distributor's `revoked` answer, deliberately: under
+    # `revoked` the bound protects the runner's own operator, so nothing marks
+    # which party supplied it and no client has to care. No `grace_seconds`,
+    # because a `404` is an answer and no grace applies to one.
+    ("status.schema.json", "status-revoked.json"),
     # The three event payloads §4.3 defines itself. `step` twice, because the
     # started/finished distinction is the one that carries a rule: latency_ms
     # is an elapsed time, so it belongs on the second and not the first, and

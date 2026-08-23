@@ -940,16 +940,19 @@ footer a{color:var(--iron)}
       <p class="cite">§4.4, §5.7.3</p>
     </li>
     <li>
-      <h3>A first-ever check that answers <code>404</code> has no <code>stale_after_seconds</code> to reuse</h3>
+      <h3>A first-ever <code>404</code> reports a <code>stale_after_seconds</code> the runner chose</h3>
       <p>§5.7.4 sends a <code>404</code> straight to <code>revoked</code> — it is an answer, not an
       outage, so §5.7.3's never-checked path does not catch it. §4.4 then <strong>requires</strong>
       both <code>checked_at</code> and <code>stale_after_seconds</code> whenever the state is
-      <code>revoked</code>, and §5.7.4 resolves the first with the runner's own receipt time and
-      the second by reusing “the last <code>stale_after_seconds</code> the distributor gave it”.</p>
-      <p>A runner whose very <em>first</em> check returns <code>404</code> has never been given
-      one. The rule is a <strong>SHOULD</strong>, so falling back to its own cadence is
-      conformant — but nothing says so, and the alternative reading (omit the field) is
-      nonconformant against §4.4. One clarifying clause would close it.</p>
+      <code>revoked</code>, and the <code>404</code> body carries neither: §5.5 requires it to be
+      constant.</p>
+      <p>So the runner supplies both — its own receipt time, and its own re-check cadence, reusing
+      the distributor's last <code>stale_after_seconds</code> where it has one. On a first check it
+      has none, which is what a token revoked before its runner ever ran produces: worth building
+      for rather than treating as exotic. Nothing in the payload marks the number as the runner's
+      own, and under <code>revoked</code> that is the honest answer — there the field says when
+      <em>this runner</em> will ask again, rather than bounding the distributor's revocation
+      risk.</p>
       <p class="cite">§4.4, §5.7.4</p>
     </li>
     <li>
