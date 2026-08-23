@@ -1354,6 +1354,10 @@ entitlement grounds, however long it has been trying.
   genuinely help, once the network returns. `not_entitled` would assert
   something no distributor has said.
 
+A check that answered `404` has completed, whatever it said, so a runner
+holding one is in §5.7.4 rather than here — including where that `404` was
+the first answer it ever got.
+
 The two shapes of `unknown` are told apart by that timestamp: `unknown` with
 a `checked_at` is a runner inside grace, still running, with a deadline;
 `unknown` without one is a runner that cannot start. A client can say which
@@ -1382,11 +1386,30 @@ force. A runner **SHOULD NOT** tell the user more than that.
 §4.4 requires `checked_at` and `stale_after_seconds` wherever the state is
 `revoked`, and a `404` carries neither: §5.5 requires that body to be
 constant, and attaching fields to it would rebuild the oracle the rule
-exists to prevent. So a runner reporting `revoked` after a `404` uses its
-own receipt time and its own re-check cadence, and **SHOULD** reuse the last
-`stale_after_seconds` the distributor gave it. §4.4's rule against
+exists to prevent. So a runner reporting `revoked` after a `404` supplies
+both itself — `checked_at` is its own receipt time, and
+`stale_after_seconds` its own re-check cadence. It **SHOULD** reuse the last
+`stale_after_seconds` the distributor gave it in place of that cadence;
+where it has never been given one, its own stands. §4.4's rule against
 re-stamping is not engaged, because it forbids discarding an anchor the
 distributor supplied, and here there is none to discard.
+
+That last case is not exotic. A first check answering `404` is what a token
+revoked before its runner ever ran produces, and what a runner pointed at
+the wrong distributor sees; there is no earlier answer anywhere to reuse.
+A runner that omitted the field instead would answer `status` with a payload
+§4.4 and `status.schema.json` both reject.
+
+A runner supplying that number itself is safe here in a way it would not be
+under `active`. §4.4 calls it the same bound either way and says what does
+change: who it protects — under `active`, how long a revoked entitlement
+keeps working, and under `revoked`, how long a restored one stays unusable.
+The first is the distributor's risk, so §5.7.1's reasoning applies and the
+party carrying it sets the bound, a longer one being exactly what a holder
+would choose. The second falls on the runner's own operator, who is the
+party waiting for that restore and gains nothing by overstating it. So a
+client reads the field the same way either way — when this runner will ask
+again — and nothing needs to mark which party supplied the number.
 
 **Every case, in one table.** `describe` and `status` are unaffected
 throughout: §4.1 requires `describe` to answer without an entitlement and
@@ -1747,6 +1770,20 @@ and informative for everyone else. Postern is usable with no reference to it.*
   runner bounding what it returns declares `limits.max_output_bytes` in
   `status`, measured before base64. Additive: a client written against
   §4.1.4's receive-side rule survives it (§4.1.4, §4.3, §4.4).
+- A runner whose first-ever check answers `404` reports `revoked` with its
+  own re-check cadence as `stale_after_seconds`. That fallback was already
+  the rule, but reachable only by reading "its own re-check cadence" as the
+  field. The clause that did name the field attached a **SHOULD** — reuse
+  the distributor's last value — which a first check cannot satisfy, so the
+  one case a plain misconfiguration produces was the one left unstated, and
+  the conformant reading was the harder of the two to find. §5.7.4 also now
+  answers whether a client can tell a runner-supplied number from a
+  distributor's: it cannot, and does not need to, because the bound protects
+  the runner's own operator under `revoked` where it protects the
+  distributor under `active`, and only the second party gains by
+  overstating it. §5.7.3 says that a `404` is a completed check and so not
+  its case, and `status.schema.json`'s two descriptions carry the same
+  exception (§5.7.3, §5.7.4).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
