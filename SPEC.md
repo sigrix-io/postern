@@ -565,13 +565,14 @@ Declares what the agent returns: a `type`, and an **OPTIONAL** `example`.
 §4.2's `run` response carries the same `type` beside the `value` it actually
 produced, and so does a stream's `done` payload (§4.3).
 
-`type` is `text` in v0, and that is a decision rather than an accident of
-the examples — the same decision §4.1.1 records for inputs, made for the
-same reason. `output.value` therefore carries a string, everywhere it
-appears. A second type, and the value shape it implies, can be added later:
+`type` is `text` or `bytes`. `text` is the ordinary one and the one §4.1.1
+records the matching decision for on the input side; `bytes` is defined at
+the end of this section, for an agent whose result is a file rather than
+prose. `output.value` carries a JSON string either way, so the envelope has
+one shape regardless. A third type can be added later on the same terms:
 additive for a runner, which need never emit it, and free to withdraw
-nothing. What it costs a *client* is the subject of the rest of this
-section.
+nothing. What an unrecognised one costs a *client* is the subject of the
+rest of this section.
 
 **An unrecognised `output.type` is the one unknown in this protocol a client
 may not ignore.** Every other extensible surface tells a client to carry on
@@ -620,14 +621,66 @@ tools are all unaffected — and **MUST NOT** describe it as returning text.
 Rendering an agent and rendering it accurately are different things, and
 Level 1 (§3) exists for the second.
 
-**What a second type would owe.** Whoever adds one says what `value`
-carries for it, and what §4.3's `delta` means in its presence: that
-invariant is text-shaped — every `delta.text` concatenated in order equals
-`output.value` — so a non-text output needs either a translation of it or an
-explicit exemption. `describe.output.example` is a string today and needs
-the same answer. None of that is settled here. What is settled is that a
-client written against this section survives the addition, which is the
-property that has to exist first.
+**`bytes` is the second type**, for an agent whose result is a rendered
+chart, a short PDF, a generated image — a file rather than prose. It
+carries two obligations beyond `text`:
+
+- `value` is the artifact **base64-encoded**, standard alphabet with
+  padding ([RFC 4648](https://www.rfc-editor.org/rfc/rfc4648) §4). It
+  remains a JSON string, so no envelope changes shape to accommodate it.
+- `media_type` sits beside `type` and is **REQUIRED** when `type` is
+  `bytes`: an [RFC 6838](https://www.rfc-editor.org/rfc/rfc6838) media
+  type, `image/png` or `application/pdf`. It is an open string rather than
+  an enum deliberately — closing it would need a specification revision per
+  format, which is exactly the cost the receive-side rule above exists to
+  avoid paying.
+
+A `run` response carrying one:
+
+```json
+{
+  "postern": "0.1",
+  "run_id": "01JD9YB4R2",
+  "output": {
+    "type": "bytes",
+    "media_type": "image/png",
+    "value": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAA…"
+  }
+}
+```
+
+A client that knows `bytes` and not the media type is better placed than one
+meeting an unknown `type`: it knows the value is an artifact rather than
+prose, so it can offer to save it under that name instead of declining to
+render anything. It **MUST NOT** present it as text, for the reason already
+given.
+
+**A `bytes` run emits no `delta`.** §4.3's invariant is that concatenated
+`delta.text` equals `output.value`, and base64 fragments satisfy it only in
+a way that is useless to the client rendering them — the stream prints the
+encoding. So a runner producing a `bytes` output **MUST NOT** emit `delta`
+at all. Progress on such a run rides on `step`, which reports it without
+pretending to be the output.
+
+**`example` stays text-only.** `describe.output.example` is a string, and a
+runner **MUST NOT** emit one for a `bytes` output. An inline artifact would
+inflate a document every catalogue listing fetches, to show what
+`media_type` already names.
+
+**Size is declared, not solved.** Base64 costs a third on top of the
+artifact and both ends hold the whole of it in memory: this envelope moves a
+chart, not a corpus. A runner that bounds what it will return **MUST**
+declare the bound as `limits.max_output_bytes` in `status` (§4.4), measured
+on the artifact rather than on its encoding. Where an agent's real output is
+larger than that, §1.2's tools remain the honest route — the file is written
+where the user can already reach it, and the protocol is not asked to carry
+it.
+
+**A third type would owe what this one just paid**: what `value` carries,
+what `delta` means in its presence, whether `example` reaches it, and what
+bounds it. What is settled here is that a client written against this
+section survives every such addition, which is the property that had to
+exist first.
 
 ### 4.2 `POST /postern/v0/run`
 
@@ -701,7 +754,7 @@ payload. Five event types are defined:
 |---|---|---|
 | `start` | `{"run_id": "…"}` | **MUST** be first. |
 | `step` | `{"name": "…", "model_id": "…", "status": "started\|finished", "latency_ms": N}` | **OPTIONAL**, zero or more. |
-| `delta` | `{"text": "…"}` | **OPTIONAL**, zero or more. Incremental output. **If any `delta` is emitted**, concatenating every `delta.text` in order **MUST** equal the final `output.value`; a runner that cannot produce incremental text emits none. |
+| `delta` | `{"text": "…"}` | **OPTIONAL**, zero or more. Incremental output. **If any `delta` is emitted**, concatenating every `delta.text` in order **MUST** equal the final `output.value`; a runner that cannot produce incremental text emits none, and one producing a `bytes` output (§4.1.4) emits none by rule. |
 | `done` | The full `run` response body (§4.2) | **MUST** be last on success. |
 | `error` | The error body (§2.1) | **MUST** be last on failure. |
 
@@ -712,6 +765,12 @@ this list grows without a version bump.
 `start` carries `run_id`, `delta` carries `text`, and a `step` carries at
 least `name` and `status` — one saying which step, the other which edge of
 it. `model_id` is absent for a step that calls no model.
+
+The `delta` invariant is text-shaped, which is why §4.1.4 forbids the event
+outright for a `bytes` output rather than reinterpreting it: base64
+fragments would satisfy the concatenation rule while giving a client that
+renders the stream nothing but the encoding to print. Such a run reports its
+progress with `step`, which was never claiming to be the output.
 
 `latency_ms` is the step's elapsed time, and is reported on `finished`. A
 runner **MUST NOT** emit it on a `started` step, where there is nothing yet
@@ -793,11 +852,13 @@ Re-stamping discards the anchor and silently restores the stacking that
 that carries no such value is a `404`, which cannot: there is nothing to
 discard there, and §5.7.4 says what a runner reports instead.
 
-`limits` is **OPTIONAL** and carries the bounds §4.5 puts on a run in
-flight. Both members are **OPTIONAL** in turn: `max_run_seconds` is the
-maximum duration the runner will let a run reach, **REQUIRED** where it
-imposes one at all and absent where it does not, and `max_concurrent_runs`
-is how many runs it will have in flight at once.
+`limits` is **OPTIONAL** and carries the bounds a runner puts on a run.
+Each member is **OPTIONAL** in turn: `max_run_seconds` is the maximum
+duration the runner will let a run reach, **REQUIRED** where it imposes one
+at all and absent where it does not; `max_concurrent_runs` is how many runs
+it will have in flight at once; and `max_output_bytes` is the largest
+artifact it will return from a `bytes` output (§4.1.4), measured before
+base64 rather than after, and likewise **REQUIRED** where it bounds one.
 
 They live in `status` rather than in `describe` because they belong to the
 deployment and not to the agent. Two runners serving the same agent may
@@ -1668,11 +1729,24 @@ and informative for everyone else. Postern is usable with no reference to it.*
 - The plaintext-token prohibition has a loopback exception, on both halves:
   a distributor reachable only on loopback may serve plaintext, and a runner
   may send its token when the peer address is loopback — the one case where
-  the network the TLS rule exists to protect is not there. The condition is the address connected to rather than the
-  hostname configured, because a name is resolved by something the runner
-  does not control and resolving before connecting leaves a gap between the
-  two answers. A runner **SHOULD** say when it takes the exception, to its
-  operator rather than in `status` (§7).
+  the network the TLS rule exists to protect is not there. The condition is
+  the address connected to rather than the hostname configured, because a
+  name is resolved by something the runner does not control, and resolving
+  before connecting leaves a gap between the two answers. A runner
+  **SHOULD** say when it takes the exception, to its operator rather than in
+  `status` (§7).
+
+- `output.type` gains `bytes`, for an agent whose result is a file rather
+  than prose. `value` carries the artifact base64-encoded and stays a JSON
+  string, so no envelope changes shape; `media_type` is **REQUIRED** beside
+  it and is an open RFC 6838 string, because an enum would need a
+  specification revision per format. A `bytes` run emits no `delta` — §4.3's
+  invariant is text-shaped, and base64 fragments would satisfy it while
+  giving a client nothing but the encoding to print — so it reports progress
+  with `step` instead. `describe.output.example` stays text-only, and a
+  runner bounding what it returns declares `limits.max_output_bytes` in
+  `status`, measured before base64. Additive: a client written against
+  §4.1.4's receive-side rule survives it (§4.1.4, §4.3, §4.4).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

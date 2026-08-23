@@ -51,7 +51,7 @@
     },
     "delta": {
       "title": "delta event payload",
-      "description": "OPTIONAL, zero or more. Incremental output. If any delta is emitted, concatenating every delta.text in order MUST equal the final output.value — an invariant no schema can express, because it spans events rather than sitting inside one. scripts/validate.py asserts it against examples/stream.txt instead.",
+      "description": "OPTIONAL, zero or more. Incremental output. If any delta is emitted, concatenating every delta.text in order MUST equal the final output.value — an invariant no schema can express, because it spans events rather than sitting inside one. scripts/validate.py asserts it against examples/stream.txt instead. A runner producing a bytes output emits no delta: the invariant is text-shaped, and base64 fragments would satisfy it while giving a client only the encoding to render (SPEC.md section 4.1.4).",
       "type": "object",
       "required": ["text"],
       "properties": { "text": { "type": "string" } },
