@@ -86,6 +86,11 @@
           "minimum": 1,
           "description": "The longest a run may take before the runner stops it with 504 run_timeout. REQUIRED where the runner imposes a limit at all, absent where it does not. A runner MUST NOT declare a bound longer than the shortest one it can actually enforce."
         },
+        "max_output_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The largest artifact the runner will return from a bytes output, measured before base64 rather than after. REQUIRED where the runner bounds one at all, absent where it does not (SPEC.md section 4.1.4)."
+        },
         "max_concurrent_runs": {
           "type": "integer",
           "minimum": 1,

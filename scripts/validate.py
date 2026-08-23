@@ -67,6 +67,13 @@ PAIRS = [
     ("describe.schema.json", "describe.json"),
     ("run-request.schema.json", "run-request.json"),
     ("run-response.schema.json", "run-response.json"),
+    # Both output types rather than only `text`. `bytes` is the one an
+    # implementer has never seen, and the two things it adds are exactly the
+    # two prose cannot check: that `value` is really base64 of something —
+    # the run-response example decodes to a valid PNG — and that
+    # `media_type` rides beside `type` rather than being remembered later.
+    ("describe.schema.json", "describe-bytes.json"),
+    ("run-response.schema.json", "run-response-bytes.json"),
     ("status.schema.json", "status.json"),
     ("error.schema.json", "error.json"),
     # Four error examples rather than one. The envelope is identical in each;
@@ -220,6 +227,25 @@ MUST_REJECT = [
             "postern": "0.1",
             "run_id": "01JD8XW2Q9",
             "output": {"type": "image", "value": "iVBORw0KGgo="},
+        },
+    ),
+    (
+        "run-response.schema.json",
+        "a bytes output with no media_type, which no client could place",
+        {
+            "postern": "0.1",
+            "run_id": "01JD8XW2Q9",
+            "output": {"type": "bytes", "value": "iVBORw0KGgo="},
+        },
+    ),
+    (
+        "describe.schema.json",
+        "a declared bytes output with no media_type",
+        {
+            "postern": "0.1",
+            "agent": {"id": "acme/chart", "name": "Chart", "version": "1.0.0"},
+            "inputs": [],
+            "output": {"type": "bytes"},
         },
     ),
     (

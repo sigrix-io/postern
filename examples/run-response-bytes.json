@@ -1,0 +1,22 @@
+{
+  "postern": "0.1",
+  "run_id": "01JD9YB4R2",
+  "output": {
+    "type": "bytes",
+    "media_type": "image/png",
+    "value": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+  },
+  "usage": {
+    "input_tokens": 180,
+    "output_tokens": 0,
+    "cost_usd": 4.1e-05,
+    "steps": [
+      {
+        "name": "render",
+        "input_tokens": 180,
+        "output_tokens": 0,
+        "latency_ms": 240
+      }
+    ]
+  }
+}

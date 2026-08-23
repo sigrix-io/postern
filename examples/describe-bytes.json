@@ -1,0 +1,22 @@
+{
+  "postern": "0.1",
+  "agent": {
+    "id": "acme/revenue-chart",
+    "name": "Revenue Chart",
+    "version": "0.4.1",
+    "summary": "Plots a revenue series and returns the chart as a PNG."
+  },
+  "inputs": [
+    {
+      "key": "series",
+      "label": "Revenue series",
+      "type": "text",
+      "required": true,
+      "help": "Comma-separated monthly totals."
+    }
+  ],
+  "output": {
+    "type": "bytes",
+    "media_type": "image/png"
+  }
+}

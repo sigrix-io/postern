@@ -38,11 +38,18 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["text"],
-          "description": "The output types a conforming implementation emits. text is the v0 type by decision (SPEC.md section 4.1.4), so value carries a string. A client MUST NOT use this enum to reject a response — and unlike every other unknown in this protocol, an unrecognised output type may not simply be ignored either: a client MUST NOT present value as text, MUST NOT report the run as failed, and SHOULD say which type it was given."
+          "enum": ["text", "bytes"],
+          "description": "The output types a conforming implementation emits. text is prose; bytes is a file, and value then carries it base64-encoded (SPEC.md section 4.1.4) — value is a JSON string either way. A client MUST NOT use this enum to reject a response — and unlike every other unknown in this protocol, an unrecognised output type may not simply be ignored either: a client MUST NOT present value as text, MUST NOT report the run as failed, and SHOULD say which type it was given."
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z]+/[A-Za-z0-9!#$&^_.+-]+$",
+          "description": "An RFC 6838 media type naming what value carries. REQUIRED when type is bytes, and meaningless otherwise. Open rather than an enum on purpose: closing it would need a specification revision per format."
         },
         "example": { "type": "string" }
       },
+      "if": { "properties": { "type": { "const": "bytes" } }, "required": ["type"] },
+      "then": { "required": ["media_type"] },
       "additionalProperties": true
     },
     "capabilities": {
