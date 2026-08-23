@@ -128,7 +128,13 @@ to, and until there is, changes land under *Unreleased* rather than moving
 the version. Breaking changes will happen before 1.0, and
 [VERSIONING.md](VERSIONING.md) says which of them move what.
 
-There is no reference implementation in this repository yet.
+There is no reference implementation in this repository. There is one
+elsewhere: [Sigrix](https://sigrix.io) serves the four verbs at Level 3 for a
+packaged agent, and the §5 endpoints as a distributor.
+
+It is an implementation of this document rather than a second definition of
+it — where the two appear to disagree, this document is what anyone pinned to,
+and the disagreement is worth an issue here.
 
 If you are building against this, please [open an
 issue](../../issues) — knowing who depends on what is what lets us avoid
