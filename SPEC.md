@@ -320,6 +320,13 @@ Where the runner allows the origin, that answer carries:
 
 on any 2xx status; `204` is the usual choice.
 
+Naming `Idempotency-Key` there is a **MUST** rather than a courtesy for a
+runner that declares `capabilities.idempotent_retry` (§4.2). A browser
+cannot send a header its preflight did not admit, so the promise would
+otherwise hold for every client kind except the one that has to ask
+permission to take it up — and the runner would look, to that client alone,
+like one ignoring a header it never received.
+
 `Access-Control-Allow-Origin` and `Vary: Origin` **MUST** ride the actual
 response as well, and not only the preflight. The two are refused
 separately: a preflight authorises the request, and a `run` whose response
@@ -483,6 +490,7 @@ and **MUST** be answerable without credentials and without an entitlement.
   },
   "capabilities": {
     "streaming": true,
+    "idempotent_retry": true,
     "tools": ["serper_search", "file_read", "file_write"],
     "write_tools": ["file_write"]
   },
@@ -544,8 +552,14 @@ subset of those that spend money, mutate state outside the workspace, or are
 otherwise not safely repeatable.
 
 A client **SHOULD** surface `write_tools` to the user before the first
-`run`, and **MAY** require confirmation. This is the only safety-relevant
-field in `describe` and the reason `tools` is not a flat list.
+`run`, and **MAY** require confirmation. It is the reason `tools` is not a
+flat list.
+
+`capabilities.idempotent_retry` (§4.2) is the other half of the same warning
+and the only other safety-relevant field here: `write_tools` says what an
+agent does that nothing can undo, and `idempotent_retry` says whether asking
+twice does it twice. A client with a reason to surface the first has the same
+reason to read the second before it retries.
 
 #### 4.1.3 `credentials`
 
@@ -742,6 +756,52 @@ stable enough to correlate with `stream` events and logs.
 `run` is not idempotent. A runner **MAY** honour an `Idempotency-Key`
 request header; behaviour when it does not is to execute again.
 
+**A runner that honours it says so**, as `capabilities.idempotent_retry` in
+`describe` (§4.1) — an **OPTIONAL** boolean. `true` is a promise about the
+agent rather than about the response: a request carrying an
+`Idempotency-Key` the runner has already answered **MUST NOT** execute the
+agent a second time, and **MUST** answer with the result of the first
+execution, whether that was a success or the error the agent produced
+(§2.1). A client wanting a genuine second attempt asks with a new key, which
+is what it would have done with no header at all. A request refused before
+the agent ran — a `bad_request` here, a `501` under §3 — executed nothing
+and so binds no key. On `stream` a replayed result arrives as `start` then
+`done`, a shape §4.3 already admits: `delta` is optional, and a replay has
+no incremental text to produce.
+
+A client **MUST** read absent and `false` identically — a retry executes
+again, which is what this section already said of a runner that does not
+honour the header. The field is there for a runner to make the promise
+rather than to deny it, which is also what keeps it additive: a client
+written before it existed reads every runner as absent, and where that is
+wrong it is wrong in the direction that costs nothing, budgeting for a
+second execution that never happens. A runner **MAY** still honour the
+header without declaring it — the **MAY** above is unchanged — and nothing
+may be built on that: an undeclared courtesy is one no client is entitled to
+read, which is what leaves the declaration carrying the whole of the
+promise. A Level 1 runner (§3) has no `run` to be idempotent about and
+**SHOULD NOT** declare the field at all.
+
+**What the key saves is narrower than it looks**, and §4.5 is why. A
+disconnected client is a cancelled run there: the runner aborts the agent
+and discards the output, so there is no completed first execution for a
+retry to be answered with, and one executes again whether it carries a key
+or not. What a key recovers is the other disconnect — the agent had
+finished and the answer was lost on the way back, the money already spent
+and every `write_tools` entry (§4.1.2) already invoked. It declines to buy a
+completed run twice. It does not resume an abandoned one.
+
+Declaring it matters precisely because a client cannot tell those two apart.
+A connection dropping mid-`run` looks identical whether the agent was
+halfway through or writing its last byte, and the client holds no `run_id`
+to ask about — §4.5 says why a `run` client never learns one. So
+`idempotent_retry` does not tell a client which of the two it suffered. It
+tells it whether asking again is capable of being free, which is the
+question a client warned about `write_tools` is actually asking.
+
+A runner declaring `true` **MUST** name `Idempotency-Key` in the
+`Access-Control-Allow-Headers` of its preflight answers (§2.3).
+
 ### 4.3 `POST /postern/v0/stream`
 
 Takes the **same request body as `run`** and returns
@@ -771,6 +831,34 @@ outright for a `bytes` output rather than reinterpreting it: base64
 fragments would satisfy the concatenation rule while giving a client that
 renders the stream nothing but the encoding to print. Such a run reports its
 progress with `step`, which was never claiming to be the output.
+
+**Where the deltas and `done` disagree, a client prefers `done`.** The
+concatenation rule binds what a runner emits, and nothing binds what a client
+does when it is broken — so a client that accumulated deltas, rendered them,
+and then read a different `output.value` has met a runner in breach of it with
+no move of its own stated anywhere. It **SHOULD** prefer `done`'s
+`output.value`: §4.2 makes the run response the result, and the deltas were a
+preview of it.
+
+A **SHOULD**, because a client cannot always comply. One writing deltas to
+standard output as they arrive has already emitted them and a scrolled
+terminal cannot be taken back, and a rule a client has to break to stay useful
+is one that gets broken quietly. So a client able to replace what it rendered
+**SHOULD**, and one that is not **MAY** say the streamed text was superseded.
+Text that changes under a user after it finished arriving is worth a word
+either way — the alternative is a user shown two answers and told nothing
+about either.
+
+What is not optional is the other half. A client **MUST NOT** report the run
+as having failed on that ground alone: §4.1.4 draws the same line for an
+output type a client cannot read, and for the same reason — the run succeeded
+and the client's rendering of it was wrong, which are two different facts.
+Reporting the first sends a user to file a bug against an agent that ran
+correctly, and costs them the result, which arrived intact in `done`.
+
+None of this reaches the emit side. The invariant is a **MUST** on the runner
+still, and a receive-side rule says what a breach costs the user rather than
+licensing one.
 
 `latency_ms` is the step's elapsed time, and is reported on `finished`. A
 runner **MUST NOT** emit it on a `started` step, where there is nothing yet
@@ -899,17 +987,25 @@ ignored, taking the rest of the rule with it. What is not optional is the
 part a runner does control — there is no callback in this protocol and no
 verb that delivers a result late, so a runner **MUST NOT** deliver the
 output of an abandoned run anywhere else, and discarding it is the only
-thing it can do with it.
+thing it can do with it. A runner honouring `Idempotency-Key` (§4.2) and
+answering a retry that carries the key of the run which produced that output
+is not the exception it looks like: that is the same request asked again,
+answered synchronously to whoever asked it, rather than the late delivery
+down some other channel this rule forbids.
 
 **An abort is not a rollback**, and a client **MUST NOT** read one as
 undoing anything. Whatever the agent did before it stopped is done: the
 money is spent, and every `write_tools` entry (§4.1.2) is a thing that may
 already have happened. Postern can stop an agent; nothing here can reverse
 one. That is also what makes a retry after a disconnect a genuinely
-different request from the first attempt, and the case `run`'s
-`Idempotency-Key` (§4.2) exists for — a client that disconnects, reconnects
-and asks again without one has asked for the work twice, and **SHOULD**
-expect to be charged for it twice.
+different request from the first attempt: a client that disconnects,
+reconnects and asks again has asked for the work twice, and **SHOULD**
+expect to be charged for it twice. An `Idempotency-Key` (§4.2) does not
+change that here, and this is the case it can do least about — the run it
+would deduplicate against is the one this section just aborted, its output
+discarded, so nothing is stored to answer with. What it saves is the retry
+whose first attempt finished, which from the client's side looks exactly
+like this one.
 
 **`run_id` is not a handle.** It correlates a stream's events with its own
 `done` payload and with the runner's logs, and that is the whole of it: no
@@ -1784,6 +1880,33 @@ and informative for everyone else. Postern is usable with no reference to it.*
   overstating it. §5.7.3 says that a `404` is a completed check and so not
   its case, and `status.schema.json`'s two descriptions carry the same
   exception (§5.7.3, §5.7.4).
+- The `delta` concatenation invariant gains the receive-side rule it was
+  missing: where the accumulated deltas and `done`'s `output.value` disagree,
+  a client **SHOULD** prefer `done`, and **MUST NOT** report the run as
+  having failed on that ground. It was the one place a client could be
+  surprised with nothing stated for it — every other one has a rule, and
+  §4.1.4's is the near neighbour, separating a run that succeeded from a
+  client that rendered it wrongly. A **SHOULD** rather than a **MUST**
+  because a client writing deltas to standard output has already emitted
+  them. The invariant itself is unchanged and still binds the runner (§4.3).
+- A runner that honours an `Idempotency-Key` declares it, as
+  `capabilities.idempotent_retry` in `describe`. §2.3 already varied a
+  browser client's preflight by whether the runner honours the header, so
+  the one answer was being advertised in a CORS header to a client with no
+  protocol-level way to ask for it, and §4.5 had since made being charged
+  twice a documented outcome of an ordinary disconnect. Declaring it forced
+  fixing what honouring means, which the specification had never said: a
+  repeat key **MUST NOT** execute the agent again and **MUST** be answered
+  with the result of the first execution, a produced error included, while a
+  request refused before the agent ran binds no key. Absent and `false` read
+  identically, so a client written before the field is right about every
+  runner that had not made the promise. §4.5 stops naming the key as the
+  remedy for the disconnect it can do least about — the run it would
+  deduplicate against was aborted and its output discarded — and says that
+  answering a retry carrying that run's key is not the late delivery its
+  discard rule forbids. A runner declaring the field **MUST** admit the
+  header in its preflight, or the promise holds for every client kind except
+  the browser (§2.3, §4.1.2, §4.2, §4.5).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

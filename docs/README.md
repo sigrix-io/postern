@@ -1,7 +1,7 @@
 # Postern in pictures
 
 Seven diagrams of [SPEC.md](../SPEC.md), for a reader deciding whether Postern is
-for them before committing to 1,790 lines of prose.
+for them before committing to 1,913 lines of prose.
 
 > [!NOTE]
 > **Non-normative.** Nothing on this page adds to the protocol, constrains an
@@ -210,6 +210,10 @@ client can render deltas as they arrive and trust that what it displayed is what
 it will be handed. A runner that cannot produce incremental text emits none —
 `start` then `done` is a conformant Level 3 stream.
 
+Where a runner breaks the invariant anyway, the client prefers `done`'s
+`output.value` and does not call the run failed: the run succeeded and the
+rendering of it was wrong, which are two different facts (§4.3).
+
 ---
 
 ## 6 · Where Sigrix fits
@@ -261,7 +265,7 @@ out.
 
 | | |
 |---|---|
-| The specification | [SPEC.md](../SPEC.md) — 1,790 lines, and the only thing that governs |
+| The specification | [SPEC.md](../SPEC.md) — 1,913 lines, and the only thing that governs |
 | Machine-readable payloads | [`schemas/`](../schemas), with worked instances in [`examples/`](../examples) |
 | What may change before 1.0 | [VERSIONING.md](../VERSIONING.md) |
 | A longer illustrated walk-through | [`flow.html`](flow.html) — open it in a browser; it adds the staleness-window and `404`-indistinguishability figures this page leaves out |

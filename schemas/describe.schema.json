@@ -56,6 +56,10 @@
       "type": "object",
       "properties": {
         "streaming": { "type": "boolean" },
+        "idempotent_retry": {
+          "type": "boolean",
+          "description": "Whether the runner honours an Idempotency-Key (SPEC.md section 4.2): a request carrying a key it has already answered MUST NOT execute the agent again, and is answered with the result of the first execution. A client reads absent and false identically — a retry executes again. A Level 1 runner implements no run and SHOULD NOT declare it."
+        },
         "tools": {
           "type": "array",
           "items": { "type": "string" },
