@@ -259,6 +259,16 @@ MUST_REJECT = [
         },
     ),
     (
+        "describe.schema.json",
+        "an idempotent_retry that is not a boolean, which promises nothing readable",
+        {
+            "postern": "0.1",
+            "agent": {"id": "acme/a", "name": "A", "version": "1"},
+            "inputs": [],
+            "capabilities": {"idempotent_retry": "yes"},
+        },
+    ),
+    (
         "status.schema.json",
         "a runner declaring it accepts zero concurrent runs",
         {

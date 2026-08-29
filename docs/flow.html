@@ -912,8 +912,9 @@ footer a{color:var(--iron)}
 <section id="notes">
   <div class="col">
     <h2><span class="marker">G — Reading notes</span>Five things the drawing surfaced</h2>
-    <p class="lede">Three are properties worth knowing before implementing. Two are places where
-    two conforming implementations could reasonably differ.</p>
+    <p class="lede">Three are properties worth knowing before implementing. Two were places
+    where two conforming implementations could reasonably differ, and are now settled in the
+    specification.</p>
   </div>
 
   <ol class="notes">
@@ -956,18 +957,20 @@ footer a{color:var(--iron)}
       <p class="cite">§4.4, §5.7.4</p>
     </li>
     <li>
-      <h3><code>Idempotency-Key</code> support is undiscoverable</h3>
-      <p>§4.2 says <code>run</code> is not idempotent, that a runner <strong>MAY</strong> honour an
-      <code>Idempotency-Key</code> header, and that the behaviour when it does not is to execute
-      again. There is no field in <code>describe.capabilities</code> or in <code>status</code>
-      that declares support, so a client whose request timed out cannot know whether retrying is
-      safe or whether it is paying twice.</p>
-      <p>That matters most for exactly the agents §4.1.2 asks a client to warn about — the ones
-      whose <code>write_tools</code> spend money or mutate state outside the workspace. The two
-      sections are solving adjacent halves of the same user-facing problem and do not reference
-      each other. An optional <code>capabilities.idempotent_retry</code> boolean would be additive
-      and would close it inside the existing verb.</p>
-      <p class="cite">§4.1.2, §4.2</p>
+      <h3><code>Idempotency-Key</code> support is declared, and saves less than it looks</h3>
+      <p>§4.2 says <code>run</code> is not idempotent and that a runner <strong>MAY</strong>
+      honour an <code>Idempotency-Key</code>. Nothing declared whether a given one does, so a
+      client whose request died in flight could not tell whether retrying was free or whether it
+      was buying the work twice — while §2.3 was already varying that same client's CORS
+      preflight by the answer.</p>
+      <p><code>capabilities.idempotent_retry</code> declares it now, and declaring it forced
+      fixing what honouring means: a repeat key <strong>MUST NOT</strong> execute the agent again
+      and is answered with the first execution's result. The narrower half is the part worth
+      reading twice. §4.5 aborts an abandoned run and discards its output, so a key cannot rescue
+      the disconnect that section is about; what it saves is the retry whose first attempt
+      <em>finished</em> and whose answer was lost on the way back — which, from the client's
+      side, looks exactly the same.</p>
+      <p class="cite">§4.1.2, §4.2, §4.5</p>
     </li>
     <li>
       <h3>A <code>delta</code> mismatch is settled in favour of <code>done</code></h3>
@@ -989,10 +992,11 @@ footer a{color:var(--iron)}
   </ol>
 
   <div class="col">
-    <p style="margin-top:34px">Notes 3, 4 and 5 are reader questions rather than defects —
+    <p style="margin-top:34px">Notes 3, 4 and 5 were reader questions rather than defects —
     the kind <a href="https://github.com/sigrix-io/postern/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>
     calls “the most useful reports we get: ambiguity found by a reader is ambiguity found before
-    it is baked into implementations.”</p>
+    it is baked into implementations.” Each has since been answered in the specification, and
+    each note describes the answer rather than the question it started as.</p>
   </div>
 </section>
 

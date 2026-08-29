@@ -30,6 +30,7 @@
   },
   "capabilities": {
     "streaming": true,
+    "idempotent_retry": true,
     "tools": ["serper_search", "file_read", "file_write"],
     "write_tools": ["file_write"]
   },
