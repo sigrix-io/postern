@@ -772,6 +772,34 @@ fragments would satisfy the concatenation rule while giving a client that
 renders the stream nothing but the encoding to print. Such a run reports its
 progress with `step`, which was never claiming to be the output.
 
+**Where the deltas and `done` disagree, a client prefers `done`.** The
+concatenation rule binds what a runner emits, and nothing binds what a client
+does when it is broken — so a client that accumulated deltas, rendered them,
+and then read a different `output.value` has met a runner in breach of it with
+no move of its own stated anywhere. It **SHOULD** prefer `done`'s
+`output.value`: §4.2 makes the run response the result, and the deltas were a
+preview of it.
+
+A **SHOULD**, because a client cannot always comply. One writing deltas to
+standard output as they arrive has already emitted them and a scrolled
+terminal cannot be taken back, and a rule a client has to break to stay useful
+is one that gets broken quietly. So a client able to replace what it rendered
+**SHOULD**, and one that is not **MAY** say the streamed text was superseded.
+Text that changes under a user after it finished arriving is worth a word
+either way — the alternative is a user shown two answers and told nothing
+about either.
+
+What is not optional is the other half. A client **MUST NOT** report the run
+as having failed on that ground alone: §4.1.4 draws the same line for an
+output type a client cannot read, and for the same reason — the run succeeded
+and the client's rendering of it was wrong, which are two different facts.
+Reporting the first sends a user to file a bug against an agent that ran
+correctly, and costs them the result, which arrived intact in `done`.
+
+None of this reaches the emit side. The invariant is a **MUST** on the runner
+still, and a receive-side rule says what a breach costs the user rather than
+licensing one.
+
 `latency_ms` is the step's elapsed time, and is reported on `finished`. A
 runner **MUST NOT** emit it on a `started` step, where there is nothing yet
 to measure; a client receiving one anyway **MUST** ignore it rather than
@@ -1784,6 +1812,15 @@ and informative for everyone else. Postern is usable with no reference to it.*
   overstating it. §5.7.3 says that a `404` is a completed check and so not
   its case, and `status.schema.json`'s two descriptions carry the same
   exception (§5.7.3, §5.7.4).
+- The `delta` concatenation invariant gains the receive-side rule it was
+  missing: where the accumulated deltas and `done`'s `output.value` disagree,
+  a client **SHOULD** prefer `done`, and **MUST NOT** report the run as
+  having failed on that ground. It was the one place a client could be
+  surprised with nothing stated for it — every other one has a rule, and
+  §4.1.4's is the near neighbour, separating a run that succeeded from a
+  client that rendered it wrongly. A **SHOULD** rather than a **MUST**
+  because a client writing deltas to standard output has already emitted
+  them. The invariant itself is unchanged and still binds the runner (§4.3).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

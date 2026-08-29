@@ -970,17 +970,21 @@ footer a{color:var(--iron)}
       <p class="cite">§4.1.2, §4.2</p>
     </li>
     <li>
-      <h3>The <code>delta</code> invariant has no stated failure behaviour</h3>
+      <h3>A <code>delta</code> mismatch is settled in favour of <code>done</code></h3>
       <p>Concatenated <code>delta.text</code> <strong>MUST</strong> equal <code>done</code>'s
-      <code>output.value</code>. The specification is unusually careful elsewhere about what a
-      client does when something does not match its expectations — unrecognised error codes,
-      unrecognised event names, unrecognised <code>validation</code> members, unrecognised input
-      types all have explicit receive-side rules. This one does not: a client that accumulated
-      deltas and then received a different <code>output.value</code> is on its own.</p>
-      <p>Most likely deliberate, since it is a runner bug rather than a protocol state. But
-      “prefer <code>done</code>” is one sentence, and it would stop two clients from disagreeing
-      about what the user sees.</p>
-      <p class="cite">§4.3</p>
+      <code>output.value</code>. That binds the runner, and for a while nothing said what the
+      client on the other end does when it is broken — the one surprise in the protocol with no
+      receive-side rule, where unrecognised error codes, event names, <code>validation</code>
+      members and input types all have one.</p>
+      <p>§4.3 now answers it. A client <strong>SHOULD</strong> prefer <code>done</code>'s
+      <code>output.value</code>, because §4.2 makes the run response the result and the deltas
+      were a preview of it; it <strong>MUST NOT</strong> report the run as failed on that ground,
+      which is §4.1.4's line between a run that succeeded and a client that rendered it wrongly.
+      A <strong>SHOULD</strong> rather than a <strong>MUST</strong> because a client writing
+      deltas to standard output has already emitted them and a scrolled terminal cannot be taken
+      back — so one that can replace what it showed does, and one that cannot may say the
+      streamed text was superseded.</p>
+      <p class="cite">§4.3, §4.1.4</p>
     </li>
   </ol>
 

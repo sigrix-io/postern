@@ -210,6 +210,10 @@ client can render deltas as they arrive and trust that what it displayed is what
 it will be handed. A runner that cannot produce incremental text emits none —
 `start` then `done` is a conformant Level 3 stream.
 
+Where a runner breaks the invariant anyway, the client prefers `done`'s
+`output.value` and does not call the run failed: the run succeeded and the
+rendering of it was wrong, which are two different facts (§4.3).
+
 ---
 
 ## 6 · Where Sigrix fits
