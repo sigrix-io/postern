@@ -98,6 +98,27 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing $VERSION to $REQUESTED"
 
+          # A pre-release reaching PyPI by hand is the mistake this guard
+          # exists for, and it is not hypothetical: a dispatch to `pypi`
+          # from a branch still carrying `0.1.0.dev0` spent that version
+          # permanently, because a dispatch names the *index* and nothing
+          # was looking at the *version*.
+          #
+          # A tag is different — `conformance-v0.2.0rc1` states the intent
+          # in the thing that triggered the run, and the check below proves
+          # the package agrees with it. So a tag may publish a pre-release
+          # and a dispatch may not.
+          if [ "$REQUESTED" = "pypi" ] && [ "${GITHUB_REF_TYPE:-}" != "tag" ]; then
+            if python -c "
+          import sys
+          from packaging.version import Version
+          sys.exit(0 if Version('$VERSION').is_prerelease else 1)
+          "; then
+              echo "::error::refusing to publish pre-release $VERSION to PyPI from a dispatch. A version on PyPI is spent permanently. Release a pre-release by tagging it (conformance-v$VERSION), which states the intent, or publish a stable version."
+              exit 1
+            fi
+          fi
+
           # A tag names the version it releases, so the two must agree.
           # Tagging without bumping, and bumping without re-tagging, both
           # produce a release whose tag and artifact disagree — and PyPI
