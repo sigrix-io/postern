@@ -20,11 +20,15 @@
 #     workflow     publish_conformance.yml
 #     environment  pypi
 #
-# That is what makes `id-token: write` below sufficient. There is no API
+# That binding is on the **filename**, so this workflow's `name:` below can
+# change freely and the publisher keeps working; renaming the file is what
+# would break it.
+#
+# `id-token: write` is what that binding makes sufficient. There is no API
 # token in this repository's secrets and there should not be one: a token
 # is a credential to store, rotate and leak, and trusted publishing is the
 # mechanism that removes it.
-name: publish conformance
+name: publish to PyPI
 
 on:
   push:
@@ -47,8 +51,18 @@ jobs:
   # uploaded is the one that passed — rather than a second build of the same
   # source, which is the same thing only as long as the build is
   # reproducible and nobody has checked.
+  #
+  # It also resolves *where this run publishes*, once, as outputs the other
+  # two jobs read. Written inline in each job instead, the same ternary
+  # would appear three times and the upload could go somewhere the
+  # verification did not look.
   build:
     runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.destination.outputs.target }}
+      upload_url: ${{ steps.destination.outputs.upload_url }}
+      index_url: ${{ steps.destination.outputs.index_url }}
+      version: ${{ steps.destination.outputs.version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -57,6 +71,46 @@ jobs:
           python-version: '3.12'
 
       - run: pip install build twine ./tools/conformance
+
+      - name: Resolve where this run publishes
+        id: destination
+        env:
+          # A tag always means PyPI. A dispatch goes where it was asked,
+          # defaulting to TestPyPI so that trying the workflow out cannot
+          # spend a real version number.
+          REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.repository || 'pypi' }}
+        run: |
+          set -euo pipefail
+          if [ "$REQUESTED" = "testpypi" ]; then
+            echo "target=testpypi"                            >> "$GITHUB_OUTPUT"
+            echo "upload_url=https://test.pypi.org/legacy/"   >> "$GITHUB_OUTPUT"
+            echo "index_url=https://test.pypi.org/simple/"    >> "$GITHUB_OUTPUT"
+          else
+            echo "target=pypi"                                >> "$GITHUB_OUTPUT"
+            echo "upload_url=https://upload.pypi.org/legacy/" >> "$GITHUB_OUTPUT"
+            echo "index_url=https://pypi.org/simple/"         >> "$GITHUB_OUTPUT"
+          fi
+          # Asked of the installed distribution rather than parsed out of a
+          # file. The version is declared in exactly one place (see
+          # pyproject.toml), and this reads whatever that resolved to — so
+          # it cannot disagree with the wheel built two steps below.
+          VERSION=$(python -c "import importlib.metadata as m; print(m.version('postern-conformance'))")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION to $REQUESTED"
+
+          # A tag names the version it releases, so the two must agree.
+          # Tagging without bumping, and bumping without re-tagging, both
+          # produce a release whose tag and artifact disagree — and PyPI
+          # keeps whichever the artifact said, permanently, under a git tag
+          # pointing at something else.
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            TAGGED="${GITHUB_REF_NAME#conformance-v}"
+            if [ "$TAGGED" != "$VERSION" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} names version ${TAGGED}, but the package builds ${VERSION}. Bump src/postern_conformance/__init__.py or retag."
+              exit 1
+            fi
+            echo "tag ${GITHUB_REF_NAME} agrees with version ${VERSION}"
+          fi
 
       # A release that cannot catch a broken rule is worse than no release:
       # it is a tool people trust to tell them their runner conforms.
@@ -78,7 +132,7 @@ jobs:
     # is also where a maintainer can require a manual approval before the
     # upload — the last point at which a mistaken tag is still recoverable.
     environment:
-      name: ${{ github.event_name == 'push' && 'pypi' || inputs.repository }}
+      name: ${{ needs.build.outputs.target }}
     permissions:
       # Mints the short-lived OIDC token PyPI exchanges for upload rights.
       # Nothing else in this workflow needs write access to anything.
@@ -92,10 +146,84 @@ jobs:
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # A tag publishes to PyPI; a dispatch publishes wherever it was
-          # asked to, defaulting to TestPyPI so that trying the workflow out
-          # cannot spend a real version number.
-          repository-url: >-
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.repository == 'testpypi')
-                && 'https://test.pypi.org/legacy/'
-                || 'https://upload.pypi.org/legacy/' }}
+          repository-url: ${{ needs.build.outputs.upload_url }}
+
+  # An upload that succeeds is not the same as a package anyone can install,
+  # and the two failures look identical from the publish step: a green tick.
+  # This is the check that tells them apart — install by name, from the index
+  # the upload just went to, the way a user would.
+  #
+  # What it catches, none of which the publish step can see: an upload that
+  # did not land, an index that will not serve it, a wheel whose schemas did
+  # not ride along, and a version that disagrees with the one this run built.
+  #
+  # It does not pass `--pre`, and that is worth stating precisely because it
+  # is easy to assume more of it than it does. pip skips a pre-release only
+  # when a stable release is *also* available; where a pre-release is the
+  # only version published, a plain `pip install` takes it. So omitting
+  # `--pre` is not a guard against shipping a `.dev0` — the tag check in the
+  # build job is what covers that, on the one path where it matters.
+  verify:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install from ${{ needs.build.outputs.target }} and run it
+        env:
+          INDEX_URL: ${{ needs.build.outputs.index_url }}
+          TARGET: ${{ needs.build.outputs.target }}
+          EXPECTED: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # TestPyPI carries no dependencies of its own, so the real index
+          # has to be reachable for them. Harmless on the PyPI run, where
+          # both URLs name the same host.
+          EXTRA=""
+          if [ "$TARGET" = "testpypi" ]; then
+            EXTRA="--extra-index-url https://pypi.org/simple/"
+          fi
+
+          python -m venv /tmp/verify
+
+          # The index lags the upload by a few seconds, and occasionally
+          # longer. Retrying is the difference between a real failure and a
+          # race; ten attempts is about two and a half minutes.
+          for attempt in $(seq 1 10); do
+            if /tmp/verify/bin/pip install --quiet \
+                 --index-url "$INDEX_URL" $EXTRA \
+                 "postern-conformance==$EXPECTED"; then
+              echo "installed on attempt $attempt"
+              break
+            fi
+            if [ "$attempt" = "10" ]; then
+              echo "::error::postern-conformance==$EXPECTED never became installable from $INDEX_URL"
+              exit 1
+            fi
+            echo "not on the index yet (attempt $attempt); waiting"
+            sleep 15
+          done
+
+          # Not merely that something installed — that the thing published
+          # by *this run* did. An older release already on the index would
+          # satisfy a bare install and tell us nothing.
+          REPORTED=$(/tmp/verify/bin/postern-conformance --version)
+          echo "$REPORTED"
+          case "$REPORTED" in
+            *"$EXPECTED"*) ;;
+            *) echo "::error::expected version $EXPECTED, got: $REPORTED"; exit 1 ;;
+          esac
+
+          # The schemas are what the checker validates against, and a wheel
+          # missing them installs cleanly and then cannot check anything.
+          /tmp/verify/bin/python -c "
+          from postern_conformance import schemas
+          _, source = schemas.schema_source()
+          assert source == 'bundled with this package', source
+          for name in schemas.SCHEMA_FILENAMES:
+              assert schemas.load(name)['\$id'], name
+          print(f'{len(schemas.SCHEMA_FILENAMES)} schemas readable from the published wheel')
+          "

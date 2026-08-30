@@ -15,7 +15,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "postern-conformance"
-version = "0.1.0.dev0"
+# Read from `src/postern_conformance/__init__.py` rather than written
+# here. The CLI reports `__version__` and this file feeds the wheel, so
+# two copies would be one fact in two places — and the drift is silent:
+# a release whose `--version` disagrees with the version people install
+# it by, both looking correct in their own file.
+dynamic = ["version"]
 description = "Conformance checker for the Postern protocol — points at a running runner and reports which of SPEC.md section 3's levels it actually meets."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -61,6 +66,9 @@ Issues = "https://github.com/sigrix-io/postern/issues"
 
 [project.scripts]
 postern-conformance = "postern_conformance.cli:main"
+
+[tool.hatch.version]
+path = "src/postern_conformance/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/postern_conformance"]
