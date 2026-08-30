@@ -89,6 +89,15 @@ something you need our permission for. Postern is HTTP; any language can serve
 or call it. Publish your SDK under your own name and open an issue so it can
 be linked from here.
 
+[`tools/conformance/`](tools/conformance) is not an exception to that, and is
+packaged as `postern-conformance` rather than `postern` to keep it from
+looking like one: it speaks to a runner over the wire and holds nothing a
+client library would want, so it checks every language equally and leaves the
+name free for whoever writes one. Improving a check there, or adding one for a
+rule nothing yet asks about, is ordinary work — and a rule it cannot check is
+worth an issue on its own, since a MUST no tool can observe is one
+implementations will differ on quietly.
+
 **A rename** — see [the name](VERSIONING.md#the-name), which records why this
 is not called AEP and what was ruled out. The name is in the path prefix and
 in every payload, so changing it breaks every implementation at once. The
