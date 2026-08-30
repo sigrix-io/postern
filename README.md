@@ -119,6 +119,23 @@ Machine-readable schemas are in [`schemas/`](schemas), worked payloads in
 [`examples/`](examples), and diagrams of the whole surface in
 [`docs/`](docs).
 
+Which level a runner *actually* reaches is a question you can ask it:
+
+```console
+pip install postern-conformance
+postern-conformance http://127.0.0.1:8787
+```
+
+[`tools/conformance/`](tools/conformance) points at a running runner and
+reports which of the three levels it meets, and which MUST rules it breaks
+getting there. It checks over the wire, so it reads a Go or Rust runner as
+well as a Python one, and it does not run your agent unless you pass
+`--execute` — a run may spend money ([§4.1.2](SPEC.md#412-capabilitieswrite_tools))
+and an abort is not a rollback ([§4.5](SPEC.md#45-the-life-of-a-run)), so
+most of the specification is checked through refusals that execute nothing.
+
+It is a test suite, not an SDK, and not a reference implementation.
+
 ## Status
 
 **This is a draft, and nothing in it is stable yet.** Version 0.1 is drafted

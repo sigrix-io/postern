@@ -1,0 +1,103 @@
+# Runs the conformance checker's self-test, and builds its distribution.
+#
+# Separate from `validate.yml` and gated on paths, because the two answer
+# different questions and the specification's own gate should not slow down
+# or fail for a change to a tool beside it. `validate.py` asks whether
+# SPEC.md, the schemas and the examples still agree; this asks whether the
+# checker that reads them can still fail when a runner breaks a rule.
+#
+# The self-test is the part worth having in CI. A conformance checker's own
+# failure mode is a false green — every check reads correctly and would
+# have passed against a runner that implemented none of it — so the thing
+# to protect is not that the checks pass, but that each one still catches
+# the rule it was written for.
+name: conformance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/conformance/**'
+      - 'schemas/**'
+      - '.github/workflows/conformance.yml'
+  pull_request:
+    paths:
+      - 'tools/conformance/**'
+      - 'schemas/**'
+      - '.github/workflows/conformance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor `pyproject.toml` declares, and current. A checker an
+        # implementer cannot install is one they will not use, and the
+        # floor is only a claim until something runs on it.
+        python-version: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Installed rather than run from source, so the packaging is exercised
+      # by the same step that exercises the checks. A dependency missing
+      # from `pyproject.toml` fails here rather than on someone's machine.
+      - run: pip install ./tools/conformance
+
+      # The self-test needs the fake runner beside it, which the install
+      # does not place — it is a test fixture, not part of the package.
+      - run: python tools/conformance/selftest.py
+
+      # Standard library only, no runner, no network: a smoke test that the
+      # console script the wheel declares actually resolves.
+      - run: postern-conformance --version
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - run: pip install build twine
+
+      - run: python -m build --outdir dist tools/conformance
+
+      # `twine check` reads the metadata the way PyPI will, so a README
+      # that renders badly is caught before an upload that cannot be
+      # replaced — a version number on PyPI is spent whether or not the
+      # page is legible.
+      - run: python -m twine check dist/*
+
+      # Proves the wheel carries the schemas. Installed into a directory
+      # with no repository around it, which is the case the bundled copy
+      # exists for and the one a checkout can never exercise: run from a
+      # checkout, the checker reads the checkout's own schemas.
+      - name: The wheel works with no checkout around it
+        run: |
+          python -m venv /tmp/wheeltest
+          /tmp/wheeltest/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/wheeltest/bin/postern-conformance --version
+          /tmp/wheeltest/bin/python -c "
+          from postern_conformance import schemas
+          directory, source = schemas.schema_source()
+          assert source == 'bundled with this package', source
+          for name in schemas.SCHEMA_FILENAMES:
+              assert schemas.load(name)['\$id'], name
+          print(f'{len(schemas.SCHEMA_FILENAMES)} schemas readable from the wheel')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: postern-conformance-dist
+          path: dist/

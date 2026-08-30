@@ -1,0 +1,101 @@
+# Publishes postern-conformance to PyPI.
+#
+# **Nothing here runs on its own.** A push to main does not publish, and a
+# merge does not publish; it takes a tag or a maintainer pressing the
+# button. A version number on PyPI is spent the moment it uploads — the
+# same version can never be replaced, only yanked — so this is the one
+# workflow in the repository whose trigger is deliberately manual.
+#
+# The tag namespace is `conformance-v*`, separate from anything the
+# specification might later tag. VERSIONING.md is clear that Postern 0.1 is
+# not released and has no tag to pin to; the checker will be released more
+# often than the protocol regardless, so its versions must not read as the
+# specification's. `conformance-v0.1.0` is the shape.
+#
+# Before the first run, a maintainer configures a **trusted publisher** on
+# PyPI (Manage project → Publishing) for:
+#
+#     owner        sigrix-io
+#     repository   postern
+#     workflow     publish_conformance.yml
+#     environment  pypi
+#
+# That is what makes `id-token: write` below sufficient. There is no API
+# token in this repository's secrets and there should not be one: a token
+# is a credential to store, rotate and leak, and trusted publishing is the
+# mechanism that removes it.
+name: publish conformance
+
+on:
+  push:
+    tags:
+      - 'conformance-v*'
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Where to publish'
+        required: true
+        default: testpypi
+        type: choice
+        options: [testpypi, pypi]
+
+permissions:
+  contents: read
+
+jobs:
+  # Deliberately a separate job from the publish, so the artifact that gets
+  # uploaded is the one that passed — rather than a second build of the same
+  # source, which is the same thing only as long as the build is
+  # reproducible and nobody has checked.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - run: pip install build twine ./tools/conformance
+
+      # A release that cannot catch a broken rule is worse than no release:
+      # it is a tool people trust to tell them their runner conforms.
+      - run: python tools/conformance/selftest.py
+
+      - run: python -m build --outdir dist tools/conformance
+
+      - run: python -m twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # The environment is half of the trusted-publisher binding above, and
+    # is also where a maintainer can require a manual approval before the
+    # upload — the last point at which a mistaken tag is still recoverable.
+    environment:
+      name: ${{ github.event_name == 'push' && 'pypi' || inputs.repository }}
+    permissions:
+      # Mints the short-lived OIDC token PyPI exchanges for upload rights.
+      # Nothing else in this workflow needs write access to anything.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A tag publishes to PyPI; a dispatch publishes wherever it was
+          # asked to, defaulting to TestPyPI so that trying the workflow out
+          # cannot spend a real version number.
+          repository-url: >-
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.repository == 'testpypi')
+                && 'https://test.pypi.org/legacy/'
+                || 'https://upload.pypi.org/legacy/' }}

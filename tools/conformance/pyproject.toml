@@ -1,0 +1,86 @@
+# The conformance checker is packaged separately from the specification it
+# checks, and deliberately not as `postern`.
+#
+# CONTRIBUTING.md puts a language SDK out of scope: Postern is HTTP, any
+# language can serve or call it, and publishing a Python client under the
+# specification's own name would make one language the blessed one for a
+# document whose whole claim is that none is. This is not that. It is a test
+# suite that speaks to a runner over the wire, so it checks a Go or Rust
+# runner exactly as well as a Python one, and it holds no name a client
+# library would want later.
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "postern-conformance"
+version = "0.1.0.dev0"
+description = "Conformance checker for the Postern protocol — points at a running runner and reports which of SPEC.md section 3's levels it actually meets."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+keywords = ["postern", "agents", "conformance", "protocol"]
+authors = [{name = "Sigrix"}]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Testing",
+  "Topic :: Internet :: WWW/HTTP",
+]
+
+# The same three the specification's own validator pins, and for the same
+# reasons (see scripts/requirements.txt): a jsonschema release must not turn
+# a green run red on its own, and `format` is an annotation unless a library
+# for the specific format is installed — so a schema declaring `date-time`
+# without these accepts every string ever written while looking exactly like
+# a schema that works.
+#
+# Nothing else. The HTTP client is `http.client` from the standard library,
+# which is not an accident of taste: a runner conforming to this protocol
+# ships without a web framework on purpose (`describe` is four routes on
+# loopback), and a checker for it that dragged in a request stack would be
+# asking implementers to install more to test the thing than to serve it.
+dependencies = [
+  "jsonschema==4.26.0",
+  "rfc3339-validator==0.1.4",
+  "rfc3986-validator==0.1.1",
+]
+
+[project.urls]
+Specification = "https://github.com/sigrix-io/postern/blob/main/SPEC.md"
+Source = "https://github.com/sigrix-io/postern"
+Issues = "https://github.com/sigrix-io/postern/issues"
+
+[project.scripts]
+postern-conformance = "postern_conformance.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/postern_conformance"]
+
+# The schemas are the machine-readable half of the specification, and this
+# checker validates against them rather than restating their rules in Python
+# — a restatement is one more place for the contract to live, and the one
+# nobody diffs. A wheel installed from an index has no repository around it,
+# so they ride along; a checkout prefers the repository's own copy, and
+# `postern_conformance.schemas` says which it used in every report.
+# `hatch_build.py` copies them in — from the repository when building in a
+# checkout, and from where the sdist already placed them otherwise. A
+# force-include cannot do both, because `../../schemas` does not exist
+# inside an extracted sdist, which is the tree `python -m build` builds the
+# wheel from.
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "selftest.py", "README.md", "pyproject.toml", "hatch_build.py"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"../../schemas" = "src/postern_conformance/_schemas"

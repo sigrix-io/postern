@@ -11,3 +11,13 @@ __pycache__/
 # listed so that whichever a contributor reaches for stays untracked.
 .venv/
 venv/
+
+# Written into the package by tools/conformance/hatch_build.py at build
+# time. The repository keeps one copy of the schemas, in schemas/.
+tools/conformance/src/postern_conformance/_schemas/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+__pycache__/
