@@ -237,19 +237,12 @@ def _capabilities_agree_with_level(body: dict[str, Any], context: Context) -> li
     if not isinstance(capabilities, dict) or level is None:
         return checks
 
-    streaming = capabilities.get("streaming")
-    if isinstance(streaming, bool) and streaming != (level >= 3):
-        checks.append(
-            warned(
-                SECTION,
-                "capabilities.streaming agrees with the declared level",
-                f"`capabilities.streaming` is {str(streaming).lower()} while "
-                f"`status.level` is {level}. Section 3 makes `level` the "
-                "authority — a client MUST NOT assume a level it has not read "
-                "from `status` — so the two disagreeing costs a client that "
-                "read the other field a call it should not have made.",
-            )
-        )
+    # `capabilities.streaming` was checked here against `level >= 3`, and the
+    # rule was this tool's own inference: section 3 makes `level` the
+    # authority, and nothing in the specification ever bound the two fields
+    # together. The field is withdrawn (section 4.1) rather than described, so
+    # there is nothing left to disagree — a runner still emitting it validates
+    # against an open `capabilities` and means nothing by it.
 
     # Section 4.2: "A Level 1 runner has no `run` to be idempotent about and
     # SHOULD NOT declare the field at all."

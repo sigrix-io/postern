@@ -490,7 +490,6 @@ and **MUST** be answerable without credentials and without an entitlement.
     "example": "## Positioning brief\n\nThe mid-market segment…"
   },
   "capabilities": {
-    "streaming": true,
     "idempotent_retry": true,
     "tools": ["serper_search", "file_read", "file_write"],
     "write_tools": ["file_write"]
@@ -511,6 +510,27 @@ and **MUST** be answerable without credentials and without an entitlement.
 `agent.id` is the identifier defined in §1.5. It is the same string the
 distributor paths in §5.3 and §5.6 address, which is what lets a client go
 from an agent it has described to an entitlement check for it.
+
+`capabilities` describes the **agent**. Whether a runner serves `stream` is
+not a fact about the agent but about the deployment, and §3 already makes it
+discoverable as `level` in `status` — normatively, and with a **MUST NOT**
+against assuming a level read from anywhere else.
+
+A `capabilities.streaming` boolean was published in an earlier draft of this
+section and is **withdrawn**. It was the second vocabulary for a fact §3
+already stated, and nothing bound the two together, so `{"level": 2}` beside
+`{"streaming": true}` was a payload no rule refused and no client could act
+on: reading it and calling `stream` is assuming a level not read from
+`status`, which is the one thing §3 forbids in those words. A field a
+conforming client may not act on is decoration, and describing it would have
+frozen the contradiction rather than settling it. The same reasoning keeps
+`limits` in `status` rather than here (§4.4), and kept `0` out of
+`max_concurrent_runs`.
+
+Withdrawing it breaks no runner. `capabilities` is an open object, so one
+still emitting `streaming` validates exactly as before — the field simply no
+longer means anything, and a client reading it was already reading something
+§3 told it not to trust.
 
 #### 4.1.1 `inputs`
 
@@ -1988,6 +2008,26 @@ and informative for everyone else. Postern is usable with no reference to it.*
   state one **SHOULD** declare `status.limits.idempotency_retention_seconds`,
   the one member of `limits` bounding a promise rather than a run (§2.1,
   §4.2, §4.4).
+
+- `capabilities.streaming` is **withdrawn**. It appeared in §4.1's example
+  and in `describe.schema.json` — the one property there carrying no
+  `description` — and no prose ever defined it, which left `capabilities`
+  documenting one of its two booleans once #89 gave `idempotent_retry` a
+  treatment. Defining it was the alternative and would have frozen a
+  contradiction: §3 makes `level` in `status` the authority and forbids
+  assuming a level read from anywhere else, so a client acting on
+  `streaming` breaks a **MUST**, and a client that may not act on a field
+  has decoration. Nothing bound the two, so `{"level": 2}` beside
+  `{"streaming": true}` was a payload no rule refused. This is the same
+  refusal of a second vocabulary that removed `run`'s `status` field and
+  kept `0` out of `max_concurrent_runs`, and pre-1.0 is the only cheap
+  moment for it — VERSIONING.md's additive-only rule binds after. It breaks
+  no runner: `capabilities` is open, so one still emitting the field
+  validates unchanged and merely means nothing by it. §4.1 now says
+  `capabilities` describes the agent and `level` the deployment, which is
+  the line that keeps the field from being re-proposed. The conformance
+  checker's `streaming`/`level` agreement warning goes with it — that rule
+  was the tool's own inference from §3, with no sentence to cite (§3, §4.1).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

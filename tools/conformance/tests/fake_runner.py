@@ -82,7 +82,6 @@ _DESCRIBE: dict[str, Any] = {
     ],
     "output": {"type": "text", "example": "## Positioning brief"},
     "capabilities": {
-        "streaming": True,
         "tools": ["serper_search", "file_write"],
         "write_tools": ["file_write"],
     },
