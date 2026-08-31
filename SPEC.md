@@ -750,8 +750,16 @@ by not having a placeholder now.
 `usage.cost_usd` is the runner's best estimate in US dollars and is
 advisory — a client **MUST NOT** treat it as a billed amount.
 
-`run_id` **MUST** be unique within the runner's lifetime and **SHOULD** be
-stable enough to correlate with `stream` events and logs.
+`run_id` **MUST** be unique per execution within the runner's lifetime and
+**SHOULD** be stable enough to correlate with `stream` events and logs.
+
+Per execution rather than per response, which is the distinction a replay
+makes visible. A replayed answer (below) carries the `run_id` of the
+execution it replays, because that is the run it reports: one execution has
+one identifier however many times it is reported. Minting a fresh one for
+the replay would name an execution that never happened — no agent ran under
+it, no `stream` emitted it, and the runner's own logs have no line for it —
+which defeats the correlation the **SHOULD** above exists for.
 
 `run` is not idempotent. A runner **MAY** honour an `Idempotency-Key`
 request header; behaviour when it does not is to execute again.
@@ -1907,6 +1915,16 @@ and informative for everyone else. Postern is usable with no reference to it.*
   discard rule forbids. A runner declaring the field **MUST** admit the
   header in its preflight, or the promise holds for every client kind except
   the browser (§2.3, §4.1.2, §4.2, §4.5).
+
+- `run_id` is unique **per execution** rather than per response, so a
+  replayed idempotent answer carries the `run_id` of the execution it
+  replays. The uniqueness **MUST** predates the replay rule by some distance
+  and the two were never read together: a strict reader of the older sentence
+  is pushed toward minting a fresh identifier for the replay, which names an
+  execution that never ran and so has no line in any log — defeating the
+  correlation the same sentence's **SHOULD** exists for. Nothing an
+  implementer builds under either reading fails, which is why this needed
+  saying rather than leaving to sense (§4.2).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
