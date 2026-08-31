@@ -49,6 +49,10 @@ class Fault(enum.Enum):
     TWO_TERMINALS = "streams both `done` and `error` (§4.3)"
     LATENCY_ON_STARTED = "reports latency_ms on a started step (§4.3)"
     DUPLICATE_RUN_ID = "reuses one run_id across two runs (§4.2)"
+    REPLAYS_A_MISMATCHED_KEY = (
+        "replays the first result for a reused Idempotency-Key carrying "
+        "different inputs (§4.2)"
+    )
 
     def __str__(self) -> str:  # pragma: no cover - readable test ids
         return self.name.lower()
@@ -239,9 +243,46 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if verb == "run":
-            self._send(200, self._run_response())
+            self._answer_run(inputs)
         else:
             self._stream()
+
+    def _answer_run(self, inputs: dict[str, Any]) -> None:
+        """Serve `run`, honouring an Idempotency-Key where this runner declares one.
+
+        Scoped to `run` because that is the only verb the checker sends a
+        key on. Section 4.2 does define a replay's shape on `stream` — a
+        `start` then a `done` — and a fake implementing a rule nothing
+        exercises would be a second, unchecked implementation of it.
+        """
+        key = self.headers.get("Idempotency-Key")
+        if not (key and self.server.idempotent):  # type: ignore[attr-defined]
+            self._send(200, self._run_response())
+            return
+
+        answered = self.server.answered_keys  # type: ignore[attr-defined]
+        remembered = answered.get(key)
+
+        if remembered is not None:
+            first_inputs, first_response = remembered
+            if first_inputs != inputs and Fault.REPLAYS_A_MISMATCHED_KEY not in self.faults:
+                self._send(
+                    409,
+                    _error(
+                        "idempotency_conflict",
+                        "That Idempotency-Key was already answered for "
+                        "different inputs. Send a new key to run these.",
+                    ),
+                )
+                return
+            # Same inputs: the replay section 4.2 requires. Under the fault,
+            # a mismatch takes this branch too, which is the whole defect.
+            self._send(200, first_response)
+            return
+
+        response = self._run_response()
+        answered[key] = (inputs, response)
+        self._send(200, response)
 
     # ---- payloads ------------------------------------------------------
 
@@ -336,6 +377,8 @@ def fake_runner(
     server.level = level  # type: ignore[attr-defined]
     server.idempotent = idempotent  # type: ignore[attr-defined]
     server.runs = 0  # type: ignore[attr-defined]
+    # Idempotency-Key -> (the inputs it was first answered for, that answer).
+    server.answered_keys = {}  # type: ignore[attr-defined]
 
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

@@ -158,6 +158,40 @@ class Context:
             inputs[key] = value
         return {"inputs": inputs}
 
+    def a_different_valid_body(self) -> dict[str, Any] | None:
+        """A second valid `run` body, differing from `a_valid_body()`, or None.
+
+        Section 4.2 binds an `Idempotency-Key` to the `inputs` it was first
+        answered for, so checking that rule needs a body a runner has no
+        grounds to refuse *except* the key it arrives under. One input is
+        varied and the rest are left alone: the smallest difference that
+        makes it a different request, so a refusal cannot be read as the
+        runner disliking something else about it.
+
+        Returns None where no required input can be varied within its own
+        declared validation — a `select` with one option, a number pinned
+        between equal bounds, a `pattern` this checker will not solve.
+        Guessing past a `validation` would produce a `bad_request` that
+        reads as the runner failing to conflict, which is the opposite
+        finding.
+        """
+        body = self.a_valid_body()
+        if body is None:
+            return None
+
+        inputs = dict(body["inputs"])
+        for declaration in self.inputs:
+            if declaration.get("required") is not True:
+                continue
+            key = declaration.get("key")
+            if not isinstance(key, str) or key not in inputs:
+                continue
+            varied = _vary(declaration, inputs[key])
+            if varied is not None:
+                inputs[key] = varied
+                return {"inputs": inputs}
+        return None
+
 
 def _fill(declaration: dict[str, Any]) -> Any:
     """A value satisfying one input declaration, or None where none is derivable."""
@@ -191,3 +225,50 @@ def _fill(declaration: dict[str, Any]) -> Any:
     if isinstance(max_length, int) and max_length >= 0:
         return text[:max_length]
     return text
+
+
+def _vary(declaration: dict[str, Any], current: Any) -> Any:
+    """A second value for one input: valid, and different from `current`.
+
+    The counterpart to `_fill`, and it answers None in the same spirit —
+    where a declaration admits exactly one value this checker can derive,
+    there is no second request to make of it. Every branch re-reads the
+    declaration's own `validation` rather than trusting that `current` came
+    from `_fill`, so a caller varying a value from anywhere else still gets
+    one inside the declared bounds.
+    """
+    validation = declaration.get("validation")
+    validation = validation if isinstance(validation, dict) else {}
+    kind = declaration.get("type")
+
+    if kind == "select":
+        options = validation.get("options")
+        if isinstance(options, list):
+            for option in options:
+                if option != current:
+                    return option
+        return None
+
+    if kind == "number":
+        if not isinstance(current, (int, float)):
+            return None
+        low, high = validation.get("min"), validation.get("max")
+        for candidate in (current + 1, current - 1):
+            if isinstance(low, (int, float)) and candidate < low:
+                continue
+            if isinstance(high, (int, float)) and candidate > high:
+                continue
+            return candidate
+        return None
+
+    # `text`, and anything a client reads as text (section 4.1.1).
+    if isinstance(validation.get("pattern"), str):
+        return None
+    text = "a second postern conformance body"
+    max_length = validation.get("max_length")
+    if isinstance(max_length, int):
+        if max_length <= 0:
+            return None
+        text = text[:max_length]
+    # A short `max_length` can truncate this to whatever `_fill` produced.
+    return text if text != current else None
