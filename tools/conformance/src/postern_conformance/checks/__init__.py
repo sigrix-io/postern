@@ -29,6 +29,7 @@ ERROR_CODE_STATUS = {
     "bad_request": 400,
     "not_found": 404,
     "not_entitled": 403,
+    "idempotency_conflict": 409,
     "withdrawn": 410,
     "missing_credential": 424,
     "agent_error": 500,

@@ -91,6 +91,11 @@
           "minimum": 1,
           "description": "The largest artifact the runner will return from a bytes output, measured before base64 rather than after. REQUIRED where the runner bounds one at all, absent where it does not (SPEC.md section 4.1.4)."
         },
+        "idempotency_retention_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How long the runner replays an Idempotency-Key it has already answered (SPEC.md section 4.2). SHOULD be declared by a runner that honours the header and can state a window; a client MUST NOT assume any particular one where none is declared, and a retry arriving after the window has lapsed is answered by a fresh execution rather than refused. This bounds a promise rather than a run, which is what makes it the odd member here."
+        },
         "max_concurrent_runs": {
           "type": "integer",
           "minimum": 1,

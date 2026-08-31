@@ -342,13 +342,18 @@ def _run_id_is_unique(
     first_run_id: Any,
     timeout: float,
 ) -> list[Check]:
-    """`run_id` MUST be unique within the runner's lifetime.
+    """`run_id` MUST be unique per execution within the runner's lifetime.
 
     Needs a second execution, which is a second agent invocation and a
     second bill. Where the runner declares `idempotent_retry`, the second
     request is sent with a fresh `Idempotency-Key` — a client wanting a
     genuine second attempt asks with a new key, which is what it would have
     done with no header at all.
+
+    A fresh key is also what keeps this check honest about the rule it
+    asserts. Uniqueness is per execution, so a replayed answer repeating the
+    first run's identifier is conformant (section 4.2); reusing one key here
+    would plant exactly that replay and read it as a duplicate.
     """
     if not isinstance(first_run_id, str):
         return []
@@ -383,9 +388,9 @@ def _run_id_is_unique(
             failed(
                 RUN,
                 "run_id is unique across two runs",
-                f"two separate runs both reported {first_run_id!r}. It must be "
-                "unique within the runner's lifetime, and is what correlates a "
-                "result with the runner's logs.",
+                f"two separate executions both reported {first_run_id!r}. It "
+                "must be unique per execution within the runner's lifetime, and "
+                "is what correlates a result with the runner's logs.",
             )
         ]
     return [passed(RUN, "run_id is unique across two runs")]

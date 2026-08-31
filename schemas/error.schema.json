@@ -16,6 +16,7 @@
             "bad_request",
             "not_found",
             "not_entitled",
+            "idempotency_conflict",
             "withdrawn",
             "missing_credential",
             "agent_error",

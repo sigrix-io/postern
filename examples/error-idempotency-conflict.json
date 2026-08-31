@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "idempotency_conflict",
+    "message": "That Idempotency-Key was already answered for different inputs. Send a new key to run these."
+  }
+}

@@ -208,6 +208,7 @@ Every non-2xx response body **MUST** be:
 | `bad_request` | 400 | R · D | Malformed request — a bad body, an input that failed `describe`'s validation, or an agent identifier that does not match §1.5's grammar (§5.3.1). |
 | `not_found` | 404 | R · D | No such agent — **or** the caller is not entitled to it, **or** the token does not resolve (§5.5). The one code that means different things on each side; see below. |
 | `not_entitled` | 403 | R | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
+| `idempotency_conflict` | 409 | R | An `Idempotency-Key` the runner has already answered, presented with different `inputs` (§4.2). |
 | `withdrawn` | 410 | D | The caller was entitled, and the agent has since been withdrawn (§5.6). |
 | `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment. |
 | `agent_error` | 500 | R | The agent ran and failed. |
@@ -489,7 +490,6 @@ and **MUST** be answerable without credentials and without an entitlement.
     "example": "## Positioning brief\n\nThe mid-market segment…"
   },
   "capabilities": {
-    "streaming": true,
     "idempotent_retry": true,
     "tools": ["serper_search", "file_read", "file_write"],
     "write_tools": ["file_write"]
@@ -510,6 +510,27 @@ and **MUST** be answerable without credentials and without an entitlement.
 `agent.id` is the identifier defined in §1.5. It is the same string the
 distributor paths in §5.3 and §5.6 address, which is what lets a client go
 from an agent it has described to an entitlement check for it.
+
+`capabilities` describes the **agent**. Whether a runner serves `stream` is
+not a fact about the agent but about the deployment, and §3 already makes it
+discoverable as `level` in `status` — normatively, and with a **MUST NOT**
+against assuming a level read from anywhere else.
+
+A `capabilities.streaming` boolean was published in an earlier draft of this
+section and is **withdrawn**. It was the second vocabulary for a fact §3
+already stated, and nothing bound the two together, so `{"level": 2}` beside
+`{"streaming": true}` was a payload no rule refused and no client could act
+on: reading it and calling `stream` is assuming a level not read from
+`status`, which is the one thing §3 forbids in those words. A field a
+conforming client may not act on is decoration, and describing it would have
+frozen the contradiction rather than settling it. The same reasoning keeps
+`limits` in `status` rather than here (§4.4), and kept `0` out of
+`max_concurrent_runs`.
+
+Withdrawing it breaks no runner. `capabilities` is an open object, so one
+still emitting `streaming` validates exactly as before — the field simply no
+longer means anything, and a client reading it was already reading something
+§3 told it not to trust.
 
 #### 4.1.1 `inputs`
 
@@ -750,8 +771,16 @@ by not having a placeholder now.
 `usage.cost_usd` is the runner's best estimate in US dollars and is
 advisory — a client **MUST NOT** treat it as a billed amount.
 
-`run_id` **MUST** be unique within the runner's lifetime and **SHOULD** be
-stable enough to correlate with `stream` events and logs.
+`run_id` **MUST** be unique per execution within the runner's lifetime and
+**SHOULD** be stable enough to correlate with `stream` events and logs.
+
+Per execution rather than per response, which is the distinction a replay
+makes visible. A replayed answer (below) carries the `run_id` of the
+execution it replays, because that is the run it reports: one execution has
+one identifier however many times it is reported. Minting a fresh one for
+the replay would name an execution that never happened — no agent ran under
+it, no `stream` emitted it, and the runner's own logs have no line for it —
+which defeats the correlation the **SHOULD** above exists for.
 
 `run` is not idempotent. A runner **MAY** honour an `Idempotency-Key`
 request header; behaviour when it does not is to execute again.
@@ -768,6 +797,45 @@ the agent ran — a `bad_request` here, a `501` under §3 — executed nothing
 and so binds no key. On `stream` a replayed result arrives as `start` then
 `done`, a shape §4.3 already admits: `delta` is optional, and a replay has
 no incremental text to produce.
+
+**A key identifies a request, not merely a caller's wish to retry one.** A
+runner **MUST** treat a key as bound to the `inputs` it was first answered
+for, and **MUST** refuse a request carrying that key with different `inputs`,
+answering `409` with code `idempotency_conflict` (§2.1) rather than replaying
+the first execution.
+
+Taking the key at its word is the cheaper rule and the one this section used
+to imply, and it fails in the way §4.1.4 argues hardest against: the second
+request is answered with a result computed for inputs the caller never sent,
+at `200`, in a well-formed envelope, with neither side able to detect it — a
+client that cannot tell a wrong answer from a right one, arriving through a
+header it added in order to be careful. §4.1.2 is the sharp case as usual.
+An agent whose `write_tools` spend money is the one a client retries
+deliberately, and the one where being handed an earlier run's output is
+worst.
+
+`bad_request` is the near miss and misleads. The body is well-formed and
+every input valid, so there is nothing in it to fix; and `400` is already
+what a failed `validation` answers, so a client could not tell "your inputs
+are wrong" from "that key is spoken for" — two refusals whose remedies are
+opposite, one correcting the body and the other sending a new key.
+
+Inputs are compared **by value on the decoded map**, not on the bytes that
+carried it. A client that re-serialises the same request — different key
+order, different whitespace — has sent the same request, and comparing bytes
+would manufacture a conflict out of a JSON encoder's choices.
+
+A `409` executes nothing, so it binds no key, exactly like the refusals
+above: the first execution's answer remains the one that key replays, and a
+client that meant to send different inputs sends them under a new key.
+
+**How long a key is remembered is the runner's to choose**, and a client
+**MUST NOT** assume any particular window. Nothing remembers forever, and a
+runner that forgets after a second satisfies every word of the replay rule,
+so a client cannot otherwise tell whether its retry is still inside the
+promise or is buying a second execution. A runner **SHOULD** declare a
+window it can state as `status.limits.idempotency_retention_seconds` (§4.4).
+A bound nobody published is one a client discovers by being charged twice.
 
 A client **MUST** read absent and `false` identically — a retry executes
 again, which is what this section already said of a runner that does not
@@ -947,6 +1015,10 @@ at all and absent where it does not; `max_concurrent_runs` is how many runs
 it will have in flight at once; and `max_output_bytes` is the largest
 artifact it will return from a `bytes` output (§4.1.4), measured before
 base64 rather than after, and likewise **REQUIRED** where it bounds one.
+`idempotency_retention_seconds` is the last and the odd one out: it bounds a
+promise rather than a run — how long the runner replays an `Idempotency-Key`
+(§4.2) — and a retry arriving after it has lapsed is answered by a fresh
+execution rather than refused.
 
 They live in `status` rather than in `describe` because they belong to the
 deployment and not to the agent. Two runners serving the same agent may
@@ -1907,6 +1979,52 @@ and informative for everyone else. Postern is usable with no reference to it.*
   discard rule forbids. A runner declaring the field **MUST** admit the
   header in its preflight, or the promise holds for every client kind except
   the browser (§2.3, §4.1.2, §4.2, §4.5).
+- `run_id` is unique **per execution** rather than per response, so a
+  replayed idempotent answer carries the `run_id` of the execution it
+  replays. The uniqueness **MUST** predates the replay rule by some distance
+  and the two were never read together: a strict reader of the older sentence
+  is pushed toward minting a fresh identifier for the replay, which names an
+  execution that never ran and so has no line in any log — defeating the
+  correlation the same sentence's **SHOULD** exists for. Nothing an
+  implementer builds under either reading fails, which is why this needed
+  saying rather than leaving to sense (§4.2).
+- An `Idempotency-Key` identifies a request rather than a caller, and
+  `idempotency_conflict` (409) is what a runner answers when one is presented
+  with different `inputs`. #89 keyed the replay rule on the header alone,
+  which answers the second request with a result computed for inputs the
+  caller never sent — at `200`, in a valid envelope, undetectable on either
+  side. That is the failure §4.1.4 argues hardest against, reached through a
+  header a client adds in order to be careful, and worst on exactly the agent
+  §4.1.2 warns about. `bad_request` nearly fits and misleads: nothing in the
+  body needs fixing, and `400` already answers a failed `validation`, so a
+  client could not tell "your inputs are wrong" from "that key is spoken for"
+  — refusals whose remedies are opposite. Inputs are compared by value on the
+  decoded map, so re-serialising a request cannot manufacture a conflict, and
+  a `409` executes nothing and so binds no key. Retention is the runner's to
+  choose and a client **MUST NOT** assume a window, since a runner forgetting
+  after a second satisfies every word of the replay rule; a runner that can
+  state one **SHOULD** declare `status.limits.idempotency_retention_seconds`,
+  the one member of `limits` bounding a promise rather than a run (§2.1,
+  §4.2, §4.4).
+- `capabilities.streaming` is **withdrawn**. It appeared in §4.1's example
+  and in `describe.schema.json` — the one property there carrying no
+  `description` — and no prose ever defined it, which left `capabilities`
+  documenting one of its two booleans once #89 gave `idempotent_retry` a
+  treatment. Defining it was the alternative and would have frozen a
+  contradiction: §3 makes `level` in `status` the authority and forbids
+  assuming a level read from anywhere else, so a client acting on
+  `streaming` breaks a **MUST**, and a client that may not act on a field
+  has decoration. Nothing bound the two, so `{"level": 2}` beside
+  `{"streaming": true}` was a payload no rule refused. This is the same
+  refusal of a second vocabulary that removed `run`'s `status` field and
+  kept `0` out of `max_concurrent_runs`, and pre-1.0 is the only cheap
+  moment for it — VERSIONING.md's additive-only rule binds after. It breaks
+  no runner: `capabilities` is open, so one still emitting the field
+  validates unchanged and merely means nothing by it. §4.1 now says
+  `capabilities` describes the agent and `level` the deployment, which is
+  the line that keeps the field from being re-proposed. The conformance
+  checker's `streaming`/`level` agreement warning goes with it — that rule
+  was the tool's own inference from §3, with no sentence to cite (§3, §4.1).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
