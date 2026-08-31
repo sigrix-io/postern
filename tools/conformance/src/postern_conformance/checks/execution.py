@@ -14,7 +14,10 @@ reject, and a rejected request executes nothing.
 
 `--execute` opts into the rest, which cannot be checked any other way: the
 response body's shape, the stream's framing, the `delta` concatenation
-invariant, and `run_id` uniqueness.
+invariant, `run_id` uniqueness, and the refusal a reused `Idempotency-Key`
+carrying different `inputs` owes. That last one executes nothing itself —
+it reuses the key the uniqueness check bound — but it needs a real run to
+have bound one.
 """
 
 from __future__ import annotations
@@ -34,6 +37,12 @@ STREAM = "4.3"
 # the runner's own bound where it declares one, and this is the fallback
 # for a runner that declares none.
 DEFAULT_RUN_TIMEOUT_SECONDS = 300.0
+
+# The key the second attempt travels under, named here because two checks
+# need the same string: one spends it to force a second execution, and the
+# other presents it again to see whether the runner remembers what it was
+# answered for.
+SECOND_ATTEMPT_KEY = "postern-conformance-second-attempt"
 
 
 def run(runner: Runner, context: Context) -> list[Check]:
@@ -283,7 +292,9 @@ def _executes(runner: Runner, context: Context, body: dict[str, Any]) -> list[Ch
     checks.extend(_output_type_agrees(payload, context, where="run"))
 
     first_run_id = payload.get("run_id")
-    checks.extend(_run_id_is_unique(runner, context, body, first_run_id, timeout))
+    unique, bound_key = _run_id_is_unique(runner, context, body, first_run_id, timeout)
+    checks.extend(unique)
+    checks.extend(_a_reused_key_is_refused(runner, context, bound_key, timeout))
     return checks
 
 
@@ -341,7 +352,7 @@ def _run_id_is_unique(
     body: dict[str, Any],
     first_run_id: Any,
     timeout: float,
-) -> list[Check]:
+) -> tuple[list[Check], str | None]:
     """`run_id` MUST be unique per execution within the runner's lifetime.
 
     Needs a second execution, which is a second agent invocation and a
@@ -354,19 +365,21 @@ def _run_id_is_unique(
     asserts. Uniqueness is per execution, so a replayed answer repeating the
     first run's identifier is conformant (section 4.2); reusing one key here
     would plant exactly that replay and read it as a duplicate.
+
+    Returns its checks and the key this execution bound, so the conflict
+    check below can present it again without buying a third run. The key is
+    reported only for a `200`: section 4.2 binds a key to an execution, and
+    a request refused before the agent ran binds none.
     """
     if not isinstance(first_run_id, str):
-        return []
+        return [], None
 
+    key = SECOND_ATTEMPT_KEY if context.declares_idempotent_retry else None
     second = runner.post_json(
         "run",
         body,
         timeout=timeout,
-        extra_headers=(
-            {"Idempotency-Key": "postern-conformance-second-attempt"}
-            if context.declares_idempotent_retry
-            else None
-        ),
+        extra_headers={"Idempotency-Key": key} if key else None,
     )
     if second.status != 200:
         return [
@@ -376,12 +389,12 @@ def _run_id_is_unique(
                 f"the second run answered {second.status}, so there is no "
                 "second identifier to compare.",
             )
-        ]
+        ], None
 
     payload = second.json
     second_run_id = payload.get("run_id") if isinstance(payload, dict) else None
     if not isinstance(second_run_id, str):
-        return []
+        return [], key
 
     if first_run_id == second_run_id:
         return [
@@ -392,8 +405,94 @@ def _run_id_is_unique(
                 "must be unique per execution within the runner's lifetime, and "
                 "is what correlates a result with the runner's logs.",
             )
+        ], key
+    return [passed(RUN, "run_id is unique across two runs")], key
+
+
+def _a_reused_key_is_refused(
+    runner: Runner,
+    context: Context,
+    bound_key: str | None,
+    timeout: float,
+) -> list[Check]:
+    """Section 4.2 — a key already answered, presented with different `inputs`.
+
+    A runner declaring `capabilities.idempotent_retry` binds a key to the
+    inputs it was first answered for, and MUST refuse a repeat carrying
+    different ones with `409` `idempotency_conflict` rather than replaying
+    the first execution.
+
+    The rule exists because the other reading fails silently. Answering
+    from the first execution hands back a result computed for inputs the
+    caller never sent — at `200`, in a valid envelope, with neither side
+    able to detect it — so nothing but a check like this one can tell a
+    runner that honours the rule from one that does not.
+
+    Costs no execution of its own: it reuses the key the second attempt
+    above already bound, and a conformant runner refuses this request
+    without running the agent. A runner that runs it anyway has spent the
+    money and demonstrated the defect in the same breath, which is the
+    honest price of asking.
+    """
+    title = "a reused key with different inputs is refused"
+
+    if not context.declares_idempotent_retry:
+        return [
+            skipped(
+                RUN,
+                title,
+                "the runner does not declare `capabilities.idempotent_retry`, "
+                "so it has made no promise about a key and binds none.",
+            )
         ]
-    return [passed(RUN, "run_id is unique across two runs")]
+
+    if bound_key is None:
+        return [
+            skipped(
+                RUN,
+                title,
+                "no second run answered 200 under a key, so there is no "
+                "answered key to present again.",
+            )
+        ]
+
+    other = context.a_different_valid_body()
+    if other is None:
+        return [
+            skipped(
+                RUN,
+                title,
+                "could not derive a second valid body differing from the "
+                "first — every required input admits one derivable value, so "
+                "there is no different request to send under the same key.",
+            )
+        ]
+
+    response = runner.post_json(
+        "run", other, timeout=timeout, extra_headers={"Idempotency-Key": bound_key}
+    )
+
+    if response.status != 409:
+        detail = (
+            "answered 200 to a key it had already answered for different "
+            "inputs. Whether it replayed the first result or ran the agent "
+            "again, a caller cannot tell: both are a 200 carrying a run the "
+            "request did not ask for."
+            if response.status == 200
+            else f"answered {response.status} to a key it had already answered "
+            "for different inputs."
+        )
+        return [failed(RUN, title, detail)]
+
+    checks: list[Check] = [passed(RUN, title)]
+    checks.extend(
+        error_envelope_checks(
+            response,
+            context="run reusing an idempotency key",
+            expected_code="idempotency_conflict",
+        )
+    )
+    return checks
 
 
 def _streams(runner: Runner, context: Context, body: dict[str, Any]) -> list[Check]:

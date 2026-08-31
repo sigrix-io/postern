@@ -78,6 +78,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
     Fault.TWO_TERMINALS: ("4.3", "exactly one done or error", {"execute": True}),
     Fault.LATENCY_ON_STARTED: ("4.3", "event payloads match their schemas", {"execute": True}),
     Fault.DUPLICATE_RUN_ID: ("4.2", "run_id is unique", {"execute": True}),
+    Fault.REPLAYS_A_MISMATCHED_KEY: (
+        "4.2",
+        "reused key with different inputs",
+        {"execute": True, "idempotent": True},
+    ),
 }
 
 
@@ -103,14 +108,20 @@ def _baseline_is_clean(problems: list[str]) -> int:
         for execute in (False, True):
             if execute and level < 2:
                 continue
-            report = _report(execute=execute, level=level)
-            checked += 1
-            if report.failures:
-                problems.append(
-                    f"the conformant fake runner failed at Level {level} "
-                    f"(execute={execute}): "
-                    + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
-                )
+            # Both idempotency postures. Declaring `idempotent_retry` changes
+            # what the runner owes — a key binds, and a repeat carrying other
+            # inputs is refused — so a runner that only ever passes without
+            # the declaration leaves the conformant half of that rule
+            # unexercised, and a check for it could pass by never running.
+            for idempotent in (False, True):
+                report = _report(execute=execute, level=level, idempotent=idempotent)
+                checked += 1
+                if report.failures:
+                    problems.append(
+                        f"the conformant fake runner failed at Level {level} "
+                        f"(execute={execute}, idempotent={idempotent}): "
+                        + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+                    )
     return checked
 
 

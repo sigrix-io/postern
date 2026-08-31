@@ -56,9 +56,16 @@ starts — which is most of the specification:
 - the CORS rules, none of which involve running anything
 
 `--execute` opts into the rest — the `run` response shape, the SSE framing,
-the `delta` concatenation invariant, and `run_id` uniqueness. There is no
-way to check those without a real run, which is why they are a decision
-rather than a default.
+the `delta` concatenation invariant, `run_id` uniqueness, and — for a runner
+declaring `capabilities.idempotent_retry` — that a key already answered is
+refused rather than replayed when it arrives carrying different `inputs`.
+There is no way to check those without a real run, which is why they are a
+decision rather than a default.
+
+The last of those spends nothing of its own: it presents the key the
+uniqueness check already bound, and a conformant runner refuses it without
+running the agent. It rides on `--execute` because the key has to have been
+bound by a real run first, not because it buys another.
 
 ## Usage
 
