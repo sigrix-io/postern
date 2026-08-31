@@ -208,6 +208,7 @@ Every non-2xx response body **MUST** be:
 | `bad_request` | 400 | R · D | Malformed request — a bad body, an input that failed `describe`'s validation, or an agent identifier that does not match §1.5's grammar (§5.3.1). |
 | `not_found` | 404 | R · D | No such agent — **or** the caller is not entitled to it, **or** the token does not resolve (§5.5). The one code that means different things on each side; see below. |
 | `not_entitled` | 403 | R | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
+| `idempotency_conflict` | 409 | R | An `Idempotency-Key` the runner has already answered, presented with different `inputs` (§4.2). |
 | `withdrawn` | 410 | D | The caller was entitled, and the agent has since been withdrawn (§5.6). |
 | `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment. |
 | `agent_error` | 500 | R | The agent ran and failed. |
@@ -777,6 +778,45 @@ and so binds no key. On `stream` a replayed result arrives as `start` then
 `done`, a shape §4.3 already admits: `delta` is optional, and a replay has
 no incremental text to produce.
 
+**A key identifies a request, not merely a caller's wish to retry one.** A
+runner **MUST** treat a key as bound to the `inputs` it was first answered
+for, and **MUST** refuse a request carrying that key with different `inputs`,
+answering `409` with code `idempotency_conflict` (§2.1) rather than replaying
+the first execution.
+
+Taking the key at its word is the cheaper rule and the one this section used
+to imply, and it fails in the way §4.1.4 argues hardest against: the second
+request is answered with a result computed for inputs the caller never sent,
+at `200`, in a well-formed envelope, with neither side able to detect it — a
+client that cannot tell a wrong answer from a right one, arriving through a
+header it added in order to be careful. §4.1.2 is the sharp case as usual.
+An agent whose `write_tools` spend money is the one a client retries
+deliberately, and the one where being handed an earlier run's output is
+worst.
+
+`bad_request` is the near miss and misleads. The body is well-formed and
+every input valid, so there is nothing in it to fix; and `400` is already
+what a failed `validation` answers, so a client could not tell "your inputs
+are wrong" from "that key is spoken for" — two refusals whose remedies are
+opposite, one correcting the body and the other sending a new key.
+
+Inputs are compared **by value on the decoded map**, not on the bytes that
+carried it. A client that re-serialises the same request — different key
+order, different whitespace — has sent the same request, and comparing bytes
+would manufacture a conflict out of a JSON encoder's choices.
+
+A `409` executes nothing, so it binds no key, exactly like the refusals
+above: the first execution's answer remains the one that key replays, and a
+client that meant to send different inputs sends them under a new key.
+
+**How long a key is remembered is the runner's to choose**, and a client
+**MUST NOT** assume any particular window. Nothing remembers forever, and a
+runner that forgets after a second satisfies every word of the replay rule,
+so a client cannot otherwise tell whether its retry is still inside the
+promise or is buying a second execution. A runner **SHOULD** declare a
+window it can state as `status.limits.idempotency_retention_seconds` (§4.4).
+A bound nobody published is one a client discovers by being charged twice.
+
 A client **MUST** read absent and `false` identically — a retry executes
 again, which is what this section already said of a runner that does not
 honour the header. The field is there for a runner to make the promise
@@ -955,6 +995,10 @@ at all and absent where it does not; `max_concurrent_runs` is how many runs
 it will have in flight at once; and `max_output_bytes` is the largest
 artifact it will return from a `bytes` output (§4.1.4), measured before
 base64 rather than after, and likewise **REQUIRED** where it bounds one.
+`idempotency_retention_seconds` is the last and the odd one out: it bounds a
+promise rather than a run — how long the runner replays an `Idempotency-Key`
+(§4.2) — and a retry arriving after it has lapsed is answered by a fresh
+execution rather than refused.
 
 They live in `status` rather than in `describe` because they belong to the
 deployment and not to the agent. Two runners serving the same agent may
@@ -1925,6 +1969,25 @@ and informative for everyone else. Postern is usable with no reference to it.*
   correlation the same sentence's **SHOULD** exists for. Nothing an
   implementer builds under either reading fails, which is why this needed
   saying rather than leaving to sense (§4.2).
+
+- An `Idempotency-Key` identifies a request rather than a caller, and
+  `idempotency_conflict` (409) is what a runner answers when one is presented
+  with different `inputs`. #89 keyed the replay rule on the header alone,
+  which answers the second request with a result computed for inputs the
+  caller never sent — at `200`, in a valid envelope, undetectable on either
+  side. That is the failure §4.1.4 argues hardest against, reached through a
+  header a client adds in order to be careful, and worst on exactly the agent
+  §4.1.2 warns about. `bad_request` nearly fits and misleads: nothing in the
+  body needs fixing, and `400` already answers a failed `validation`, so a
+  client could not tell "your inputs are wrong" from "that key is spoken for"
+  — refusals whose remedies are opposite. Inputs are compared by value on the
+  decoded map, so re-serialising a request cannot manufacture a conflict, and
+  a `409` executes nothing and so binds no key. Retention is the runner's to
+  choose and a client **MUST NOT** assume a window, since a runner forgetting
+  after a second satisfies every word of the replay rule; a runner that can
+  state one **SHOULD** declare `status.limits.idempotency_retention_seconds`,
+  the one member of `limits` bounding a promise rather than a run (§2.1,
+  §4.2, §4.4).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

@@ -82,10 +82,14 @@ PAIRS = [
     # (§5.6's access_ends_at), §4.5's max_run_seconds, and, for §5.5's 404,
     # nothing at all. The 404 is the load-bearing one: a detail saying which
     # of "no such agent", "not entitled" and "dead token" applied would undo
-    # the rule the response exists to keep.
+    # the rule the response exists to keep. §4.2's idempotency conflict is the
+    # other detail-less one, and for the opposite reason: everything a client
+    # needs is that its key is spoken for, and echoing the first request's
+    # inputs back would publish one caller's body to whoever guessed its key.
     ("error.schema.json", "error-withdrawn.json"),
     ("error.schema.json", "error-not-found.json"),
     ("error.schema.json", "error-run-timeout.json"),
+    ("error.schema.json", "error-idempotency-conflict.json"),
     # Both entitlement states rather than only `active`. They differ by one
     # value and validate identically, which is the point: §4.4 and §5.4 require
     # `checked_at` and `stale_after_seconds` of a `revoked` answer too, and an
