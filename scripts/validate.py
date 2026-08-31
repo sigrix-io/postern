@@ -8,7 +8,7 @@ aspirational: run it before opening a pull request.
     pip install jsonschema
     python scripts/validate.py
 
-Eight things are checked, because eight different kinds of edit go wrong:
+Nine things are checked, because nine different kinds of edit go wrong:
 
 1. Every file in examples/ validates against its schema.
 2. Every fenced JSON block in SPEC.md validates against its schema too.
@@ -31,6 +31,9 @@ Eight things are checked, because eight different kinds of edit go wrong:
    name, and the delta texts concatenate to the done payload's output.value
    — the one section 4.3 rule that spans events, and so the one no schema
    can reach.
+9. Every line count docs/ cites is SPEC.md's real one. The pages there
+   state its length as the thing a reader is deciding whether to take on,
+   and every edit to SPEC.md invalidates the number.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -721,6 +724,76 @@ def _docs_cite_real_sections() -> bool:
     return failed
 
 
+# A length cited in prose: `1,913 lines`, or `1913 lines` once someone drops
+# the comma. Three digits at least. The bound is what keeps an incidental
+# "8 lines" of an example from being read as a claim about the document, and
+# it costs nothing real — SPEC.md passed a thousand lines before this check
+# existed, and a specification that shrank below a hundred would be a
+# different document.
+_DOCS_LINE_COUNT = re.compile(r"\b(\d{1,3}(?:,\d{3})+|\d{3,})\s+lines\b")
+
+
+def _docs_cite_the_real_length() -> bool:
+    """Every line count docs/ cites is SPEC.md's real one.
+
+    docs/README.md states the length twice and docs/flow.html opens with it a
+    third time. All three are hand-maintained, every edit to SPEC.md
+    invalidates them, and until now nothing read them — so they rotted twice,
+    and both repairs rode along with changes that were not about them. The
+    first citation is the one doing real work: it is the reader's estimate of
+    what they are about to commit to.
+
+    Every page under docs/ is swept rather than the two that cite a length
+    today, because the next citation is the one added somewhere nobody
+    thought to watch.
+
+    Matching nothing at all is a failure rather than a pass, for the reason
+    _version_mirrors gives one check up: a check with nothing to assert
+    reports exactly like one that holds. Rewording every citation away is
+    allowed and has to be deliberate — reword this check with them.
+
+    A count that is not SPEC.md's is reported rather than guessed at. Prose
+    citing some other file's length would fail here, which is the safe
+    direction: the failure is loud and the fix is one line, where a check
+    tuned to allow it would be silently narrower than it reads.
+
+    Returns True when a citation has rotted, so callers can accumulate.
+    """
+    length = len((ROOT / "SPEC.md").read_text(encoding="utf-8").splitlines())
+
+    pages = sorted(
+        path
+        for path in (ROOT / "docs").rglob("*")
+        if path.suffix in {".md", ".html"}
+    )
+
+    failed = False
+    cited = 0
+    for path in pages:
+        where = path.relative_to(ROOT)
+        source = path.read_text(encoding="utf-8")
+        for match in _DOCS_LINE_COUNT.finditer(source):
+            cited += 1
+            claimed = int(match.group(1).replace(",", ""))
+            if claimed != length:
+                failed = True
+                line = source.count("\n", 0, match.start()) + 1
+                print(
+                    f"FAIL  {where}:{line} says SPEC.md is {match.group(1)} lines; "
+                    f"it is {length:,}"
+                )
+
+    if not cited:
+        print("FAIL  no page under docs/ cites SPEC.md's length any more")
+        print(f"        looked for: {_DOCS_LINE_COUNT.pattern}")
+        print("        Reword the pages or this check, not neither.")
+        return True
+
+    if not failed:
+        print(f"ok    docs/ — {cited} citations of SPEC.md's length say {length:,}")
+    return failed
+
+
 # examples/stream.txt is the only example that is not a JSON document, and it
 # was the only one nothing checked. Its payloads are JSON all the same, and the
 # rule that matters most in §4.3 — deltas concatenating to the final output —
@@ -889,6 +962,7 @@ def main() -> int:
 
     print()
     failed |= _docs_cite_real_sections()
+    failed |= _docs_cite_the_real_length()
 
     return 1 if failed else 0
 
