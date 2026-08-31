@@ -1979,7 +1979,6 @@ and informative for everyone else. Postern is usable with no reference to it.*
   discard rule forbids. A runner declaring the field **MUST** admit the
   header in its preflight, or the promise holds for every client kind except
   the browser (§2.3, §4.1.2, §4.2, §4.5).
-
 - `run_id` is unique **per execution** rather than per response, so a
   replayed idempotent answer carries the `run_id` of the execution it
   replays. The uniqueness **MUST** predates the replay rule by some distance
@@ -1989,7 +1988,6 @@ and informative for everyone else. Postern is usable with no reference to it.*
   correlation the same sentence's **SHOULD** exists for. Nothing an
   implementer builds under either reading fails, which is why this needed
   saying rather than leaving to sense (§4.2).
-
 - An `Idempotency-Key` identifies a request rather than a caller, and
   `idempotency_conflict` (409) is what a runner answers when one is presented
   with different `inputs`. #89 keyed the replay rule on the header alone,
@@ -2008,7 +2006,6 @@ and informative for everyone else. Postern is usable with no reference to it.*
   state one **SHOULD** declare `status.limits.idempotency_retention_seconds`,
   the one member of `limits` bounding a promise rather than a run (§2.1,
   §4.2, §4.4).
-
 - `capabilities.streaming` is **withdrawn**. It appeared in §4.1's example
   and in `describe.schema.json` — the one property there carrying no
   `description` — and no prose ever defined it, which left `capabilities`
