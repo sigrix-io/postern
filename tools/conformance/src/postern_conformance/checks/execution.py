@@ -161,29 +161,34 @@ def _refuses_a_missing_required_input(runner: Runner, context: Context) -> list[
     response = runner.post_json("run", {"inputs": {}})
     title = "run refuses a missing required input"
 
-    # A request that is missing a required input *and* arrives at a runner
-    # whose environment is missing a credential has two correct refusals
-    # available, and the specification orders neither: section 4.2 requires
-    # `bad_request` for the input, section 2.1 defines `missing_credential`
-    # for the environment, and both are true of this request. So a runner
-    # answering 424 here has not been caught breaking a rule — it has been
-    # asked a question with two right answers, and this check cannot tell
-    # which rule it applies until the environment is complete.
+    # Section 4.6 orders these: a runner decides what the request says
+    # before it inspects what it holds, so a request that is both malformed
+    # and unservable is a `bad_request`. This used to be unordered, and the
+    # check had to skip whenever a runner answered 424 -- which meant
+    # section 4.2's MUST went untested on exactly the runners most likely
+    # to be breaking it, since an incomplete environment is the ordinary
+    # state of one being brought up. The 424 is now a finding, reported
+    # under section 4.2 -- that is the MUST the runner broke, and the rule
+    # its implementer has to fix. Section 4.6 only decides which of the two
+    # refusals applies, so it belongs in the message rather than in the
+    # section this is filed under.
     if response.status == 424 and error_code(response) == "missing_credential":
         return [
-            skipped(
+            failed(
                 RUN,
                 title,
-                "the runner answered 424 `missing_credential`"
+                "answered 424 `missing_credential`"
                 + (
                     " (" + ", ".join(context.missing_credentials) + ")"
                     if context.missing_credentials
                     else ""
                 )
-                + ". Both refusals are correct for this request and the "
-                "specification does not order them, so this rule cannot be "
-                "isolated until the runner's environment carries the "
-                "credentials `describe` declares.",
+                + " to a request omitting "
+                + ", ".join(repr(key) for key in missing)
+                + ". Both refusals describe this request, and section 4.6 "
+                "orders them: the request check comes first, so this is a "
+                "`bad_request`. Validate the request before inspecting the "
+                "environment.",
             )
         ]
 

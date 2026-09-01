@@ -210,7 +210,7 @@ Every non-2xx response body **MUST** be:
 | `not_entitled` | 403 | R | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
 | `idempotency_conflict` | 409 | R | An `Idempotency-Key` the runner has already answered, presented with different `inputs` (§4.2). |
 | `withdrawn` | 410 | D | The caller was entitled, and the agent has since been withdrawn (§5.6). |
-| `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment. |
+| `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment, on a request that is otherwise valid (§4.6). |
 | `agent_error` | 500 | R | The agent ran and failed. |
 | `not_implemented` | 501 | R | The verb is defined by this specification but sits above the runner's conformance level (§3). Retrying will not help. |
 | `unavailable` | 503 | R · D | The runner or distributor is not ready. Retrying may help — a runner refusing a run because another is in flight answers this (§4.5). |
@@ -732,7 +732,9 @@ Request:
 a request omitting a `required` input, or failing a declared `validation`,
 with `bad_request` — and **SHOULD** name the offending key in `message`. It
 **MUST** reject a body that is not `application/json` with the same code,
-before reading the body at all (§2.3).
+before reading the body at all (§2.3). This check precedes the runner's
+inspection of its own environment, so a request that is both malformed and
+unservable is answered `bad_request` (§4.6).
 
 Response:
 
@@ -1161,6 +1163,69 @@ So a client **MUST** be prepared for `503` on `run` or `stream` whatever
 rather than one, and the slot can go to somebody else in between; a client
 that treats a `ready` it read a moment ago as an admission ticket has built
 a race into itself.
+
+---
+
+### 4.6 The order of refusals
+
+§4.2 and §4.3 say when a runner refuses, and §2.1 names the codes it refuses
+with. Neither says which refusal wins when one request earns more than one,
+and a `run` earns several routinely: a request omitting a `required` input,
+sent to a runner whose environment is missing a credential `describe`
+declares, is described correctly by both §4.2's `bad_request` and §2.1's
+`missing_credential`.
+
+A runner **MUST** decide what the request says before it inspects what it
+holds:
+
+| | Check | Refusal | Stated in |
+|---|---|---|---|
+| 1 | The verb sits above the runner's declared level | `501` `not_implemented` | §3 |
+| 2 | The media type is not `application/json` | `400` `bad_request` | §2.3 |
+| 3 | A `required` input is absent, or a declared `validation` fails | `400` `bad_request` | §4.2 |
+| 4 | A credential `describe` declares is absent from the environment | `424` `missing_credential` | §2.1 |
+
+The first two were already ordered and are repeated here only so the
+sequence can be read in one place: §3 states its rule for every verb, and
+§2.3 requires the media-type check *"before reading the body at all"*. What
+this section adds is **3 before 4**.
+
+Steps 1 to 3 read the request against the runner's own published contract,
+so every conforming runner answers them identically. Step 4 depends on how
+one machine happens to be deployed. Ordering the deployment-dependent answer
+last buys two things a client and an implementer both need.
+
+**A malformed request gets the same answer everywhere.** A client that sends
+one learns what is wrong with it, rather than learning something about the
+operator's machine and discovering the real problem on the next attempt.
+Reversed, a client fixes its credentials, retries, and only then hears that
+its inputs were never valid — two round trips to learn two things, in the
+order that helps least.
+
+**And §4.2 stays testable on a runner that is not fully configured**, which
+is the ordinary state of one being brought up for the first time. Under the
+reverse order a runner missing any credential answers `424` to every `run`,
+so the rule §4.2 states as a **MUST** cannot be exercised at all until the
+operator finishes a task unrelated to it.
+
+The disclosure difference is real but small, and worth stating at its true
+size rather than as a threat: `describe` already publishes *which*
+credentials an agent needs, so step 4 discloses only whether they are
+currently set. A browser client cannot read that answer cross-origin anyway
+(§2.3), and a local process that can reach the runner can usually read the
+environment directly. Ordering the request checks first means a caller sends
+a well-formed, complete request before it learns even that much, which is a
+reasonable default rather than a mitigation.
+
+`missing_credential` has no other producer. It is the one code in §2.1's
+table that no other section of this specification requires, and step 4 is
+the rule that emits it; before this section it was a code the protocol
+defined and never asked anyone to send.
+
+§4.5's capacity refusal is deliberately **not** placed in this sequence. A
+runner that cannot start another run has nothing to gain by validating one
+first, and **MAY** answer `503` with `unavailable` at any point before the
+agent starts.
 
 ---
 
@@ -1733,6 +1798,17 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before the first tagged release.
 
+- A runner's refusals are ordered: it decides what the request says before
+  it inspects what it holds, so a `run` that both omits a `required` input
+  and meets a runner missing a credential is answered `bad_request` rather
+  than `missing_credential` (§4.6). Both were correct under the previous
+  text and nothing chose between them, which left §4.2's **MUST**
+  untestable on any runner whose environment was incomplete — the ordinary
+  state of one being brought up — and made a malformed request's answer
+  depend on the operator's deployment. `missing_credential` gains the
+  producing rule it never had: it was the only code in §2.1's table that no
+  section required, defined and never asked for. §4.5's capacity refusal is
+  deliberately left unordered (§2.1, §4.2, §4.6).
 - A client **MUST** tolerate an error `code` it does not recognise, so that
   adding a code stays an additive change (§2.1).
 - Added `not_implemented` (501). A Level 2 runner answers `stream` with it

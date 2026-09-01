@@ -49,6 +49,9 @@ class Fault(enum.Enum):
     TWO_TERMINALS = "streams both `done` and `error` (§4.3)"
     LATENCY_ON_STARTED = "reports latency_ms on a started step (§4.3)"
     DUPLICATE_RUN_ID = "reuses one run_id across two runs (§4.2)"
+    CREDENTIAL_BEFORE_REQUEST = (
+        "answers missing_credential to a request that is also malformed (§4.6)"
+    )
     REPLAYS_A_MISMATCHED_KEY = (
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
@@ -236,6 +239,15 @@ class _Handler(BaseHTTPRequestHandler):
 
         inputs = payload.get("inputs") if isinstance(payload, dict) else None
         if not isinstance(inputs, dict) or "segment" not in inputs:
+            # §4.6 orders the request check ahead of the environment check.
+            # This fault reverses them: the runner reports its own missing
+            # credential first, so a malformed request is answered 424.
+            if Fault.CREDENTIAL_BEFORE_REQUEST in self.faults:
+                self._send(
+                    424,
+                    _error("missing_credential", "OPENAI_API_KEY is not set."),
+                )
+                return
             body = _error("bad_request", "Missing required input 'segment'.")
             if Fault.ERROR_SIBLING in self.faults:
                 body["trace_id"] = "abc123"
