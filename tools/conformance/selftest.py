@@ -77,6 +77,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
     Fault.DELTAS_DISAGREE: ("4.3", "deltas concatenate", {"execute": True}),
     Fault.TWO_TERMINALS: ("4.3", "exactly one done or error", {"execute": True}),
     Fault.LATENCY_ON_STARTED: ("4.3", "event payloads match their schemas", {"execute": True}),
+    Fault.CREDENTIAL_BEFORE_REQUEST: (
+        "4.2",
+        "run refuses a missing required input",
+        {"execute": True},
+    ),
     Fault.DUPLICATE_RUN_ID: ("4.2", "run_id is unique", {"execute": True}),
     Fault.REPLAYS_A_MISMATCHED_KEY: (
         "4.2",
