@@ -53,6 +53,10 @@ class Fault(enum.Enum):
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
     )
+    CREDENTIALS_BEFORE_VALIDATION = (
+        "answers 424 missing_credential to a request that omits a required "
+        "input, inspecting its environment before validating (§4.2)"
+    )
 
     def __str__(self) -> str:  # pragma: no cover - readable test ids
         return self.name.lower()
@@ -235,6 +239,18 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         inputs = payload.get("inputs") if isinstance(payload, dict) else None
+
+        # Section 4.2 validates the request before inspecting the
+        # environment. This runner has no missing credential to report, so
+        # the fault stands in for one — what it plants is the ordering, by
+        # answering the environment's refusal ahead of the request's.
+        if Fault.CREDENTIALS_BEFORE_VALIDATION in self.faults:
+            self._send(
+                424,
+                _error("missing_credential", "OPENAI_API_KEY is not set."),
+            )
+            return
+
         if not isinstance(inputs, dict) or "segment" not in inputs:
             body = _error("bad_request", "Missing required input 'segment'.")
             if Fault.ERROR_SIBLING in self.faults:

@@ -210,7 +210,7 @@ Every non-2xx response body **MUST** be:
 | `not_entitled` | 403 | R | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
 | `idempotency_conflict` | 409 | R | An `Idempotency-Key` the runner has already answered, presented with different `inputs` (§4.2). |
 | `withdrawn` | 410 | D | The caller was entitled, and the agent has since been withdrawn (§5.6). |
-| `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment. |
+| `missing_credential` | 424 | R | A credential named by `describe` is absent from the environment, on a request the runner would otherwise have executed (§4.2). |
 | `agent_error` | 500 | R | The agent ran and failed. |
 | `not_implemented` | 501 | R | The verb is defined by this specification but sits above the runner's conformance level (§3). Retrying will not help. |
 | `unavailable` | 503 | R · D | The runner or distributor is not ready. Retrying may help — a runner refusing a run because another is in flight answers this (§4.5). |
@@ -733,6 +733,35 @@ a request omitting a `required` input, or failing a declared `validation`,
 with `bad_request` — and **SHOULD** name the offending key in `message`. It
 **MUST** reject a body that is not `application/json` with the same code,
 before reading the body at all (§2.3).
+
+**The request is checked before the environment.** A runner **MUST** apply
+the validation above before inspecting whether the credentials `describe`
+declares (§4.1.3) are present. A request omitting a required input is
+answered `bad_request` whether or not the runner could have served a
+well-formed one, and `missing_credential` (§2.1) is reserved for a request
+the runner would otherwise have executed.
+
+Both refusals describe such a request truthfully, so without an order an
+implementer has no way to choose, and the cost falls in two places: runners
+differ on a code clients branch on, and a conformance checker cannot isolate
+the validation rule at all against a runner whose environment is incomplete
+— the ordinary state of a runner being brought up for the first time, and so
+exactly when that rule is worth checking. Ordering them costs a runner
+nothing, because validating a request needs no environment: the cheaper
+check is the one that runs first. §2.3 orders a cheaper check ahead of a
+more expensive one the same way, one step earlier, where a media type is
+refused before the body is read at all.
+
+**A runner that can tell SHOULD say so.** Where a credential `describe`
+declares is absent and the request is otherwise valid, a runner **SHOULD**
+answer `424` `missing_credential` rather than starting an agent that cannot
+succeed. It is a **SHOULD** because a runner is not obliged to know:
+`status.credentials` is **OPTIONAL** (§4.4), and one that never inspects its
+environment runs the agent and reports what it produces, which is
+`agent_error` — a true answer, and a worse one. What the **SHOULD** buys is
+a refusal a person can act on, since `424` names the variable to set where a
+`500` from a failed run names nothing, and a run that does not spend money
+in order to fail (§4.1.2).
 
 Response:
 
@@ -2025,6 +2054,23 @@ and informative for everyone else. Postern is usable with no reference to it.*
   the line that keeps the field from being re-proposed. The conformance
   checker's `streaming`/`level` agreement warning goes with it — that rule
   was the tool's own inference from §3, with no sentence to cite (§3, §4.1).
+- A runner validates the request before inspecting its environment, and
+  `missing_credential` gains the rule it never had. The code was defined in
+  §2.1's table and produced by nothing — every other code there is required
+  somewhere — while the obvious way to use it collided with §4.2's
+  unconditional **MUST** to answer `bad_request` for a missing `required`
+  input. A request that omits one *and* reaches a runner short of a
+  credential satisfies both descriptions, and nothing ordered them, so two
+  runners could answer differently and both cite the document. Validation
+  now comes first, which costs a runner nothing (validating needs no
+  environment) and follows §2.3's precedent of refusing a media type before
+  reading the body. `missing_credential` is a **SHOULD** rather than a
+  **MUST**, because `status.credentials` is **OPTIONAL** and a runner is not
+  obliged to know its own environment; what it buys where honoured is a
+  refusal naming the variable to set, instead of a paid run failing into
+  `agent_error`. Until this, a conformance checker could not isolate §4.2's
+  validation rule on any runner whose environment was incomplete — which is
+  every runner on its first boot (§2.1, §4.2).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see

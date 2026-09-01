@@ -83,6 +83,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         "reused key with different inputs",
         {"execute": True, "idempotent": True},
     ),
+    Fault.CREDENTIALS_BEFORE_VALIDATION: (
+        "4.2",
+        "refuses a missing required input",
+        {},
+    ),
 }
 
 

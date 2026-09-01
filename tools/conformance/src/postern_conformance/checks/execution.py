@@ -146,6 +146,14 @@ def _refuses_a_missing_required_input(runner: Runner, context: Context) -> list[
     reads this message is usually a person: a refusal that does not say
     which field was missing sends them back to `describe` to diff it by
     hand against what they sent.
+
+    A `424` here used to be skipped rather than failed. Both refusals
+    described this request truthfully and section 4.2 ordered neither, so a
+    runner answering `missing_credential` had been asked a question with two
+    right answers — and the rule could not be isolated on any runner whose
+    environment was incomplete, which is every runner on its first boot.
+    Section 4.2 now orders them: the request is validated before the
+    environment is inspected, so this is an assertion rather than a skip.
     """
     missing = context.required_input_keys
     if not missing:
@@ -161,29 +169,28 @@ def _refuses_a_missing_required_input(runner: Runner, context: Context) -> list[
     response = runner.post_json("run", {"inputs": {}})
     title = "run refuses a missing required input"
 
-    # A request that is missing a required input *and* arrives at a runner
-    # whose environment is missing a credential has two correct refusals
-    # available, and the specification orders neither: section 4.2 requires
-    # `bad_request` for the input, section 2.1 defines `missing_credential`
-    # for the environment, and both are true of this request. So a runner
-    # answering 424 here has not been caught breaking a rule — it has been
-    # asked a question with two right answers, and this check cannot tell
-    # which rule it applies until the environment is complete.
+    # Section 4.2 orders these, so a `424` here is a finding rather than an
+    # ambiguity: the runner inspected its environment before validating the
+    # request. Reported separately from the generic wrong-status case below
+    # because the remedy is different — the runner is not missing the rule,
+    # it is applying two of them in the wrong order.
     if response.status == 424 and error_code(response) == "missing_credential":
         return [
-            skipped(
+            failed(
                 RUN,
                 title,
-                "the runner answered 424 `missing_credential`"
+                "answered 424 `missing_credential`"
                 + (
                     " (" + ", ".join(context.missing_credentials) + ")"
                     if context.missing_credentials
                     else ""
                 )
-                + ". Both refusals are correct for this request and the "
-                "specification does not order them, so this rule cannot be "
-                "isolated until the runner's environment carries the "
-                "credentials `describe` declares.",
+                + " to a request omitting "
+                + ", ".join(repr(key) for key in missing)
+                + ". Section 4.2 validates the request before inspecting the "
+                "environment, so `bad_request` is the answer here; "
+                "`missing_credential` is reserved for a request the runner "
+                "would otherwise have executed.",
             )
         ]
 
