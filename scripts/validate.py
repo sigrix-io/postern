@@ -287,6 +287,16 @@ MUST_REJECT = [
     ),
     (
         "status.schema.json",
+        "an update check reporting a version it never obtained",
+        {
+            "postern": "0.1",
+            "level": 3,
+            "state": "ready",
+            "update": {"state": "unreachable", "current": "1.3.0", "latest": "1.4.0"},
+        },
+    ),
+    (
+        "status.schema.json",
         "a maximum run duration of zero seconds, which no run can meet",
         {
             "postern": "0.1",

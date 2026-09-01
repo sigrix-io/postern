@@ -77,6 +77,43 @@
       },
       "additionalProperties": true
     },
+    "update": {
+      "type": "object",
+      "description": "What the runner learned when it asked its distributor whether a newer version of the agent exists (SPEC.md section 4.4). OPTIONAL, and present only where such a check actually ran \u2014 a runner with no version check configured omits it, which is a different fact from a check that ran and found no distributor to ask. How a runner obtains the answer is the distributor's to define; this specification adds no path for it.",
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["not_required", "unreachable", "current", "update_available"],
+          "description": "not_required: no distributor is configured, mirroring entitlement's own state (section 5.1). unreachable: one is and could not be asked \u2014 a client reads this as not known, never as out of date, and a runner MUST NOT refuse to start or to run because of it (section 4.4). current / update_available: the check succeeded, and the running version and the reported one are equal or are not."
+        },
+        "current": {
+          "type": "string",
+          "description": "The runner's own describe.agent.version. Present whenever it is knowable, unreachable included: a runner always knows what it is running, whatever it could not reach."
+        },
+        "latest": {
+          "type": "string",
+          "description": "The version the distributor reported. Present only under current and update_available, those being the only states in which one was obtained."
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {"state": {"const": "not_required"}},
+            "required": ["state"]
+          },
+          "then": {"not": {"required": ["latest"]}}
+        },
+        {
+          "if": {
+            "properties": {"state": {"const": "unreachable"}},
+            "required": ["state"]
+          },
+          "then": {"not": {"required": ["latest"]}}
+        }
+      ]
+    },
     "limits": {
       "type": "object",
       "description": "Bounds the runner puts on a run in flight (SPEC.md section 4.5). These belong to the deployment rather than to the agent, which is why they sit here and not in describe: two runners serving one agent may answer differently.",
