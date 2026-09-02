@@ -44,15 +44,40 @@ class Context:
         return state if isinstance(state, str) else None
 
     @property
-    def refuses_runs(self) -> bool:
-        """True where SPEC.md section 5.7.4 says `run` must refuse.
+    def never_checked(self) -> bool:
+        """True for §5.7.3's runner: `unknown`, and no check has ever completed.
 
-        `revoked` refuses with `403 not_entitled`; `unknown` refuses with
-        `503 unavailable` only once past the grace, which a client cannot
-        determine from outside — so `unknown` is not counted here and the
-        run probes treat it as undecided.
+        The two shapes of `unknown` are told apart by `checked_at`, and the
+        specification says so in those words: one with a timestamp is a
+        runner inside grace, still running, with a deadline; one without is
+        a runner that cannot start. Only the second is decidable from
+        outside, and it is fully decided — `run` and `stream` **MUST**
+        answer `503` `unavailable`.
         """
-        return self.entitlement_state == "revoked"
+        if self.entitlement_state != "unknown":
+            return False
+        if not isinstance(self.status, dict):
+            return False
+        entitlement = self.status.get("entitlement")
+        return isinstance(entitlement, dict) and "checked_at" not in entitlement
+
+    @property
+    def refuses_runs(self) -> bool:
+        """True where the specification says `run` and `stream` must refuse.
+
+        Two states, and both are decidable from outside. `revoked` refuses
+        with `403 not_entitled` (§5.7.4). A runner that has never completed
+        a check refuses with `503 unavailable` (§5.7.3).
+
+        The third shape is not here and must not be: `unknown` *with* a
+        `checked_at` is a runner inside grace, and whether it has passed
+        that grace cannot be determined from outside, so the run probes
+        treat it as undecided. This property used to answer `revoked`
+        alone, on that reasoning — which is right for the grace case and
+        was silently covering the never-checked one, where the answer is
+        fixed.
+        """
+        return self.entitlement_state == "revoked" or self.never_checked
 
     @property
     def runs_are_free(self) -> bool:

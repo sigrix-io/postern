@@ -57,6 +57,22 @@ class Fault(enum.Enum):
         "answers bad_request to a malformed request while its entitlement "
         "is revoked (§4.6 step 2)"
     )
+    STREAM_NOT_ROUTED = "declares Level 3 and answers stream with 404 (§3)"
+    WILDCARD_TO_KNOWN_ORIGIN = (
+        "answers a configured origin with Access-Control-Allow-Origin: * "
+        "while refusing a stranger correctly (§2.3)"
+    )
+    WILDCARD_ON_GETS = (
+        "ships Access-Control-Allow-Origin: * on describe and status, so any "
+        "page can read them (§2.3)"
+    )
+    RUNS_WITHOUT_EVER_CHECKING = (
+        "reports unknown with no checked_at and runs the agent anyway (§5.7.3)"
+    )
+    RERUNS_AN_IDENTICAL_REPEAT = (
+        "re-runs the agent on a repeat carrying the same inputs under a key "
+        "it already answered (§4.2)"
+    )
     REPLAYS_A_MISMATCHED_KEY = (
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
@@ -139,8 +155,21 @@ class _Handler(BaseHTTPRequestHandler):
 
         if Fault.WILDCARD_CORS in self.faults:
             headers["Access-Control-Allow-Origin"] = "*"
+        elif Fault.WILDCARD_ON_GETS in self.faults and self.command == "GET":
+            # Narrower than WILDCARD_CORS on purpose: `run` and `stream`
+            # behave perfectly, so the probe that only ever asked `run`'s
+            # preflight saw nothing. What leaks is what the agent *is* and
+            # what it holds, to every page the user visits.
+            headers["Access-Control-Allow-Origin"] = "*"
         elif origin == "null" and Fault.NULL_ORIGIN_ALLOWED in self.faults:
             headers["Access-Control-Allow-Origin"] = "null"
+        elif origin == ALLOWED_ORIGIN and Fault.WILDCARD_TO_KNOWN_ORIGIN in self.faults:
+            # Correct to a stranger (no header at all), wildcard to the one
+            # origin it was configured for. Invisible to every stranger-based
+            # probe, which is why the actual-response check is the only thing
+            # that can see it -- and why it accepting `*` made that check
+            # unable to fail.
+            headers["Access-Control-Allow-Origin"] = "*"
         elif origin == ALLOWED_ORIGIN:
             headers["Access-Control-Allow-Origin"] = origin
 
@@ -215,6 +244,13 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(404, _error("not_found", "No such path."))
             return
 
+        # A verb that was never wired up at all: the path 404s like any
+        # other unknown one. Distinct from NOT_IMPLEMENTED_AT_LEVEL, which
+        # routes `stream` and answers 501 from inside it.
+        if verb == "stream" and Fault.STREAM_NOT_ROUTED in self.faults:
+            self._send(404, _error("not_found", "No such path."))
+            return
+
         required_level = 2 if verb == "run" else 3
         degrading = (
             verb == "run" and Fault.RUNS_ABOVE_LEVEL in self.faults
@@ -242,6 +278,15 @@ class _Handler(BaseHTTPRequestHandler):
             and Fault.VALIDATES_BEFORE_ENTITLEMENT not in self.faults
         ):
             self._send(403, _error("not_entitled", "This entitlement is revoked."))
+            return
+
+        if (
+            self.server.never_checked  # type: ignore[attr-defined]
+            and Fault.RUNS_WITHOUT_EVER_CHECKING not in self.faults
+        ):
+            # `unavailable`, not `not_entitled`: retrying may genuinely help
+            # once the network returns, and no distributor has said no.
+            self._send(503, _error("unavailable", "No entitlement check has completed."))
             return
 
         length = int(self.headers.get("Content-Length") or 0)
@@ -318,6 +363,14 @@ class _Handler(BaseHTTPRequestHandler):
                     ),
                 )
                 return
+            if Fault.RERUNS_AN_IDENTICAL_REPEAT in self.faults:
+                # Honours the conflict refusal above and still re-runs every
+                # identical repeat -- the promise the header exists to make,
+                # broken while the rule protecting it is kept.
+                fresh = self._run_response()
+                answered[key] = (inputs, fresh)
+                self._send(200, fresh)
+                return
             # Same inputs: the replay section 4.2 requires. Under the fault,
             # a mismatch takes this branch too, which is the whole defect.
             self._send(200, first_response)
@@ -334,6 +387,10 @@ class _Handler(BaseHTTPRequestHandler):
         if Fault.STALE_NOT_REQUIRED in self.faults:
             entitlement["checked_at"] = "2026-08-15T09:14:02Z"
             entitlement["stale_after_seconds"] = 60
+        if self.server.never_checked:  # type: ignore[attr-defined]
+            # §5.7.3: no check has ever completed, so there is no
+            # `checked_at` and no grace to count from.
+            entitlement = {"state": "unknown"}
         if self.server.revoked:  # type: ignore[attr-defined]
             # §5.7.4: a runner told `404` supplies both fields itself.
             entitlement = {
@@ -448,6 +505,7 @@ def fake_runner(
     level: int = 3,
     idempotent: bool = False,
     revoked: bool = False,
+    never_checked: bool = False,
     strict_origin: bool = False,
     requires_nothing: bool = False,
 ) -> Iterator[tuple[str, "RunCounter"]]:
@@ -464,6 +522,7 @@ def fake_runner(
     server.level = level  # type: ignore[attr-defined]
     server.idempotent = idempotent  # type: ignore[attr-defined]
     server.revoked = revoked  # type: ignore[attr-defined]
+    server.never_checked = never_checked  # type: ignore[attr-defined]
     server.strict_origin = strict_origin  # type: ignore[attr-defined]
     server.requires_nothing = requires_nothing  # type: ignore[attr-defined]
     server.runs = 0  # type: ignore[attr-defined]
