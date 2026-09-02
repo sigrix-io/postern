@@ -441,22 +441,71 @@ def _the_build_hook_bundles_every_schema(problems: list[str]) -> int:
     return len(read)
 
 
+def _the_readme_quotes_this_run(tallies: list[str], problems: list[str]) -> None:
+    """README.md's transcript of this command must be what it prints.
+
+    It is a `$ python tools/conformance/selftest.py` block, so a reader
+    takes it for the output rather than for prose — and it is the first
+    thing anyone weighing whether these checks are worth trusting reads.
+    Every number in it is one this run knows, so nothing here has to be
+    kept by hand.
+
+    It had drifted three ways at once and none of them was visible from
+    the file being edited: two counts had moved, and the schema-bundling
+    line had been added to this self-test without ever reaching the block.
+    A transcript short by a whole line reads exactly like a complete one.
+    """
+    readme = pathlib.Path(__file__).resolve().parent / "README.md"
+    text = readme.read_text(encoding="utf-8")
+
+    marker = "$ python tools/conformance/selftest.py"
+    start = text.find(marker)
+    if start == -1:
+        problems.append(
+            f"{readme.name} no longer shows a run of this command, so nothing "
+            "tells a reader what it prints."
+        )
+        return
+
+    fence = text.find("```", start)
+    quoted = [
+        line
+        for line in text[start:fence].splitlines()
+        if line.startswith("  ") and line.strip()
+    ]
+
+    if quoted != tallies:
+        problems.append(
+            f"{readme.name}'s transcript of this command has drifted from what "
+            "it prints"
+            + "".join(f"\n    quoted: {line.strip()}" for line in quoted)
+            + "".join(f"\n    prints: {line.strip()}" for line in tallies)
+        )
+
+
 def main() -> int:
     problems: list[str] = []
+    tallies: list[str] = []
+
+    def say(line: str) -> None:
+        tallies.append(line)
+        print(line)
 
     print("postern-conformance self-test\n")
 
     baselines = _baseline_is_clean(problems)
-    print(f"  {baselines} conformant baselines, none failing")
+    say(f"  {baselines} conformant baselines, none failing")
 
     codes = _every_defined_code_is_known(problems)
-    print(f"  {codes} error codes, table agrees with the schema")
+    say(f"  {codes} error codes, table agrees with the schema")
 
     bundled = _the_build_hook_bundles_every_schema(problems)
-    print(f"  {bundled} schemas, the build hook bundles each one")
+    say(f"  {bundled} schemas, the build hook bundles each one")
 
     faults = _every_fault_is_caught(problems)
-    print(f"  {faults} planted faults, each caught by its own check")
+    say(f"  {faults} planted faults, each caught by its own check")
+
+    _the_readme_quotes_this_run(tallies, problems)
 
     if problems:
         print("\n" + "\n".join(f"  ✗ {problem}" for problem in problems))
