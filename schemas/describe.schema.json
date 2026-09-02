@@ -43,8 +43,8 @@
         },
         "media_type": {
           "type": "string",
-          "pattern": "^[a-z]+/[A-Za-z0-9!#$&^_.+-]+$",
-          "description": "An RFC 6838 media type naming what value carries. REQUIRED when type is bytes, and meaningless otherwise. Open rather than an enum on purpose: closing it would need a specification revision per format."
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$",
+          "description": "An RFC 6838 media type naming what value carries. REQUIRED when type is bytes, and meaningless otherwise. Open rather than an enum on purpose: closing it would need a specification revision per format. The pattern is RFC 6838 section 4.2's restricted-name for both parts, lowercased: a runner emits lower case so that two runners naming one format agree octet-for-octet (SPEC.md section 4.1.4). A client MUST NOT reject a response for the case of this field \u2014 media types are case-insensitive (RFC 9110), and these schemas describe what a conforming runner emits, not what a client accepts."
         },
         "example": { "type": "string" }
       },
