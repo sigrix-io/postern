@@ -83,6 +83,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         {"execute": True},
     ),
     Fault.DUPLICATE_RUN_ID: ("4.2", "run_id is unique", {"execute": True}),
+    Fault.VALIDATES_BEFORE_ENTITLEMENT: (
+        "5.7.4",
+        "run refuses a revoked entitlement",
+        {"revoked": True},
+    ),
     Fault.REPLAYS_A_MISMATCHED_KEY: (
         "4.2",
         "reused key with different inputs",
@@ -91,8 +96,14 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
 }
 
 
-def _report(*faults: Fault, execute: bool = False, level: int = 3, idempotent: bool = False):
-    with fake_runner(*faults, level=level, idempotent=idempotent) as origin:
+def _report(
+    *faults: Fault,
+    execute: bool = False,
+    level: int = 3,
+    idempotent: bool = False,
+    revoked: bool = False,
+):
+    with fake_runner(*faults, level=level, idempotent=idempotent, revoked=revoked) as origin:
         return check(
             Runner(origin, timeout=10.0),
             Context(execute=execute, origin=ALLOWED_ORIGIN),
@@ -127,6 +138,26 @@ def _baseline_is_clean(problems: list[str]) -> int:
                         f"(execute={execute}, idempotent={idempotent}): "
                         + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
                     )
+
+    # And the same runner with its entitlement revoked, which is a posture
+    # rather than a fault: §5.7.4 says such a runner refuses `run` and
+    # `stream`, and §4.6 step 2 says it refuses them before it reads the
+    # request. A runner doing both is conformant and must sweep clean.
+    #
+    # This is the case #108 reported and the one nothing here could reach:
+    # the checker demanded `400` from probes below step 2 and `403` from the
+    # §5.7.4 probe, using the same body for both, so every revoked runner
+    # failed whichever order it picked. The baseline above never noticed
+    # because the fake runner had no entitlement state at all.
+    for level in (2, 3):
+        report = _report(level=level, revoked=True)
+        checked += 1
+        if report.failures:
+            problems.append(
+                f"the conformant fake runner failed at Level {level} with its "
+                "entitlement revoked: "
+                + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+            )
     return checked
 
 

@@ -51,7 +51,7 @@ def run(runner: Runner, context: Context) -> list[Check]:
         return []
 
     checks: list[Check] = []
-    checks.extend(_refuses_a_malformed_body(runner))
+    checks.extend(_refuses_a_malformed_body(runner, context))
     checks.extend(_refuses_a_missing_required_input(runner, context))
     checks.extend(_entitlement_refusals(runner, context))
 
@@ -112,7 +112,50 @@ def _timeout(context: Context) -> float:
     return DEFAULT_RUN_TIMEOUT_SECONDS
 
 
-def _refuses_a_malformed_body(runner: Runner) -> list[Check]:
+def entitlement_preempted(response: Response, context: Context) -> str | None:
+    """Why a request-level probe stands down here, or `None` to judge it.
+
+    §4.6 puts the entitlement refusal at step 2, ahead of the media type,
+    the inputs and the environment. So on a runner whose entitlement is not
+    in force, a probe written for one of those steps earns the entitlement
+    refusal instead of the one it was checking — and reporting that as a
+    failure would be reporting the runner for obeying the order.
+
+    Two things make this a stand-down rather than a hole.
+
+    It is keyed on the *answer*, not on the state: a runner reporting
+    `revoked` that nonetheless answers `400` to a malformed body is still
+    judged, and still passes. Only a runner that actually preempts skips.
+
+    And the answer is corroborated against `status` before it is believed.
+    An entitled runner answering `not_entitled` to a body it simply did not
+    like is a real defect, and one of the more attractive ones to hide
+    behind — so a runner cannot skip its way out of §4.2 by claiming a
+    refusal its own `status` does not support.
+    """
+    state = context.entitlement_state
+    if state not in ("revoked", "unknown"):
+        return None
+
+    code = error_code(response)
+    if response.status == 403 and code == "not_entitled":
+        return (
+            "the runner answered 403 `not_entitled`, and `status` reports its "
+            "entitlement as `revoked`. §4.6 step 2 puts that refusal ahead of "
+            "this check, so it is the correct answer to this probe and the "
+            "rule below it cannot be reached from outside."
+        )
+    if response.status == 503 and code == "unavailable":
+        return (
+            "the runner answered 503 `unavailable`, and `status` reports its "
+            "entitlement as `unknown` — §5.7.4's past-grace case, which §4.6 "
+            "step 2 puts ahead of this check. Whether it is past grace cannot "
+            "be determined from outside, so this is not read as a failure."
+        )
+    return None
+
+
+def _refuses_a_malformed_body(runner: Runner, context: Context) -> list[Check]:
     """A body that is not JSON is a `bad_request`, and never reaches the agent."""
     response = runner.request(
         "POST",
@@ -121,6 +164,9 @@ def _refuses_a_malformed_body(runner: Runner) -> list[Check]:
         headers={"Content-Type": "application/json", "Content-Length": "17"},
     )
     title = "run refuses a malformed body"
+    preempted = entitlement_preempted(response, context)
+    if preempted is not None:
+        return [skipped(RUN, title, preempted)]
     if response.status == 400:
         checks = [passed(RUN, title)]
         checks.extend(
@@ -160,6 +206,10 @@ def _refuses_a_missing_required_input(runner: Runner, context: Context) -> list[
 
     response = runner.post_json("run", {"inputs": {}})
     title = "run refuses a missing required input"
+
+    preempted = entitlement_preempted(response, context)
+    if preempted is not None:
+        return [skipped(RUN, title, preempted)]
 
     # Section 4.6 orders these: a runner decides what the request says
     # before it inspects what it holds, so a request that is both malformed
@@ -263,7 +313,17 @@ def _entitlement_refusals(runner: Runner, context: Context) -> list[Check]:
                     "entitlement as `revoked`, and a revoked entitlement is a "
                     "refusal the runner has been told about — 403 "
                     "`not_entitled`, the one place that code is correct. "
-                    "`unavailable` would invite a retry that cannot succeed.",
+                    "`unavailable` would invite a retry that cannot succeed."
+                    + (
+                        " This body also omits a required input, so a runner "
+                        "validating the request first answers 400 here. §4.6 "
+                        "puts the entitlement at step 2, ahead of the media "
+                        "type, the inputs and the environment: a 400 names "
+                        "something the caller could fix and so invites the "
+                        "retry §5.7.4 forbids a revoked runner to imply."
+                        if response.status == 400
+                        else ""
+                    ),
                 )
             )
     return checks

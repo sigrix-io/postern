@@ -1221,27 +1221,51 @@ with. Neither says which refusal wins when one request earns more than one,
 and a `run` earns several routinely: a request omitting a `required` input,
 sent to a runner whose environment is missing a credential `describe`
 declares, is described correctly by both §4.2's `bad_request` and §2.1's
-`missing_credential`.
+`missing_credential`. Send that same request to a runner whose entitlement
+has lapsed and a third applies, §5.7.4's `not_entitled` — which is the case
+that makes this a table rather than a sentence, since it is the one whose
+answer no amount of fixing the request changes.
 
-A runner **MUST** decide what the request says before it inspects what it
-holds:
+A runner **MUST** answer these in order:
 
 | | Check | Refusal | Stated in |
 |---|---|---|---|
 | 1 | The verb sits above the runner's declared level | `501` `not_implemented` | §3 |
-| 2 | The media type is not `application/json` | `400` `bad_request` | §2.3 |
-| 3 | A `required` input is absent, or a declared `validation` fails | `400` `bad_request` | §4.2 |
-| 4 | A credential `describe` declares is absent from the environment | `424` `missing_credential` | §2.1 |
+| 2 | The entitlement is not in force | `403` `not_entitled` or `503` `unavailable` | §5.7.4 |
+| 3 | The media type is not `application/json` | `400` `bad_request` | §2.3 |
+| 4 | A `required` input is absent, or a declared `validation` fails | `400` `bad_request` | §4.2 |
+| 5 | A credential `describe` declares is absent from the environment | `424` `missing_credential` | §2.1 |
 
-The first two were already ordered and are repeated here only so the
+Steps 1 and 3 were already ordered and are repeated here only so the
 sequence can be read in one place: §3 states its rule for every verb, and
 §2.3 requires the media-type check *"before reading the body at all"*. What
-this section adds is **3 before 4**.
+this section adds is **2 before 3**, and **4 before 5**.
 
-Steps 1 to 3 read the request against the runner's own published contract,
-so every conforming runner answers them identically. Step 4 depends on how
-one machine happens to be deployed. Ordering the deployment-dependent answer
-last buys two things a client and an implementer both need.
+Between steps 3 and 5 the rule is that **a runner decides what the request
+says before it inspects what it holds.** That sentence governs those steps
+and not step 2, which is neither: an entitlement is not a property of the
+request, and it is not the runner's own deployment either — it is whether
+this runner may serve this caller at all.
+
+**Step 2 comes before the request checks because a refusal it produces
+applies to every request, whatever the request says.** §5.7.4 draws the line
+this rests on: a runner that has been told no *"does not pretend the answer
+might change on the next request."* A `400` is exactly that pretence — it
+names something the caller can fix and so invites a retry, and on a revoked
+runner no retry can succeed. Answering the entitlement first tells the
+caller the one thing that is true of every request it might send.
+
+That is the reason, and it is worth separating from one that does not hold.
+Gating entitlement first discloses *less* about the agent's inputs, but not
+usefully: §4.1 requires `describe` to be answerable "without credentials and
+without an entitlement", so any caller already has the input schema. The
+ordering is not a disclosure control and should not be defended as one.
+
+Steps 1 and 3 to 4 read the request against the runner's own published
+contract, so every conforming runner answers them identically. Step 5
+depends on how one machine happens to be deployed. Ordering the
+deployment-dependent answer last buys two things a client and an implementer
+both need.
 
 **A malformed request gets the same answer everywhere.** A client that sends
 one learns what is wrong with it, rather than learning something about the
@@ -1258,7 +1282,7 @@ operator finishes a task unrelated to it.
 
 The disclosure difference is real but small, and worth stating at its true
 size rather than as a threat: `describe` already publishes *which*
-credentials an agent needs, so step 4 discloses only whether they are
+credentials an agent needs, so step 5 discloses only whether they are
 currently set. A browser client cannot read that answer cross-origin anyway
 (§2.3), and a local process that can reach the runner can usually read the
 environment directly. Ordering the request checks first means a caller sends
@@ -1266,14 +1290,18 @@ a well-formed, complete request before it learns even that much, which is a
 reasonable default rather than a mitigation.
 
 `missing_credential` has no other producer. It is the one code in §2.1's
-table that no other section of this specification requires, and step 4 is
+table that no other section of this specification requires, and step 5 is
 the rule that emits it; before this section it was a code the protocol
 defined and never asked anyone to send.
 
 §4.5's capacity refusal is deliberately **not** placed in this sequence. A
 runner that cannot start another run has nothing to gain by validating one
 first, and **MAY** answer `503` with `unavailable` at any point before the
-agent starts.
+agent starts. It shares a status and a code with step 2's unreachable case
+and is a different refusal: that one says this runner cannot establish it
+may serve you, this one says it cannot serve anyone right now. Neither is
+distinguishable from the other by status alone, which is what `status`
+(§4.4) is for.
 
 ---
 
@@ -1723,6 +1751,11 @@ one an implementer will apply to a case this table does not list:
 **unreachable answers `unavailable`, refused answers `not_entitled`.** A
 runner that cannot find out says so and invites a retry; a runner that has
 been told no does not pretend the answer might change on the next request.
+
+*Where* in a request these refusals fall is §4.6, step 2: ahead of the media
+type, the inputs and the environment, and behind only the level check. That
+placement follows from the sentence above — a `400` invites the retry the
+second half of it forbids.
 
 ---
 
@@ -2219,6 +2252,15 @@ and informative for everyone else. Postern is usable with no reference to it.*
   version answer is neither, and a runner that never asks conforms fully — so
   how `latest` is obtained is the distributor's to publish, and §8 records
   Sigrix's, unauthenticated because it names no buyer (§4.4, §8).
+- §4.6 places the entitlement refusals, which it previously left out of its
+  sequence entirely. They are step 2 — behind the level check, ahead of the
+  media type, the inputs and the environment — so a runner that has been told
+  no answers that rather than a `400` naming something the caller could fix,
+  which §5.7.4 already forbids it to imply. The general sentence is narrowed
+  to the steps it was always about: *what the request says before what the
+  runner holds* governs steps 3 to 5, and an entitlement is neither. Both
+  orders conformed before, so a conformance checker could assert neither
+  (§4.6, §5.7.4).
 - `version.schema.json` fixes the shape of a version answer — `postern`, the
   `agent_id` echoed octet-for-octet, and a `version` string compared for
   equality only, with no ordering implied. It is the source of §4.4's
