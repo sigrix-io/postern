@@ -124,9 +124,10 @@ passed just as happily against a runner that did none of it.
 $ python tools/conformance/selftest.py
 postern-conformance self-test
 
-  5 conformant baselines, none failing
-  9 error codes, table agrees with the schema
-  22 planted faults, each caught by its own check
+  19 conformant baselines, none failing
+  11 error codes, table agrees with the schema
+  6 schemas, the build hook bundles each one
+  34 planted faults, each caught by its own check
 
 Every check can fail.
 ```
@@ -170,7 +171,7 @@ always there and is only now being checked.
 
 ### 0.1.0
 
-First release. 10 conformant baselines, 24 planted faults.
+First release. 5 conformant baselines, 22 planted faults.
 
 ## Status
 
