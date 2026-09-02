@@ -63,11 +63,19 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
     Fault.ERROR_SIBLING: ("2.1", "nothing sits beside `error`", {}),
     Fault.MISCODED_ERROR: ("2.1", "travels on 503", {}),
     Fault.DISTRIBUTOR_CODE: ("2.1", "emits no distributor-only code", {}),
-    Fault.NO_404: ("2", "an unimplemented path answers 404", {}),
+    # The status half of this is a warning now (§2.1 constrains what a
+    # 404 means, not which status an unimplemented path takes), so the
+    # fault is caught by the half that is a real MUST: a 200 carries no
+    # error envelope at all.
+    Fault.NO_404: ("2.1", "unknown path", {}),
     Fault.CREDENTIAL_VALUE: ("4.1.3", "credentials are declared by name only", {}),
     Fault.WRITE_TOOLS_NOT_SUBSET: ("4.1.2", "write_tools is a subset of tools", {}),
     Fault.AGENT_ID_MISMATCH: ("2.2", "describe and status name the same agent", {}),
-    Fault.STALE_NOT_REQUIRED: ("4.4", "not_required carries no check timestamp", {}),
+    Fault.STALE_NOT_REQUIRED: (
+        "4.4",
+        "not_required carries no check timestamp",
+        {"as_warning": True},
+    ),
     Fault.IDEMPOTENT_WITHOUT_HEADER: (
         "2.3",
         "preflight allows Idempotency-Key",
@@ -83,6 +91,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         {"execute": True},
     ),
     Fault.DUPLICATE_RUN_ID: ("4.2", "run_id is unique", {"execute": True}),
+    Fault.STATUS_IN_RUN_BODY: (
+        "4.2",
+        "the run response carries no status field",
+        {"execute": True, "as_warning": True},
+    ),
     Fault.VALIDATES_BEFORE_ENTITLEMENT: (
         "5.7.4",
         "run refuses a revoked entitlement",
@@ -102,13 +115,25 @@ def _report(
     level: int = 3,
     idempotent: bool = False,
     revoked: bool = False,
+    strict_origin: bool = False,
+    requires_nothing: bool = False,
+    origin: str | None = ALLOWED_ORIGIN,
 ):
-    with fake_runner(*faults, level=level, idempotent=idempotent, revoked=revoked) as origin:
-        return check(
-            Runner(origin, timeout=10.0),
-            Context(execute=execute, origin=ALLOWED_ORIGIN),
+    with fake_runner(
+        *faults,
+        level=level,
+        idempotent=idempotent,
+        revoked=revoked,
+        strict_origin=strict_origin,
+        requires_nothing=requires_nothing,
+    ) as (base, counter):
+        report = check(
+            Runner(base, timeout=10.0),
+            Context(execute=execute, origin=origin),
             "self-test",
         )
+        report.runs = counter.runs  # type: ignore[attr-defined]
+        return report
 
 
 def _baseline_is_clean(problems: list[str]) -> int:
@@ -158,6 +183,45 @@ def _baseline_is_clean(problems: list[str]) -> int:
                 "entitlement revoked: "
                 + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
             )
+
+    # A runner that refuses a stranger's preflight with 403 rather than 204.
+    # §2.3 asks for the 204 as a SHOULD, so this is a permitted deviation and
+    # a warning at most. Run without --origin, which is the case that broke:
+    # the checker made up an origin the runner was entitled to refuse and
+    # then failed it for refusing.
+    report = _report(strict_origin=True, origin=None)
+    checked += 1
+    if report.failures:
+        problems.append(
+            "a runner refusing a stranger's preflight with 403 failed, and "
+            "§2.3 only SHOULDs the 204: "
+            + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+        )
+    if not [c for c in report.checks if c.outcome is Outcome.WARN and "OPTIONS" in c.title]:
+        problems.append(
+            "a runner refusing a stranger's preflight with 403 drew no warning "
+            "at all — the SHOULD is still worth reporting, just not as a "
+            "failure."
+        )
+
+    # The README's claim, asserted rather than described: "it does not run
+    # your agent unless you ask." The case that broke it is an agent
+    # declaring no required input, against a runner that ignores its own
+    # level -- then the level probe's `{"inputs": {}}` was a *valid*
+    # request, so the runner ran it. A malformed body cannot be executed by
+    # anyone, and §4.6 step 1 puts the level check ahead of reading it, so a
+    # conformant runner still answers 501.
+    for fault, level in ((Fault.RUNS_ABOVE_LEVEL, 1), (Fault.STREAM_DEGRADES, 2)):
+        report = _report(fault, level=level, requires_nothing=True)
+        checked += 1
+        if report.runs:  # type: ignore[attr-defined]
+            problems.append(
+                f"the checker ran the agent {report.runs} time(s) against a "  # type: ignore[attr-defined]
+                f"runner that ignores its level ({fault.name}) and declares no "
+                "required input — without --execute, and the README promises "
+                "it does not."
+            )
+
     return checked
 
 
@@ -171,19 +235,31 @@ def _every_fault_is_caught(problems: list[str]) -> int:
             "actually cover."
         )
 
-    for fault, (section, fragment, options) in EXPECTED.items():
+    for fault, expectation in EXPECTED.items():
+        section, fragment, options = expectation[0], expectation[1], dict(expectation[2])
+        # A fault may be caught as a warning rather than a failure, where
+        # the rule it breaks is one the specification states without a
+        # MUST. That is still the check looking — which is all this file
+        # asserts — so the expectation names the outcome instead of
+        # assuming a failure. Anything not named is a failure, so an
+        # existing entry keeps meaning what it meant.
+        as_warning = options.pop("as_warning", False)
         report = _report(fault, **options)
+        seen = (
+            [c for c in report.checks if c.outcome is Outcome.WARN]
+            if as_warning
+            else report.failures
+        )
         matching = [
-            c
-            for c in report.failures
-            if c.section == section and fragment.lower() in c.title.lower()
+            c for c in seen if c.section == section and fragment.lower() in c.title.lower()
         ]
         if not matching:
-            other = "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+            kind = "warnings" if as_warning else "failures"
+            other = "; ".join(f"§{c.section} {c.title}" for c in seen)
             problems.append(
                 f"{fault.name} was not caught by §{section} …{fragment}…\n"
                 f"    the runner {fault.value}\n"
-                f"    failures reported: {other or 'none at all'}"
+                f"    {kind} reported: {other or 'none at all'}"
             )
     return len(EXPECTED)
 

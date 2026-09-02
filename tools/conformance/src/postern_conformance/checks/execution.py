@@ -374,11 +374,19 @@ def _no_status_field(payload: dict[str, Any]) -> list[Check]:
     """
     if "status" in payload:
         return [
-            failed(
+            warned(
                 RUN,
                 "the run response carries no status field",
                 f"the body carries `status`: {payload['status']!r}. A `run` "
-                "body exists only where the run succeeded.",
+                "body exists only where the run succeeded, so the field can "
+                "only repeat the status line.\n"
+                "Reported as a warning rather than a failure because the "
+                "specification does not forbid it in those terms: §4.2 says "
+                "*\"the response body carries no `status` field\"* as a "
+                "description, with no MUST NOT, and `run-response.schema.json` "
+                "is `additionalProperties: true`, so this payload is "
+                "schema-valid. A tool cannot fail a runner for a rule two of "
+                "the three places that state it do not state.",
             )
         ]
     return [passed(RUN, "the run response carries no status field")]
