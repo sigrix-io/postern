@@ -84,25 +84,24 @@ def error_envelope_checks(
     *,
     context: str,
     expected_code: str | None = None,
-    expected_status: int | None = None,
 ) -> Iterable[Check]:
     """Check one non-2xx answer against SPEC.md section 2.1.
 
     `context` names the request that produced it, because these run against
     every refusal the checker provokes and a bare "error envelope" line
     repeated eight times tells a reader nothing about which one broke.
+
+    There is deliberately no `expected_status`. The status a refusal travels
+    on is not a caller's to state: section 2.1 pairs each code with one, and
+    `ERROR_CODE_STATUS` below reads the pairing off the answer's own code. A
+    caller passing both would be restating what the specification already
+    binds, and could contradict it. Where a check genuinely turns on the
+    status — the two entitlement states of section 5.7.4, which differ in
+    status and in code together — the caller branches on it before calling
+    here, because it has different things to say about each.
     """
     checks: list[Check] = []
     body = response.json
-
-    if expected_status is not None and response.status != expected_status:
-        checks.append(
-            failed(
-                "2.1",
-                f"{context}: answers {expected_status}",
-                f"answered {response.status}.",
-            )
-        )
 
     if body is None:
         checks.append(
