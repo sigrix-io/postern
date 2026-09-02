@@ -148,6 +148,30 @@ This is a test suite rather than a client library, and it deliberately
 leaves the name a Python client would want free for whoever writes one
 under their own.
 
+## Changes
+
+### 0.1.1
+
+**A runner that reported clean under 0.1.0 may report findings here.** That
+is the intent rather than a regression: the specification was clarified in
+four places and the suite followed. Read a new finding as a rule that was
+always there and is only now being checked.
+
+- **§4.6 is checked at all.** A `run` missing a required input, sent to a
+  runner whose environment is incomplete, earns both `bad_request` and
+  `missing_credential`, and the specification did not order them — so this
+  suite *skipped* §4.2's rule whenever a runner answered `424`, which is the
+  ordinary state of one being brought up. §4.6 now orders them, and the
+  `424` is a finding.
+- **A reused `Idempotency-Key` carrying different inputs must be refused**,
+  not replayed.
+- **`run_id` is per execution**, quoting §4.2's own wording.
+- **`capabilities.streaming` is withdrawn** and no longer checked.
+
+### 0.1.0
+
+First release. 10 conformant baselines, 24 planted faults.
+
 ## Status
 
 The specification is a draft and nothing in it is stable yet, so neither is

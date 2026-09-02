@@ -19,7 +19,7 @@ __all__ = ["POSTERN_VERSION", "__version__"]
 # `pyproject.toml` reads it from here via hatchling's version source, so
 # the number the CLI reports and the number people install by cannot
 # disagree.
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # The version of the specification it checks against. Deliberately separate:
 # the checker will be released more often than the protocol, and a reader
