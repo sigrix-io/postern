@@ -11,6 +11,7 @@ that runs an agent twice by accident has spent someone's money.
 from __future__ import annotations
 
 import dataclasses
+import re
 from typing import Any
 
 
@@ -191,6 +192,37 @@ class Context:
             inputs[key] = value
         return {"inputs": inputs}
 
+    def a_body_that_fails_validation(self) -> tuple[dict[str, Any], str] | None:
+        """A `run` body §4.2 obliges the runner to refuse, and why.
+
+        Every other input is filled the way `a_valid_body` fills it, so the
+        request differs from an acceptable one in exactly the constraint
+        being tested — a refusal cannot then be read as the runner disliking
+        something else about it, which is the same care `a_different_valid_body`
+        takes for the idempotency probe.
+
+        Returns `None` where no declared `validation` can be violated
+        derivably. That is not a gap to paper over: §4.2 binds a runner to
+        the validation it *declares*, so an agent declaring none is owed no
+        refusal and there is nothing here to ask about.
+        """
+        base = self.a_valid_body()
+        if base is None:
+            return None
+
+        for declaration in self.inputs:
+            key = declaration.get("key")
+            if not isinstance(key, str):
+                continue
+            broken = _violate(declaration)
+            if broken is None:
+                continue
+            value, why = broken
+            inputs = dict(base["inputs"])
+            inputs[key] = value
+            return {"inputs": inputs}, f"`{key}` carrying {why}"
+        return None
+
     def a_different_valid_body(self) -> dict[str, Any] | None:
         """A second valid `run` body, differing from `a_valid_body()`, or None.
 
@@ -224,6 +256,56 @@ class Context:
                 inputs[key] = varied
                 return {"inputs": inputs}
         return None
+
+
+def _violate(declaration: dict[str, Any]) -> tuple[Any, str] | None:
+    """A value one declared `validation` must reject, and what it breaks.
+
+    The inverse of `_fill`, and it has to be derived the same way rather
+    than guessed: a value that merely looks wrong is a value the runner may
+    legitimately accept, and reading its `200` as a defect would be the
+    checker asserting a rule the runner never declared.
+
+    Returns `None` where the declaration constrains nothing this can break.
+    A `pattern` is the one that cannot be inverted in general, so the
+    candidate is tested against the pattern before it is offered — an
+    unanchored or permissive expression matches it and yields `None`.
+    """
+    validation = declaration.get("validation")
+    validation = validation if isinstance(validation, dict) else {}
+    kind = declaration.get("type")
+
+    if kind == "select":
+        options = validation.get("options")
+        if isinstance(options, list) and options:
+            outside = "postern-conformance-not-an-option"
+            if outside not in options:
+                return outside, f"a value outside its {len(options)} declared options"
+        return None
+
+    if kind == "number":
+        high, low = validation.get("max"), validation.get("min")
+        if isinstance(high, (int, float)) and not isinstance(high, bool):
+            return high + 1, f"a number above its declared max of {high}"
+        if isinstance(low, (int, float)) and not isinstance(low, bool):
+            return low - 1, f"a number below its declared min of {low}"
+        return None
+
+    max_length = validation.get("max_length")
+    if isinstance(max_length, int) and max_length >= 0:
+        return "x" * (max_length + 1), f"a string longer than its declared max_length of {max_length}"
+
+    pattern = validation.get("pattern")
+    if isinstance(pattern, str):
+        candidate = "postern-conformance-violates-the-pattern"
+        try:
+            if re.search(pattern, candidate) is None:
+                return candidate, "a string its declared pattern does not match"
+        except re.error:
+            # An expression this checker cannot compile is one it cannot
+            # claim to be violating. The runner's own engine may differ.
+            return None
+    return None
 
 
 def _fill(declaration: dict[str, Any]) -> Any:

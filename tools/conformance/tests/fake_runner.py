@@ -23,6 +23,11 @@ from typing import Any, Iterator
 
 ALLOWED_ORIGIN = "https://app.example.com"
 
+# A one-pixel PNG, base64. Small on purpose: the point is the type.
+BYTES_OUTPUT_VALUE = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="
+)
+
 
 class Fault(enum.Enum):
     """One broken rule each, named for what it breaks."""
@@ -58,6 +63,12 @@ class Fault(enum.Enum):
         "is revoked (§4.6 step 2)"
     )
     STREAM_NOT_ROUTED = "declares Level 3 and answers stream with 404 (§3)"
+    EXAMPLE_ON_BYTES_OUTPUT = "declares an output example for a bytes output (§4.1.4)"
+    DELTAS_ON_BYTES_RUN = "streams base64 deltas on a bytes run (§4.1.4)"
+    IGNORES_DECLARED_VALIDATION = (
+        "checks that a required input is present and applies none of the "
+        "validation it declares (§4.2)"
+    )
     WILDCARD_TO_KNOWN_ORIGIN = (
         "answers a configured origin with Access-Control-Allow-Origin: * "
         "while refusing a stranger correctly (§2.3)"
@@ -330,6 +341,16 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(400, body)
             return
 
+        # §4.2's other half: a request failing a *declared* validation is
+        # refused in the same sentence as one omitting a required input.
+        # This runner declares `max_length` on `segment` and `options` on
+        # `depth`, so it owes both.
+        if Fault.IGNORES_DECLARED_VALIDATION not in self.faults:
+            invalid = _validation_failure(inputs)
+            if invalid is not None:
+                self._send(400, _error("bad_request", invalid))
+                return
+
         if verb == "run":
             self._answer_run(inputs)
         else:
@@ -419,6 +440,12 @@ class _Handler(BaseHTTPRequestHandler):
         if self.server.requires_nothing:  # type: ignore[attr-defined]
             for declared in document["inputs"]:
                 declared["required"] = False
+        if self.server.returns_bytes:  # type: ignore[attr-defined]
+            document["output"] = {"type": "bytes", "media_type": "image/png"}
+            if Fault.EXAMPLE_ON_BYTES_OUTPUT in self.faults:
+                # §4.1.4: `example` stays text-only. An inline artifact
+                # would inflate a document every catalogue listing fetches.
+                document["output"]["example"] = BYTES_OUTPUT_VALUE
         if self.server.idempotent:  # type: ignore[attr-defined]
             document["capabilities"]["idempotent_retry"] = True
         if Fault.CREDENTIAL_VALUE in self.faults:
@@ -437,7 +464,11 @@ class _Handler(BaseHTTPRequestHandler):
         body: dict[str, Any] = {
             "postern": "0.1",
             "run_id": run_id,
-            "output": {"type": "text", "value": OUTPUT_VALUE},
+            "output": (
+                {"type": "bytes", "media_type": "image/png", "value": BYTES_OUTPUT_VALUE}
+                if self.server.returns_bytes  # type: ignore[attr-defined]
+                else {"type": "text", "value": OUTPUT_VALUE}
+            ),
             "usage": {"input_tokens": 4210, "output_tokens": 918, "cost_usd": 0.001182},
         }
         if Fault.STATUS_IN_RUN_BODY in self.faults:
@@ -461,10 +492,20 @@ class _Handler(BaseHTTPRequestHandler):
             )
         )
 
-        deltas = list(_DELTAS)
-        if Fault.DELTAS_DISAGREE in self.faults:
-            deltas[-1] = "is thoroughly served."
-        events.extend(("delta", {"text": chunk}) for chunk in deltas)
+        if self.server.returns_bytes:  # type: ignore[attr-defined]
+            # §4.1.4: a bytes run emits no delta at all. Progress rides on
+            # `step`, which reports it without pretending to be the output.
+            if Fault.DELTAS_ON_BYTES_RUN in self.faults:
+                half = len(BYTES_OUTPUT_VALUE) // 2
+                events.extend(
+                    ("delta", {"text": chunk})
+                    for chunk in (BYTES_OUTPUT_VALUE[:half], BYTES_OUTPUT_VALUE[half:])
+                )
+        else:
+            deltas = list(_DELTAS)
+            if Fault.DELTAS_DISAGREE in self.faults:
+                deltas[-1] = "is thoroughly served."
+            events.extend(("delta", {"text": chunk}) for chunk in deltas)
         events.append(("done", self._run_response()))
         if Fault.TWO_TERMINALS in self.faults:
             events.append(("error", _error("agent_error", "and an error too.")))
@@ -499,6 +540,30 @@ class RunCounter:
         return self._server.runs
 
 
+def _validation_failure(inputs: dict[str, Any]) -> str | None:
+    """The first declared constraint these inputs break, or None.
+
+    Read off `_DESCRIBE` rather than restated: a fake enforcing a rule it
+    does not publish would refuse requests the checker had every right to
+    send, and the mismatch would read as a checker bug.
+    """
+    for declared in _DESCRIBE["inputs"]:
+        key = declared["key"]
+        if key not in inputs:
+            continue
+        value = inputs[key]
+        rules = declared.get("validation") or {}
+
+        options = rules.get("options")
+        if isinstance(options, list) and value not in options:
+            return f"'{key}' must be one of {', '.join(options)}."
+
+        max_length = rules.get("max_length")
+        if isinstance(max_length, int) and isinstance(value, str) and len(value) > max_length:
+            return f"'{key}' is longer than {max_length} characters."
+    return None
+
+
 @contextlib.contextmanager
 def fake_runner(
     *faults: Fault,
@@ -508,6 +573,7 @@ def fake_runner(
     never_checked: bool = False,
     strict_origin: bool = False,
     requires_nothing: bool = False,
+    returns_bytes: bool = False,
 ) -> Iterator[tuple[str, "RunCounter"]]:
     """Serve a runner with the given faults; yields its origin and run counter.
 
@@ -525,6 +591,7 @@ def fake_runner(
     server.never_checked = never_checked  # type: ignore[attr-defined]
     server.strict_origin = strict_origin  # type: ignore[attr-defined]
     server.requires_nothing = requires_nothing  # type: ignore[attr-defined]
+    server.returns_bytes = returns_bytes  # type: ignore[attr-defined]
     server.runs = 0  # type: ignore[attr-defined]
     # Idempotency-Key -> (the inputs it was first answered for, that answer).
     server.answered_keys = {}  # type: ignore[attr-defined]
