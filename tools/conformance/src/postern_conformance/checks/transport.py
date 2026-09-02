@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from ..context import Context
 from ..probe import Runner
-from ..report import Check, failed, passed
+from ..report import Check, failed, passed, warned
 from . import error_envelope_checks
 
 SECTION = "2"
@@ -50,18 +50,37 @@ def _unknown_path(runner: Runner) -> list[Check]:
     say it.
     """
     response = runner.get("not-a-postern-verb")
+    title = "an unimplemented path answers 404"
 
     if response.status != 404:
-        return [
-            failed(
+        # Two rules meet here and only one is stated. §2.1 says what a
+        # runner's `404` *means* -- it can only mean an unimplemented path,
+        # since a runner serves one agent and carries no identifier in any
+        # path -- and that is a real constraint on the code. It does not say
+        # an unimplemented path must answer `404`: a `405`, with §2.1's
+        # envelope and a code that fits it, breaks nothing the section
+        # states. So the status is reported and the envelope is still
+        # judged, which is the half a runner can actually get wrong.
+        checks: list[Check] = [
+            warned(
                 SECTION,
-                "an unimplemented path answers 404",
+                title,
                 f"answered {response.status} for `/postern/v0/not-a-postern-verb`. "
-                "A runner's only use of 404 is a path it does not implement.",
+                "§2.1 constrains what a runner's 404 may mean, not which "
+                "status an unimplemented path takes, so this is not a "
+                "failure — but 404 is the answer every other runner gives, "
+                "and a client that special-cases it will read this one as "
+                "something else.",
             )
         ]
+        checks.extend(
+            error_envelope_checks(
+                response, context="unknown path", expected_code=None
+            )
+        )
+        return checks
 
-    checks: list[Check] = [passed(SECTION, "an unimplemented path answers 404")]
+    checks = [passed(SECTION, title)]
     checks.extend(
         error_envelope_checks(
             response, context="unknown path", expected_code="not_found"

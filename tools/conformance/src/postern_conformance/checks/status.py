@@ -111,12 +111,16 @@ def _entitlement(body: dict[str, Any]) -> list[Check]:
         present = [name for name in ("checked_at", "stale_after_seconds") if name in entitlement]
         if present:
             checks.append(
-                failed(
+                warned(
                     SECTION,
                     "not_required carries no check timestamp",
                     f"`entitlement` carries {', '.join(present)} while its state "
                     "is `not_required`. No check took place, so there is no "
-                    "read time to report and nothing to go stale.",
+                    "read time to report and nothing to go stale.\n"
+                    "A warning rather than a failure: §4.4 says *\"it is "
+                    "omitted for `not_required`\"* as a description, with no "
+                    "MUST, and `status.schema.json` accepts the payload. The "
+                    "field is meaningless here, not forbidden.",
                 )
             )
         else:

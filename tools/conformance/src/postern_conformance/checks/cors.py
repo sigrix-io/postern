@@ -71,12 +71,34 @@ def _preflight_is_answered(runner: Runner, context: Context) -> list[Check]:
     """
     checks: list[Check] = []
     origin = context.origin or _STRANGER
+    # Without --origin the probe carries an origin the runner is *expected*
+    # to refuse, and §2.3 only **SHOULD**s the 204 a refusal answers with:
+    # "A runner refusing an origin SHOULD answer the preflight 204 with no
+    # Access-Control-Allow-Origin, rather than an error status." Deviating
+    # from a SHOULD is permitted, so a 403 here warns. With --origin the
+    # runner has been told the origin is allowed and the MUST applies.
+    a_stranger = context.origin is None
 
     for verb in ("run", "stream"):
         response = _preflight(runner, verb, origin)
         title = f"answers OPTIONS on {verb}"
         if 200 <= response.status < 300:
             checks.append(passed(SECTION, title))
+        elif a_stranger:
+            checks.append(
+                warned(
+                    SECTION,
+                    title,
+                    f"answered {response.status} to a preflight from an origin "
+                    "this checker made up, which the runner is entitled to "
+                    "refuse. §2.3 asks a refusing runner for a 204 with no "
+                    "Access-Control-Allow-Origin rather than an error status, "
+                    "but only as a SHOULD — a 403 invites whoever reads the "
+                    "network log to go looking for an entitlement problem that "
+                    "does not exist. Pass --origin with an origin this runner "
+                    "allows to check the MUST instead.",
+                )
+            )
         else:
             level_note = (
                 f"\nThe runner declares Level {context.level}, which does not "

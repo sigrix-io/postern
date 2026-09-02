@@ -52,6 +52,7 @@ class Fault(enum.Enum):
     CREDENTIAL_BEFORE_REQUEST = (
         "answers missing_credential to a request that is also malformed (§4.6)"
     )
+    STATUS_IN_RUN_BODY = "puts a `status` field in the run response body (§4.2)"
     VALIDATES_BEFORE_ENTITLEMENT = (
         "answers bad_request to a malformed request while its entitlement "
         "is revoked (§4.6 step 2)"
@@ -181,6 +182,15 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(405, _error("bad_request", "no preflight here."))
             return
 
+        # A posture, not a fault. §2.3 asks a runner refusing an origin for a
+        # 204 rather than an error status, but only as a SHOULD, so a 403
+        # here is a permitted deviation and the checker may warn at most.
+        if self.server.strict_origin and self.headers.get("Origin") != ALLOWED_ORIGIN:  # type: ignore[attr-defined]
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
         methods = "GET, OPTIONS" if verb in ("describe", "status") else "POST, OPTIONS"
         self.send_response(204)
         for key, value in self._cors(methods).items():
@@ -258,7 +268,8 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         inputs = payload.get("inputs") if isinstance(payload, dict) else None
-        if not isinstance(inputs, dict) or "segment" not in inputs:
+        needs_segment = not self.server.requires_nothing  # type: ignore[attr-defined]
+        if not isinstance(inputs, dict) or (needs_segment and "segment" not in inputs):
             # §4.6 orders the request check ahead of the environment check.
             # This fault reverses them: the runner reports its own missing
             # credential first, so a malformed request is answered 424.
@@ -348,6 +359,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _describe(self) -> dict[str, Any]:
         document = json.loads(json.dumps(_DESCRIBE))
+        if self.server.requires_nothing:  # type: ignore[attr-defined]
+            for declared in document["inputs"]:
+                declared["required"] = False
         if self.server.idempotent:  # type: ignore[attr-defined]
             document["capabilities"]["idempotent_retry"] = True
         if Fault.CREDENTIAL_VALUE in self.faults:
@@ -363,12 +377,18 @@ class _Handler(BaseHTTPRequestHandler):
             if Fault.DUPLICATE_RUN_ID in self.faults
             else f"01JD8XW2Q{self.server.runs}"  # type: ignore[attr-defined]
         )
-        return {
+        body: dict[str, Any] = {
             "postern": "0.1",
             "run_id": run_id,
             "output": {"type": "text", "value": OUTPUT_VALUE},
             "usage": {"input_tokens": 4210, "output_tokens": 918, "cost_usd": 0.001182},
         }
+        if Fault.STATUS_IN_RUN_BODY in self.faults:
+            # Schema-valid -- run-response.schema.json is open at its root --
+            # and §4.2 describes its absence without a MUST NOT, so the
+            # checker warns rather than failing.
+            body["status"] = "ok"
+        return body
 
     def _stream(self) -> None:
         events: list[tuple[str, Any]] = []
@@ -406,11 +426,32 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(b"0\r\n\r\n")
 
 
+class RunCounter:
+    """How many times the agent actually started, for the README's claim.
+
+    `postern-conformance` says it does not run your agent unless you ask.
+    That is a property of the checker, not of any rule it checks, so the
+    only way to assert it is to count.
+    """
+
+    def __init__(self, server: Any) -> None:
+        self._server = server
+
+    @property
+    def runs(self) -> int:
+        return self._server.runs
+
+
 @contextlib.contextmanager
 def fake_runner(
-    *faults: Fault, level: int = 3, idempotent: bool = False, revoked: bool = False
-) -> Iterator[str]:
-    """Serve a runner with the given faults; yields its origin.
+    *faults: Fault,
+    level: int = 3,
+    idempotent: bool = False,
+    revoked: bool = False,
+    strict_origin: bool = False,
+    requires_nothing: bool = False,
+) -> Iterator[tuple[str, "RunCounter"]]:
+    """Serve a runner with the given faults; yields its origin and run counter.
 
     `revoked` puts the runner in §5.7.4's refused state, which is a posture
     rather than a fault: a revoked runner that refuses correctly is fully
@@ -423,6 +464,8 @@ def fake_runner(
     server.level = level  # type: ignore[attr-defined]
     server.idempotent = idempotent  # type: ignore[attr-defined]
     server.revoked = revoked  # type: ignore[attr-defined]
+    server.strict_origin = strict_origin  # type: ignore[attr-defined]
+    server.requires_nothing = requires_nothing  # type: ignore[attr-defined]
     server.runs = 0  # type: ignore[attr-defined]
     # Idempotency-Key -> (the inputs it was first answered for, that answer).
     server.answered_keys = {}  # type: ignore[attr-defined]
@@ -430,7 +473,7 @@ def fake_runner(
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f"http://127.0.0.1:{server.server_address[1]}"
+        yield f"http://127.0.0.1:{server.server_address[1]}", RunCounter(server)
     finally:
         server.shutdown()
         server.server_close()

@@ -123,9 +123,17 @@ class Context:
 
         Returns None where the agent declares no required input, because
         then the same body is a valid request and sending it would run the
-        agent. There is no clever substitute: an agent that requires nothing
-        can be started by an empty map, and a checker that sent one anyway
-        would be doing the thing it exists to avoid.
+        agent. There is no clever substitute *for this rule*: §4.2 is about
+        what a runner does with an incomplete request, and against an agent
+        requiring nothing there is no incomplete request to send.
+
+        A probe for a different rule can still be safe, and `levels.py` is
+        the one that has to be: a malformed body — `inputs` typed as
+        something other than an object — cannot be executed by anyone, and
+        §4.6 step 1 puts the level check ahead of reading it, so a
+        conformant runner answers 501 without ever looking. That works
+        there because the rule under test sits above the body; it would not
+        work here, where the body *is* the test.
         """
         return {"inputs": {}} if self.required_input_keys else None
 

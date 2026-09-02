@@ -78,14 +78,26 @@ def _above_level(
 ) -> list[Check]:
     """A verb above the level MUST answer 501 `not_implemented`.
 
-    Nothing here can execute the agent: that is the point of the rule being
-    checked, and a runner that breaks it by running instead is exactly the
-    finding. The body sent is still the one the runner would have to refuse
-    anyway, so a runner that ignores its own level is caught by section
-    4.2's validation rather than by spending someone's money.
+    Nothing here can execute the agent, and the body is what guarantees it
+    rather than the rule being checked. `{"inputs": []}` is malformed —
+    `run-request.schema.json` types `inputs` as an object — so there is no
+    runner that could execute it, level-ignoring or not.
+
+    That matters because the guarantee used to rest on the body omitting a
+    `required` input, which is only unservable when the agent declares one.
+    Against an agent declaring none, `{"inputs": {}}` is a *valid* request,
+    so a runner that ignored its level would have run it — and the README's
+    "it does not run your agent unless you ask" was false in exactly that
+    case.
+
+    A conformant runner still answers 501 either way: section 4.6 puts the
+    level check at step 1, ahead of the media type, the inputs and the
+    environment, so the malformed body is never reached. A runner that
+    ignores its level now answers 400 instead of running, which is still
+    the finding this check reports.
     """
     title = f"{verb} answers 501 above Level {level}"
-    response = runner.post_json(verb, probe_body or {"inputs": {}})
+    response = runner.post_json(verb, probe_body or {"inputs": []})
 
     if response.status == 501:
         checks = [passed(SECTION, title)]
