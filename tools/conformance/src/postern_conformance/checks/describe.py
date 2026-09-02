@@ -88,6 +88,7 @@ def run(runner: Runner, context: Context) -> list[Check]:
         check_schema(SECTION, "describe matches its schema", "describe.schema.json", body)
     )
     checks.append(_side_effect_free(runner, response.body))
+    checks.extend(_bytes_output_carries_no_example(body))
     checks.extend(_write_tools(body))
     checks.extend(_credentials_are_names_only(body))
     checks.extend(_agrees_with_status(body, context))
@@ -122,6 +123,38 @@ def _side_effect_free(runner: Runner, first_body: bytes) -> Check:
         "side-effect free; a body that moves on its own is not proof of a "
         "side effect, but it is the only symptom of one visible from here.",
     )
+
+
+def _bytes_output_carries_no_example(body: dict[str, Any]) -> list[Check]:
+    """§4.1.4 — a runner MUST NOT declare an `example` for a `bytes` output.
+
+    `example` is a string, and for a `bytes` output the only string it
+    could carry is the artifact itself, base64-encoded. That would inflate
+    a document every catalogue listing fetches, to show what `media_type`
+    already names.
+
+    Free to ask: it reads the `describe` already fetched.
+    """
+    output = body.get("output")
+    if not isinstance(output, dict) or output.get("type") != "bytes":
+        return []
+
+    title = "a bytes output declares no example"
+    if "example" not in output:
+        return [passed(SECTION, title)]
+
+    example = output.get("example")
+    size = f"{len(example)} characters" if isinstance(example, str) else "a value"
+    return [
+        failed(
+            SECTION,
+            title,
+            f"`describe.output` declares `type: bytes` and carries an "
+            f"`example` of {size}. §4.1.4 forbids it: the only string an "
+            "example could hold here is the artifact itself, and every "
+            "client that lists this agent pays for it on every fetch.",
+        )
+    ]
 
 
 def _write_tools(body: dict[str, Any]) -> list[Check]:

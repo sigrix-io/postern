@@ -247,6 +247,16 @@ MUST_ACCEPT = [
         },
     ),
     (
+        "describe.schema.json",
+        "a text output carrying an example, which stays permitted",
+        {
+            "postern": "0.1",
+            "agent": {"id": "acme/chart", "name": "Chart", "version": "1.0.0"},
+            "inputs": [],
+            "output": {"type": "text", "example": "A short answer."},
+        },
+    ),
+    (
         "run-response.schema.json",
         "a media type carrying a facet and a structured suffix",
         {
@@ -307,6 +317,16 @@ MUST_REJECT = [
             "postern": "0.1",
             "run_id": "01JD8XW2Q9",
             "output": {"type": "bytes", "media_type": "Image/PNG", "value": "iVBORw0KGgo="},
+        },
+    ),
+    (
+        "describe.schema.json",
+        "a bytes output carrying an example, which §4.1.4 forbids outright",
+        {
+            "postern": "0.1",
+            "agent": {"id": "acme/chart", "name": "Chart", "version": "1.0.0"},
+            "inputs": [],
+            "output": {"type": "bytes", "media_type": "image/png", "example": "iVBORw0KGgo="},
         },
     ),
     (

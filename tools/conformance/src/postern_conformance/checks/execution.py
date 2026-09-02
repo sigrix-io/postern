@@ -113,6 +113,7 @@ def run(runner: Runner, context: Context) -> list[Check]:
         )
         return checks
 
+    checks.extend(_refuses_a_declared_validation(runner, context))
     checks.extend(_executes(runner, context, body))
     if context.level == 3:
         checks.extend(_streams(runner, context, body))
@@ -526,6 +527,84 @@ def _run_id_is_unique(
     return [passed(RUN, "run_id is unique across two runs")], bound
 
 
+def _refuses_a_declared_validation(runner: Runner, context: Context) -> list[Check]:
+    """§4.2 — a request failing a declared `validation` MUST be refused.
+
+    The rule is one sentence with two halves — *"a request omitting a
+    `required` input, or failing a declared `validation`"* — and only the
+    first was asked about. A runner that checks presence and nothing else
+    passed, which is the ordinary shape of a half-built validator.
+
+    Under `--execute` for a reason that is the finding itself: a runner
+    that ignores the constraint has no grounds to refuse this body, so it
+    runs the agent. There is no way to ask the question that is free
+    against a runner answering it wrongly — the run *is* the answer, and
+    the caller has to have agreed to pay for it.
+
+    Against a conformant runner it costs nothing: the refusal happens
+    before the agent starts.
+    """
+    title = "run refuses a declared validation"
+
+    if not context.execute:
+        return [
+            skipped(
+                RUN,
+                title,
+                "not asked to execute. A runner that ignores its own declared "
+                "validation has no grounds to refuse this request, so asking "
+                "runs the agent (§4.1.2). Pass --execute to include it.",
+            )
+        ]
+
+    built = context.a_body_that_fails_validation()
+    if built is None:
+        return [
+            skipped(
+                RUN,
+                title,
+                "no declared `validation` on any input could be violated from "
+                "`describe` alone — §4.2 binds a runner to the validation it "
+                "declares, so an agent declaring none is owed no refusal here.",
+            )
+        ]
+
+    body, why = built
+    response = runner.post_json("run", body, timeout=_timeout(context))
+
+    preempted = entitlement_preempted(response, context)
+    if preempted is not None:
+        return [skipped(RUN, title, preempted)]
+
+    if response.status == 400:
+        checks = [passed(RUN, title, f"refused {why}.")]
+        checks.extend(
+            error_envelope_checks(
+                response,
+                context="run failing a declared validation",
+                expected_code="bad_request",
+            )
+        )
+        return checks
+
+    return [
+        failed(
+            RUN,
+            title,
+            f"answered {response.status} to a request carrying {why}. §4.2 "
+            "requires a request failing a declared `validation` to be refused "
+            "`400` `bad_request`, in the same sentence that requires it for a "
+            "missing `required` input"
+            + (
+                " — and this one ran the agent, so the constraint `describe` "
+                "publishes is one the runner does not apply."
+                if response.status == 200
+                else "."
+            ),
+        )
+    ]
+
+
 def _a_repeat_is_replayed(
     runner: Runner,
     context: Context,
@@ -748,6 +827,7 @@ def _streams(runner: Runner, context: Context, body: dict[str, Any]) -> list[Che
 
     checks.extend(_terminates_once(names))
     checks.extend(_payloads(events, context))
+    checks.extend(_bytes_run_emits_no_delta(events, context))
     checks.extend(_deltas_concatenate(events))
     return checks
 
@@ -839,6 +919,44 @@ def _schema_problems(schema_filename: str, payload: Any) -> list[str]:
     from . import schema_errors
 
     return schema_errors(schema_filename, payload)
+
+
+def _bytes_run_emits_no_delta(
+    events: list[tuple[str, str]], context: Context
+) -> list[Check]:
+    """§4.1.4 — a runner producing a `bytes` output MUST NOT emit `delta` at all.
+
+    §4.3's invariant is that concatenated `delta.text` equals
+    `output.value`, and for a `bytes` output that value is base64 — so
+    fragments of it satisfy the invariant in the one way that is useless to
+    the client rendering them: the stream prints the encoding.
+
+    Which is why `_deltas_concatenate` could not catch this. It compares
+    strings, and base64 halves do concatenate to the base64 whole. The rule
+    it satisfies is the wrong rule for this output type, and the right one
+    is that there should be no `delta` here at all.
+    """
+    declared = (context.describe or {}).get("output")
+    if not isinstance(declared, dict) or declared.get("type") != "bytes":
+        return []
+
+    title = "a bytes run emits no delta"
+    deltas = [data for name, data in events if name == "delta"]
+    if not deltas:
+        return [passed("4.1.4", title)]
+
+    return [
+        failed(
+            "4.1.4",
+            title,
+            f"`describe` declares a `bytes` output and the stream carried "
+            f"{len(deltas)} `delta` events. §4.1.4 forbids them outright for "
+            "this type: they concatenate to the base64, so a client "
+            "rendering them as they arrive prints the encoding rather than "
+            "the artifact. Progress on such a run rides on `step`, which "
+            "reports it without pretending to be the output.",
+        )
+    ]
 
 
 def _deltas_concatenate(events: list[tuple[str, str]]) -> list[Check]:

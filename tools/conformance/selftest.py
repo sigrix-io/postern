@@ -102,6 +102,21 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         {"revoked": True},
     ),
     Fault.STREAM_NOT_ROUTED: ("3", "stream is implemented at Level 3", {}),
+    Fault.EXAMPLE_ON_BYTES_OUTPUT: (
+        "4.1",
+        "a bytes output declares no example",
+        {"returns_bytes": True},
+    ),
+    Fault.DELTAS_ON_BYTES_RUN: (
+        "4.1.4",
+        "a bytes run emits no delta",
+        {"execute": True, "returns_bytes": True},
+    ),
+    Fault.IGNORES_DECLARED_VALIDATION: (
+        "4.2",
+        "run refuses a declared validation",
+        {"execute": True},
+    ),
     Fault.WILDCARD_ON_GETS: ("2.3", "no wildcard", {}),
     Fault.WILDCARD_TO_KNOWN_ORIGIN: (
         "2.3",
@@ -135,6 +150,7 @@ def _report(
     never_checked: bool = False,
     strict_origin: bool = False,
     requires_nothing: bool = False,
+    returns_bytes: bool = False,
     origin: str | None = ALLOWED_ORIGIN,
 ):
     with fake_runner(
@@ -145,6 +161,7 @@ def _report(
         never_checked=never_checked,
         strict_origin=strict_origin,
         requires_nothing=requires_nothing,
+        returns_bytes=returns_bytes,
     ) as (base, counter):
         report = check(
             Runner(base, timeout=10.0),
@@ -200,6 +217,19 @@ def _baseline_is_clean(problems: list[str]) -> int:
             problems.append(
                 f"the conformant fake runner failed at Level {level} with its "
                 "entitlement revoked: "
+                + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+            )
+
+    # A runner whose output is a file. Returning `bytes` is conformant, and
+    # the two rules that only bind for it -- no `example` in `describe`, no
+    # `delta` in the stream -- were unreachable until something produced one.
+    for execute in (False, True):
+        report = _report(execute=execute, returns_bytes=True)
+        checked += 1
+        if report.failures:
+            problems.append(
+                f"the conformant fake runner failed returning bytes "
+                f"(execute={execute}): "
                 + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
             )
 

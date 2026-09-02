@@ -49,7 +49,10 @@
         "example": { "type": "string" }
       },
       "if": { "properties": { "type": { "const": "bytes" } }, "required": ["type"] },
-      "then": { "required": ["media_type"] },
+      "then": {
+        "required": ["media_type"],
+        "not": { "required": ["example"] }
+      },
       "additionalProperties": true
     },
     "capabilities": {
