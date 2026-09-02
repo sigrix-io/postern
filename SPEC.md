@@ -681,6 +681,21 @@ carries two obligations beyond `text`:
   format, which is exactly the cost the receive-side rule above exists to
   avoid paying.
 
+  Open is not unshaped. Both halves follow §4.2's `restricted-name` —
+  alphanumeric first, then any of `!#$&-^_.+` — which is what admits a
+  facet and a structured suffix (`application/vnd.api+json`) and an
+  experimental type (`x-custom/foo`) without admitting a subtype beginning
+  `!`.
+
+  **A runner emits it in lower case.** RFC 6838 names are case-insensitive,
+  so `image/png` and `IMAGE/PNG` are one type — and a client that compares
+  the field octet-for-octet, which is the obvious thing to do to a JSON
+  string, would read them as two. Fixing the case on the emit side costs a
+  runner nothing and spares every client the comparison rule. **A client
+  MUST NOT reject a response over the case of this field**: the constraint
+  is on what a runner sends, and §2.1's posture on unrecognised values
+  applies here too. Compare case-insensitively and carry on.
+
 A `run` response carrying one:
 
 ```json
@@ -2252,6 +2267,15 @@ and informative for everyone else. Postern is usable with no reference to it.*
   version answer is neither, and a runner that never asks conforms fully — so
   how `latest` is obtained is the distributor's to publish, and §8 records
   Sigrix's, unauthenticated because it names no buyer (§4.4, §8).
+- `output.media_type` is bounded by the grammar it always claimed. Both
+  schemas carried a pattern that was wrong in each direction at once: it
+  refused every experimental type, `x-custom/foo` among them, because the
+  type half admitted no `-`, while accepting a subtype beginning `!`, which
+  §4.2 of RFC 6838 forbids. Both halves are that RFC's `restricted-name`
+  now. §4.1.4 also states what the pattern used to imply by accident — a
+  runner emits the field in lower case, so two runners naming one format
+  agree octet-for-octet, and a client **MUST NOT** reject a response over
+  its case (§4.1.4).
 - §4.6 places the entitlement refusals, which it previously left out of its
   sequence entirely. They are step 2 — behind the level check, ahead of the
   media type, the inputs and the environment — so a runner that has been told

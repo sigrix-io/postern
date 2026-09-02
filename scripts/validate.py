@@ -231,6 +231,36 @@ def _without(member: str) -> dict:
     return {key: value for key, value in _ENTITLEMENT.items() if key != member}
 
 
+# Payloads a schema MUST accept. The mirror of MUST_REJECT, and needed for
+# the same reason in the other direction: a pattern can be wrong by being
+# too narrow, and nothing in a list of refusals notices when something legal
+# stops fitting. `media_type` was wrong both ways at once -- it rejected
+# every `x-` experimental type while accepting a subtype beginning `!`.
+MUST_ACCEPT = [
+    (
+        "run-response.schema.json",
+        "an experimental media type, which RFC 6838 permits",
+        {
+            "postern": "0.1",
+            "run_id": "01JD8XW2Q9",
+            "output": {"type": "bytes", "media_type": "x-custom/foo", "value": "iVBORw0KGgo="},
+        },
+    ),
+    (
+        "run-response.schema.json",
+        "a media type carrying a facet and a structured suffix",
+        {
+            "postern": "0.1",
+            "run_id": "01JD8XW2Q9",
+            "output": {
+                "type": "bytes",
+                "media_type": "application/vnd.api+json",
+                "value": "iVBORw0KGgo=",
+            },
+        },
+    ),
+]
+
 MUST_REJECT = [
     (
         "stream-event.schema.json",
@@ -258,6 +288,25 @@ MUST_REJECT = [
             "postern": "0.1",
             "run_id": "01JD8XW2Q9",
             "output": {"type": "bytes", "value": "iVBORw0KGgo="},
+        },
+    ),
+    (
+        "run-response.schema.json",
+        "a media_type whose subtype does not start alphanumeric, which "
+        "RFC 6838 section 4.2 forbids",
+        {
+            "postern": "0.1",
+            "run_id": "01JD8XW2Q9",
+            "output": {"type": "bytes", "media_type": "image/!weird", "value": "iVBORw0KGgo="},
+        },
+    ),
+    (
+        "run-response.schema.json",
+        "a media_type carrying upper case, which a runner does not emit",
+        {
+            "postern": "0.1",
+            "run_id": "01JD8XW2Q9",
+            "output": {"type": "bytes", "media_type": "Image/PNG", "value": "iVBORw0KGgo="},
         },
     ),
     (
@@ -520,6 +569,33 @@ _IDENTIFIER_POINTERS = {
     "entitlement.schema.json": ("agent_id",),
     "version.schema.json": ("agent_id",),
 }
+
+
+def _media_type_pattern() -> bool:
+    """`describe` and `run-response` both bound `output.media_type`, and the
+    two must agree.
+
+    The same reasoning as the identifier grammar below, one field over: a
+    runner declares the media type it will emit and then emits it, so a
+    `describe` that admits a value `run-response` refuses would let a runner
+    promise something it cannot deliver — and the two documents are edited
+    at different times, by whoever is fixing whichever one they hit.
+
+    Returns True when they disagree, so callers can accumulate.
+    """
+    carried = {}
+    for name in ("describe.schema.json", "run-response.schema.json"):
+        node = _load("schemas", name)["properties"]["output"]["properties"]["media_type"]
+        carried[name] = node.get("pattern")
+
+    if len(set(carried.values())) != 1:
+        print("FAIL  describe and run-response bound media_type differently")
+        for name, pattern in sorted(carried.items()):
+            print(f"        {name}: {pattern}")
+        return True
+
+    print("ok    both schemas bound media_type the same way")
+    return False
 
 
 def _identifier_pattern() -> bool:
@@ -962,6 +1038,17 @@ def main() -> int:
             failed = True
             print(f"FAIL  {schema_name} accepts {description}")
 
+    for schema_name, description, payload in MUST_ACCEPT:
+        validator = jsonschema.Draft202012Validator(
+            _load("schemas", schema_name), format_checker=FORMAT_CHECKER
+        )
+        errors = list(validator.iter_errors(payload))
+        if errors:
+            failed = True
+            print(f"FAIL  {schema_name} rejects {description}: {errors[0].message}")
+        else:
+            print(f"ok    accepts {description}")
+
     for rule, description, payload in INVARIANT_MUST_FLAG:
         if rule(payload):
             print(f"ok    flags {description}")
@@ -970,6 +1057,7 @@ def main() -> int:
             print(f"FAIL  {rule.__name__} misses {description}")
 
     print()
+    failed |= _media_type_pattern()
     failed |= _identifier_pattern()
     failed |= _version_mirrors()
 
