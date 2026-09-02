@@ -206,6 +206,7 @@ Every non-2xx response body **MUST** be:
 | Code | HTTP | Side | Meaning |
 |---|---|---|---|
 | `bad_request` | 400 | R · D | Malformed request — a bad body, an input that failed `describe`'s validation, or an agent identifier that does not match §1.5's grammar (§5.3.1). |
+| `unauthorized` | 401 | R | The runner requires inbound authentication of its own (§7) and the request did not satisfy it. Only for a runner that binds a non-loopback interface; distributors **MUST NOT** use it (§5.5). |
 | `not_found` | 404 | R · D | No such agent — **or** the caller is not entitled to it, **or** the token does not resolve (§5.5). The one code that means different things on each side; see below. |
 | `not_entitled` | 403 | R | The caller is known and is not entitled. Only for a local runner reporting its *own* state; distributors **MUST NOT** use it (§5.5). |
 | `idempotency_conflict` | 409 | R | An `Idempotency-Key` the runner has already answered, presented with different `inputs` (§4.2). |
@@ -316,7 +317,7 @@ Where the runner allows the origin, that answer carries:
 |---|---|
 | `Access-Control-Allow-Origin` | the requesting origin, echoed octet-for-octet |
 | `Access-Control-Allow-Methods` | `POST, OPTIONS` — `GET, OPTIONS` for `describe` and `status` |
-| `Access-Control-Allow-Headers` | `Content-Type`, plus `Idempotency-Key` where the runner honours it (§4.2) |
+| `Access-Control-Allow-Headers` | `Content-Type`, plus `Idempotency-Key` where the runner honours it (§4.2), plus `Authorization` where the runner requires its own inbound authentication (§7) |
 | `Vary` | `Origin` |
 
 on any 2xx status; `204` is the usual choice.
@@ -327,6 +328,16 @@ cannot send a header its preflight did not admit, so the promise would
 otherwise hold for every client kind except the one that has to ask
 permission to take it up — and the runner would look, to that client alone,
 like one ignoring a header it never received.
+
+Naming `Authorization` is the same **MUST** for the same reason, and only for
+a runner that requires inbound authentication of its own (§7). Unadmitted, it
+is the one header a browser client cannot present, so such a runner would
+refuse every request from a page `401` while answering every other client
+kind — a failure that reads as a wrong credential and is a missing preflight
+header. A runner requiring nothing **SHOULD NOT** name it: `Authorization` is
+not on the browser's safelist, so admitting it preflights a `describe` that
+would otherwise have gone without one, for a credential the runner does not
+read.
 
 `Access-Control-Allow-Origin` and `Vary: Origin` **MUST** ride the actual
 response as well, and not only the preflight. The two are refused
@@ -1467,11 +1478,20 @@ enumeration argument applies to tokens exactly as it applies to agents: a
 caller who can tell "this token is dead" from "you may not have this agent"
 can sort guesses into two piles, and two piles is all an enumeration needs.
 
-**Postern defines no `401`.** No status in this specification means
+**A distributor answers no `401`.** No status it may send means
 "authenticate and try again", because saying that is itself an answer — it
 confirms the token was once real. §7's requirement that a rotated token's
 predecessor stop resolving is discharged here: it stops resolving by
 answering `404`, on the next request, like a token that never existed.
+
+`unauthorized` (401) in §2.1's table is a runner's, and it refuses a
+different credential for a different reason. A runner binding a non-loopback
+interface requires inbound authentication of its own (§7): not a distributor
+token, not presented to a distributor, and not a scheme this specification
+defines. Nor does it have anything to enumerate — a runner serves exactly one
+agent and carries no identifier in any of its paths (§2.2), so a caller told
+that its credential was refused has learned only what the URL it already held
+would tell it. The rule above protects a catalogue; a runner has none.
 
 This costs a legitimate caller the same way the agent rule does. A runner
 holding a malformed or long-revoked token is told `404` for as long as it
@@ -1784,6 +1804,22 @@ Two distributors' namespaces coexisting in one bundle is valid.
   Runners that do so **MUST** require authentication of their own; Postern does
   not specify it, because a runner reachable from off-machine is outside the
   threat model this version addresses.
+
+  The *scheme* is unspecified; the *refusal* is not. A request that fails such
+  a runner's own authentication **MUST** be answered `401` with `unauthorized`
+  in §2.1's envelope, so that a client meets one error shape across this
+  protocol rather than a second one at its edge — and so that a client can tell
+  a credential it must fix from a path that does not exist. The credential
+  **MUST NOT** appear in `describe` or `status`: §4.1.3 keeps a *provider* key
+  out of the protocol, and a runner that answered with its own inbound token
+  would have published, to an unauthenticated reader of `status`, the value
+  that reader was missing. A runner requiring one also names `Authorization` in
+  its preflight (§2.3), for the reason given there.
+
+  None of this reaches a loopback runner. A runner that requires nothing
+  answers exactly as it did before — the bundle that ships to a buyer's own
+  machine is the same bundle — and §2.3's origin check remains the entirety of
+  its access control against a browser.
 - **A browser is a client the user did not choose.** The bullet above is
   about who can reach the port. Every page the user visits can reach it — a
   loopback runner is one `fetch` away from any origin on the web, and what
@@ -1845,6 +1881,24 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before the first tagged release.
 
+- Added `unauthorized` (401), the answer a runner gives when it requires
+  inbound authentication of its own and a request does not satisfy it (§2.1,
+  §7). §7 has always obliged a runner binding a non-loopback interface to
+  authenticate its callers while specifying no scheme for it, which left the
+  *refusal* undefined too — so such a runner had to answer either a code
+  meaning something else or one outside §2.1's table, and a client met a
+  second error shape at exactly the deployment where it had least context.
+  The scheme stays unspecified; only the refusal is fixed. §5.5's "Postern
+  defines no `401`" is narrowed to the distributor it was always about: its
+  reasoning is that a `401` confirms a token was once real and so sorts
+  guesses into piles, which needs a catalogue to enumerate, and a runner
+  serving one agent behind an identifier-free path space (§2.2) has none.
+  §2.3 gains `Authorization` in the preflight's `Access-Control-Allow-Headers`
+  for such a runner — a browser cannot send a header its preflight did not
+  admit, so without it a page is the one client kind that could never
+  authenticate — and a runner requiring nothing **SHOULD NOT** name it, since
+  the header is off the safelist and admitting it preflights a `describe`
+  that would otherwise go without one (§2.1, §2.3, §5.5, §7).
 - A runner's refusals are ordered: it decides what the request says before
   it inspects what it holds, so a `run` that both omits a `required` input
   and meets a runner missing a credential is answered `bad_request` rather

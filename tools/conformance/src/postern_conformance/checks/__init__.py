@@ -27,6 +27,7 @@ FORMAT_CHECKER = jsonschema.FormatChecker()
 # emit it — `R` for a runner, `D` for a distributor.
 ERROR_CODE_STATUS = {
     "bad_request": 400,
+    "unauthorized": 401,
     "not_found": 404,
     "not_entitled": 403,
     "idempotency_conflict": 409,
