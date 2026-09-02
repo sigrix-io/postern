@@ -29,9 +29,10 @@ import pathlib
 from typing import Any
 
 # Every schema the checker validates against, by the filename `schemas/`
-# uses. `entitlement.schema.json` is deliberately absent: it is the
-# distributor's answer to a runner (SPEC.md section 5.3), and a runner never
-# emits one — a checker pointed at a runner has nothing to validate with it.
+# uses. `entitlement.schema.json` and `version.schema.json` are deliberately
+# absent: both are a distributor's answer to a runner (SPEC.md sections 5.3
+# and 8), and a runner never emits either — a checker pointed at a runner has
+# nothing to validate with them.
 SCHEMA_FILENAMES = (
     "describe.schema.json",
     "error.schema.json",
