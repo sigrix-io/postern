@@ -441,6 +441,61 @@ def _the_build_hook_bundles_every_schema(problems: list[str]) -> int:
     return len(read)
 
 
+def _every_declared_format_is_asserted(problems: list[str]) -> int:
+    """Every `format` the loaded schemas declare must be one the checker asserts.
+
+    `format` is an annotation in JSON Schema unless the validator has a
+    library for the specific format, and jsonschema asserts only the ones it
+    can. So a schema declaring `date-time` against a checker with no
+    date-time library accepts every string ever written, and looks exactly
+    like a schema that works: the specification says RFC 3339, the file says
+    `date-time`, the run says ok, and nothing has looked at the value.
+
+    `scripts/validate.py` already makes this check, and it is not the same
+    check. That one runs against `scripts/requirements.txt`, installed by the
+    `validate` workflow. This package pins its own format libraries in
+    `pyproject.toml`, and the `conformance` workflow installs *those*
+    (`pip install ./tools/conformance`) before running this file — so the
+    wheel's list is the one nothing was comparing. Dropping
+    `rfc3986-validator` from it leaves `uri` silently unasserted while every
+    check here still passes, because a validator that asserts less passes
+    everything it passed before.
+
+    It reads the schemas the checker really loads, through the same
+    `schemas.load`, so it speaks for whichever copy resolved — a checkout's
+    or the one bundled in the wheel.
+    """
+    from postern_conformance import schemas
+    from postern_conformance.checks import FORMAT_CHECKER
+
+    declared: set[str] = set()
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "format" and isinstance(value, str):
+                    declared.add(value)
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    for filename in schemas.SCHEMA_FILENAMES:
+        walk(schemas.load(filename))
+
+    unasserted = sorted(declared - set(FORMAT_CHECKER.checkers))
+    if unasserted:
+        problems.append(
+            "the schemas declare formats this package does not assert: "
+            + ", ".join(unasserted)
+            + "\n    a format with no library behind it accepts anything, and "
+            "nothing else here can tell\n    check the format libraries "
+            "pinned in pyproject.toml"
+        )
+
+    return len(declared)
+
+
 def _the_readme_quotes_this_run(tallies: list[str], problems: list[str]) -> None:
     """README.md's transcript of this command must be what it prints.
 
@@ -501,6 +556,9 @@ def main() -> int:
 
     bundled = _the_build_hook_bundles_every_schema(problems)
     say(f"  {bundled} schemas, the build hook bundles each one")
+
+    formats = _every_declared_format_is_asserted(problems)
+    say(f"  {formats} declared formats, every one asserted")
 
     faults = _every_fault_is_caught(problems)
     say(f"  {faults} planted faults, each caught by its own check")

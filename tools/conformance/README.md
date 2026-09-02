@@ -127,6 +127,7 @@ postern-conformance self-test
   19 conformant baselines, none failing
   11 error codes, table agrees with the schema
   6 schemas, the build hook bundles each one
+  2 declared formats, every one asserted
   34 planted faults, each caught by its own check
 
 Every check can fail.
