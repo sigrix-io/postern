@@ -22,6 +22,7 @@ from ..context import Context
 from ..probe import Response, Runner
 from ..report import Check, failed, passed, skipped, warned
 from . import error_code
+from .execution import entitlement_preempted
 
 SECTION = "2.3"
 
@@ -360,6 +361,10 @@ def _media_type_guard(runner: Runner, context: Context) -> list[Check]:
             continue
 
         response = _post_as_text(runner, verb, refusable)
+        preempted = entitlement_preempted(response, context)
+        if preempted is not None:
+            checks.append(skipped(SECTION, title, preempted))
+            continue
         if response.status == 400 and error_code(response) == "bad_request":
             checks.append(
                 passed(

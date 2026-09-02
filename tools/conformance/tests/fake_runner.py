@@ -52,6 +52,10 @@ class Fault(enum.Enum):
     CREDENTIAL_BEFORE_REQUEST = (
         "answers missing_credential to a request that is also malformed (§4.6)"
     )
+    VALIDATES_BEFORE_ENTITLEMENT = (
+        "answers bad_request to a malformed request while its entitlement "
+        "is revoked (§4.6 step 2)"
+    )
     REPLAYS_A_MISMATCHED_KEY = (
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
@@ -214,6 +218,22 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(501, _error("not_implemented", "Not wired up."))
             return
 
+        # §4.6 step 2, and the position is the whole point: above the body
+        # read, so nothing about the request can be reached first. A revoked
+        # runner answers this to every request, which is what makes a `400`
+        # here wrong -- it would name something the caller could fix.
+        #
+        # The fault skips the gate rather than moving it. Moving it below the
+        # validation would also break §4.6, but by then the runner has read a
+        # body it was never entitled to read, so the two defects would arrive
+        # together and the check could not say which it caught.
+        if (
+            self.server.revoked  # type: ignore[attr-defined]
+            and Fault.VALIDATES_BEFORE_ENTITLEMENT not in self.faults
+        ):
+            self._send(403, _error("not_entitled", "This entitlement is revoked."))
+            return
+
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length) if length else b""
 
@@ -303,6 +323,13 @@ class _Handler(BaseHTTPRequestHandler):
         if Fault.STALE_NOT_REQUIRED in self.faults:
             entitlement["checked_at"] = "2026-08-15T09:14:02Z"
             entitlement["stale_after_seconds"] = 60
+        if self.server.revoked:  # type: ignore[attr-defined]
+            # §5.7.4: a runner told `404` supplies both fields itself.
+            entitlement = {
+                "state": "revoked",
+                "checked_at": "2026-09-02T09:00:00Z",
+                "stale_after_seconds": 60,
+            }
 
         agent_id = (
             "acme/a-different-crew"
@@ -381,13 +408,21 @@ class _Handler(BaseHTTPRequestHandler):
 
 @contextlib.contextmanager
 def fake_runner(
-    *faults: Fault, level: int = 3, idempotent: bool = False
+    *faults: Fault, level: int = 3, idempotent: bool = False, revoked: bool = False
 ) -> Iterator[str]:
-    """Serve a runner with the given faults; yields its origin."""
+    """Serve a runner with the given faults; yields its origin.
+
+    `revoked` puts the runner in §5.7.4's refused state, which is a posture
+    rather than a fault: a revoked runner that refuses correctly is fully
+    conformant, and the baseline asserts exactly that. It is here because
+    the checker's whole §5.7.4 branch was unreachable without it — the
+    reason the ordering defect in #108 shipped.
+    """
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     server.faults = set(faults)  # type: ignore[attr-defined]
     server.level = level  # type: ignore[attr-defined]
     server.idempotent = idempotent  # type: ignore[attr-defined]
+    server.revoked = revoked  # type: ignore[attr-defined]
     server.runs = 0  # type: ignore[attr-defined]
     # Idempotency-Key -> (the inputs it was first answered for, that answer).
     server.answered_keys = {}  # type: ignore[attr-defined]

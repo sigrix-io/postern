@@ -1,7 +1,7 @@
 # Postern in pictures
 
 Seven diagrams of [SPEC.md](../SPEC.md), for a reader deciding whether Postern is
-for them before committing to 2,236 lines of prose.
+for them before committing to 2,278 lines of prose.
 
 > [!NOTE]
 > **Non-normative.** Nothing on this page adds to the protocol, constrains an
@@ -265,7 +265,7 @@ out.
 
 | | |
 |---|---|
-| The specification | [SPEC.md](../SPEC.md) — 2,236 lines, and the only thing that governs |
+| The specification | [SPEC.md](../SPEC.md) — 2,278 lines, and the only thing that governs |
 | Machine-readable payloads | [`schemas/`](../schemas), with worked instances in [`examples/`](../examples) |
 | What may change before 1.0 | [VERSIONING.md](../VERSIONING.md) |
 | A longer illustrated walk-through | [`flow.html`](flow.html) — open it in a browser; it adds the staleness-window and `404`-indistinguishability figures this page leaves out |
