@@ -144,31 +144,57 @@ def _no_wildcard_default(runner: Runner) -> list[Check]:
     runner defines no authentication and the origin check is the entirety
     of its access control against a browser.
     """
-    response = _preflight(runner, "run", _STRANGER)
-    allowed = response.header_values("access-control-allow-origin")
-    title = "no wildcard Access-Control-Allow-Origin by default"
+    # Every verb, not just `run`'s preflight, and the GETs as themselves
+    # rather than as a preflight: `describe` and `status` answer a plain
+    # `GET`, so a wildcard on those is reachable by any page without a
+    # preflight ever being sent. Asking only `run` missed exactly that --
+    # a runner wildcarding every GET, so any page could read what the
+    # agent is and what it holds, swept clean.
+    probes: list[tuple[str, Response]] = [
+        (f"the {verb} preflight", _preflight(runner, verb, _STRANGER))
+        for verb in ("run", "stream")
+    ]
+    probes += [
+        (f"GET {verb}", runner.get(verb, headers={"Origin": _STRANGER}))
+        for verb in ("describe", "status")
+    ]
 
-    if "*" in allowed:
+    title = "no wildcard Access-Control-Allow-Origin by default"
+    wildcarded = [
+        where for where, response in probes
+        if "*" in response.header_values("access-control-allow-origin")
+    ]
+
+    if wildcarded:
         return [
             failed(
                 SECTION,
                 title,
-                f"the preflight for an origin the runner cannot have been "
-                f"configured to allow ({_STRANGER}) answered "
-                "`Access-Control-Allow-Origin: *`. Every page the user visits "
-                "can then run this agent.",
+                f"{', '.join(wildcarded)} answered "
+                "`Access-Control-Allow-Origin: *` for an origin the runner "
+                f"cannot have been configured to allow ({_STRANGER}). A runner "
+                "defines no authentication, so the origin check is the "
+                "entirety of its access control against a browser (§2.3) — "
+                "every page the user visits can then read this, and run this "
+                "agent where the wildcard is on `run`.",
             )
         ]
 
-    if _STRANGER in allowed:
+    # The same four probes answer the echo question, which is the wildcard
+    # written the long way and so belongs on the same surfaces.
+    echoed = [
+        where for where, response in probes
+        if _STRANGER in response.header_values("access-control-allow-origin")
+    ]
+    if echoed:
         return [
             failed(
                 SECTION,
                 title,
-                f"the runner echoed {_STRANGER} back as an allowed origin. "
-                "A runner MUST NOT allow an origin it was not configured to "
-                "allow; echoing whatever arrives is a wildcard written the "
-                "long way.",
+                f"{', '.join(echoed)} echoed {_STRANGER} back as an allowed "
+                "origin. A runner MUST NOT allow an origin it was not "
+                "configured to allow; echoing whatever arrives is a wildcard "
+                "written the long way.",
             )
         ]
 
@@ -213,6 +239,25 @@ def _allowed_origin(runner: Runner, context: Context) -> list[Check]:
     checks: list[Check] = []
     preflight = _preflight(runner, "run", origin)
     allowed = preflight.header_values("access-control-allow-origin")
+
+    # A wildcard is not a refusal, and reading it as one silenced every
+    # rule below. `*` does not contain `origin`, so this skip swallowed a
+    # runner that answers a configured origin with `*` -- the whole
+    # allowed-origin block reported "could not be checked" for a runner
+    # whose answer was the finding.
+    if "*" in allowed:
+        return [
+            failed(
+                SECTION,
+                "preflight echoes the origin octet-for-octet",
+                f"the preflight for {origin} answered "
+                "`Access-Control-Allow-Origin: *` rather than the origin "
+                "echoed back. §2.3 requires the requesting origin "
+                "octet-for-octet; a wildcard reaches every page instead of "
+                "the one configured, and reads from outside exactly like a "
+                "runner that refused this origin.",
+            )
+        ]
 
     if origin not in allowed:
         return [
@@ -305,7 +350,25 @@ def _allowed_origin(runner: Runner, context: Context) -> list[Check]:
     actual = runner.get("status", headers={"Origin": origin})
     actual_allowed = actual.header_values("access-control-allow-origin")
     title = "the actual response carries the origin header"
-    if origin in actual_allowed or "*" in actual_allowed:
+    if "*" in actual_allowed:
+        # A wildcard does carry the origin, in the sense that the browser
+        # will let the page read the body -- which is why this passed. It is
+        # the wrong question: `_no_wildcard_default` above establishes that a
+        # runner must not ship one, and accepting it here let a runner
+        # satisfy the echo rule with the very header that rule exists to
+        # rule out.
+        checks.append(
+            failed(
+                SECTION,
+                title,
+                f"`GET status` with `Origin: {origin}` answered "
+                "`Access-Control-Allow-Origin: *` rather than the origin "
+                "echoed back. §2.3 requires the requesting origin "
+                "octet-for-octet; a wildcard reaches every page instead of "
+                "the one configured.",
+            )
+        )
+    elif origin in actual_allowed:
         checks.append(passed(SECTION, title))
     else:
         checks.append(

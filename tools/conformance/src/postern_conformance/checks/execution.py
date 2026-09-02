@@ -22,6 +22,7 @@ have bound one.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Any
 
@@ -43,6 +44,23 @@ DEFAULT_RUN_TIMEOUT_SECONDS = 300.0
 # other presents it again to see whether the runner remembers what it was
 # answered for.
 SECOND_ATTEMPT_KEY = "postern-conformance-second-attempt"
+
+
+@dataclasses.dataclass(frozen=True)
+class BoundAttempt:
+    """What the second execution bound, for the two checks that reuse it.
+
+    `key` is the `Idempotency-Key` that execution was answered under, and
+    `run_id` the identifier it answered with. They are separate because the
+    checks need different halves: the conflict check presents the key with
+    other inputs and never looks at the identifier, while the replay check
+    compares the identifier and would be meaningless without it. A runner
+    that answered `200` with no string `run_id` binds a usable key and no
+    comparable identifier, which is why `run_id` is optional.
+    """
+
+    key: str
+    run_id: str | None
 
 
 def run(runner: Runner, context: Context) -> list[Check]:
@@ -285,42 +303,66 @@ def _entitlement_refusals(runner: Runner, context: Context) -> list[Check]:
     one to hold it to: unreachable answers `unavailable`, refused answers
     `not_entitled`.
     """
-    state = context.entitlement_state
-    if state != "revoked":
+    if not context.refuses_runs:
         return []
+
+    # §5.7.3 and §5.7.4 refuse for different reasons and owe different
+    # answers, and the rule underneath both is the one that tells them
+    # apart: a runner that has been told no answers `not_entitled` and does
+    # not invite a retry; a runner that could not find out answers
+    # `unavailable` and does. The never-checked case used to be skipped
+    # entirely, so a runner answering 200 there -- running an agent it has
+    # no entitlement for -- swept clean.
+    never_checked = context.never_checked
+    section = "5.7.3" if never_checked else "5.7.4"
+    expected_status, expected_code = (503, "unavailable") if never_checked else (403, "not_entitled")
+    condition = (
+        "an entitlement it has never been able to check"
+        if never_checked
+        else "a revoked entitlement"
+    )
 
     checks: list[Check] = []
     for verb in ("run", "stream"):
         if context.level is not None and context.level < (2 if verb == "run" else 3):
             continue
         response = _post(runner, verb, {"inputs": {}}, context)
-        title = f"{verb} refuses a revoked entitlement"
-        if response.status == 403:
-            checks.append(passed("5.7.4", title))
+        title = f"{verb} refuses {condition}"
+        if response.status == expected_status:
+            checks.append(passed(section, title))
             checks.extend(
                 error_envelope_checks(
                     response,
-                    context=f"{verb} with a revoked entitlement",
-                    expected_code="not_entitled",
+                    context=f"{verb} with {condition}",
+                    expected_code=expected_code,
                 )
             )
         else:
+            why = (
+                "`status` reports the entitlement as `unknown` with no "
+                "`checked_at`, so no check has ever completed — §5.7.3 says "
+                "such a runner MUST NOT run the agent on entitlement grounds, "
+                "however long it has been trying, and owes 503 `unavailable`. "
+                "`not_entitled` would assert something no distributor has said."
+                if never_checked
+                else "`status` reports the entitlement as `revoked`, and a "
+                "revoked entitlement is a refusal the runner has been told "
+                "about — 403 `not_entitled`, the one place that code is "
+                "correct. `unavailable` would invite a retry that cannot "
+                "succeed."
+            )
             checks.append(
                 failed(
-                    "5.7.4",
+                    section,
                     title,
-                    f"answered {response.status}. `status` reports the "
-                    "entitlement as `revoked`, and a revoked entitlement is a "
-                    "refusal the runner has been told about — 403 "
-                    "`not_entitled`, the one place that code is correct. "
-                    "`unavailable` would invite a retry that cannot succeed."
+                    f"answered {response.status}. {why}"
                     + (
                         " This body also omits a required input, so a runner "
                         "validating the request first answers 400 here. §4.6 "
                         "puts the entitlement at step 2, ahead of the media "
                         "type, the inputs and the environment: a 400 names "
                         "something the caller could fix and so invites the "
-                        "retry §5.7.4 forbids a revoked runner to imply."
+                        "retry a refusing runner must not imply."
                         if response.status == 400
                         else ""
                     ),
@@ -357,9 +399,10 @@ def _executes(runner: Runner, context: Context, body: dict[str, Any]) -> list[Ch
     checks.extend(_output_type_agrees(payload, context, where="run"))
 
     first_run_id = payload.get("run_id")
-    unique, bound_key = _run_id_is_unique(runner, context, body, first_run_id, timeout)
+    unique, bound = _run_id_is_unique(runner, context, body, first_run_id, timeout)
     checks.extend(unique)
-    checks.extend(_a_reused_key_is_refused(runner, context, bound_key, timeout))
+    checks.extend(_a_repeat_is_replayed(runner, context, bound, body, timeout))
+    checks.extend(_a_reused_key_is_refused(runner, context, bound, timeout))
     return checks
 
 
@@ -425,7 +468,7 @@ def _run_id_is_unique(
     body: dict[str, Any],
     first_run_id: Any,
     timeout: float,
-) -> tuple[list[Check], str | None]:
+) -> tuple[list[Check], BoundAttempt | None]:
     """`run_id` MUST be unique per execution within the runner's lifetime.
 
     Needs a second execution, which is a second agent invocation and a
@@ -466,8 +509,9 @@ def _run_id_is_unique(
 
     payload = second.json
     second_run_id = payload.get("run_id") if isinstance(payload, dict) else None
+    bound = BoundAttempt(key=key, run_id=second_run_id) if key else None
     if not isinstance(second_run_id, str):
-        return [], key
+        return [], bound
 
     if first_run_id == second_run_id:
         return [
@@ -478,14 +522,104 @@ def _run_id_is_unique(
                 "must be unique per execution within the runner's lifetime, and "
                 "is what correlates a result with the runner's logs.",
             )
-        ], key
-    return [passed(RUN, "run_id is unique across two runs")], key
+        ], bound
+    return [passed(RUN, "run_id is unique across two runs")], bound
+
+
+def _a_repeat_is_replayed(
+    runner: Runner,
+    context: Context,
+    bound: BoundAttempt | None,
+    body: dict[str, Any],
+    timeout: float,
+) -> list[Check]:
+    """Section 4.2 — a repeat carrying the *same* inputs is replayed, not re-run.
+
+    This is the promise `idempotent_retry` exists to make: a client whose
+    connection dropped mid-run resends and gets the first answer back
+    rather than a second bill. Its sibling below checks the refusal a
+    *mismatched* key owes, which is the rule that protects the promise —
+    but a runner can honour that refusal perfectly and still re-run every
+    identical repeat, which is the case this asks about.
+
+    A re-run is invisible from the outside except here. The response is a
+    `200` in a valid envelope carrying a valid `run_id`; nothing about it
+    says it was computed twice. Only comparing the identifier against the
+    one the key was bound to distinguishes a replay from a fresh execution,
+    which is why the identifier is carried down rather than the key alone.
+
+    Costs no execution of its own against a conformant runner — the whole
+    point is that it does not run — and against a broken one the run it
+    provokes *is* the finding.
+    """
+    title = "a repeat under the same key is replayed"
+
+    if not context.declares_idempotent_retry:
+        return [
+            skipped(
+                RUN,
+                title,
+                "the runner does not declare `capabilities.idempotent_retry`, "
+                "so it promises no replay and owes nothing here.",
+            )
+        ]
+    if bound is None or bound.run_id is None:
+        return [
+            skipped(
+                RUN,
+                title,
+                "no execution bound a key to a comparable `run_id`, so there "
+                "is nothing to present again.",
+            )
+        ]
+
+    response = runner.post_json(
+        "run", body, timeout=timeout, extra_headers={"Idempotency-Key": bound.key}
+    )
+    if response.status != 200:
+        return [
+            failed(
+                RUN,
+                title,
+                f"answered {response.status} to a repeat carrying the same "
+                f"inputs under a key it had already answered. §4.2 requires "
+                "the first result back: a client that resent after a dropped "
+                "connection is told its retry failed, which is the situation "
+                "the header exists to survive.",
+            )
+        ]
+
+    payload = response.json
+    replayed = payload.get("run_id") if isinstance(payload, dict) else None
+    if not isinstance(replayed, str):
+        return [
+            failed(
+                RUN,
+                title,
+                "the repeat answered 200 with no string `run_id`, so a client "
+                "cannot tell a replay from a second execution.",
+            )
+        ]
+    if replayed != bound.run_id:
+        return [
+            failed(
+                RUN,
+                title,
+                f"the repeat answered a different `run_id` ({replayed!r} "
+                f"against {bound.run_id!r}), so the agent ran again. §4.2 "
+                "requires the first result back — identical inputs under a "
+                "key already answered MUST NOT execute a second time. The "
+                "caller has been billed twice for one request, and nothing "
+                "in the response says so.",
+            )
+        ]
+    return [passed(RUN, title)]
 
 
 def _a_reused_key_is_refused(
     runner: Runner,
     context: Context,
-    bound_key: str | None,
+    bound: BoundAttempt | None,
     timeout: float,
 ) -> list[Check]:
     """Section 4.2 — a key already answered, presented with different `inputs`.
@@ -519,7 +653,7 @@ def _a_reused_key_is_refused(
             )
         ]
 
-    if bound_key is None:
+    if bound is None:
         return [
             skipped(
                 RUN,
@@ -542,7 +676,7 @@ def _a_reused_key_is_refused(
         ]
 
     response = runner.post_json(
-        "run", other, timeout=timeout, extra_headers={"Idempotency-Key": bound_key}
+        "run", other, timeout=timeout, extra_headers={"Idempotency-Key": bound.key}
     )
 
     if response.status != 409:

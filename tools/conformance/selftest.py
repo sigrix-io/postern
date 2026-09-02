@@ -101,6 +101,23 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         "run refuses a revoked entitlement",
         {"revoked": True},
     ),
+    Fault.STREAM_NOT_ROUTED: ("3", "stream is implemented at Level 3", {}),
+    Fault.WILDCARD_ON_GETS: ("2.3", "no wildcard", {}),
+    Fault.WILDCARD_TO_KNOWN_ORIGIN: (
+        "2.3",
+        "preflight echoes the origin octet-for-octet",
+        {},
+    ),
+    Fault.RUNS_WITHOUT_EVER_CHECKING: (
+        "5.7.3",
+        "run refuses an entitlement it has never been able to check",
+        {"never_checked": True},
+    ),
+    Fault.RERUNS_AN_IDENTICAL_REPEAT: (
+        "4.2",
+        "a repeat under the same key is replayed",
+        {"execute": True, "idempotent": True},
+    ),
     Fault.REPLAYS_A_MISMATCHED_KEY: (
         "4.2",
         "reused key with different inputs",
@@ -115,6 +132,7 @@ def _report(
     level: int = 3,
     idempotent: bool = False,
     revoked: bool = False,
+    never_checked: bool = False,
     strict_origin: bool = False,
     requires_nothing: bool = False,
     origin: str | None = ALLOWED_ORIGIN,
@@ -124,6 +142,7 @@ def _report(
         level=level,
         idempotent=idempotent,
         revoked=revoked,
+        never_checked=never_checked,
         strict_origin=strict_origin,
         requires_nothing=requires_nothing,
     ) as (base, counter):
@@ -181,6 +200,19 @@ def _baseline_is_clean(problems: list[str]) -> int:
             problems.append(
                 f"the conformant fake runner failed at Level {level} with its "
                 "entitlement revoked: "
+                + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+            )
+
+    # §5.7.3's runner: `unknown` with no `checked_at`, refusing with 503
+    # `unavailable`. Conformant, and it must sweep clean -- the checker used
+    # to skip this state entirely, so nothing here could see either answer.
+    for level in (2, 3):
+        report = _report(level=level, never_checked=True)
+        checked += 1
+        if report.failures:
+            problems.append(
+                f"the conformant fake runner failed at Level {level} having "
+                "never completed an entitlement check: "
                 + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
             )
 

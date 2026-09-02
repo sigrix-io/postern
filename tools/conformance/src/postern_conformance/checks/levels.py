@@ -23,8 +23,9 @@ from typing import Any
 
 from ..context import Context
 from ..probe import Response, Runner
-from ..report import Check, failed, passed, skipped
+from ..report import Check, failed, passed, skipped, warned
 from . import error_envelope_checks
+from .execution import entitlement_preempted
 
 SECTION = "3"
 
@@ -154,19 +155,58 @@ def _at_level(
 
     response = _post(runner, verb, probe_body)
 
-    if response.status != 501:
-        return [passed(SECTION, title)]
+    # §4.6 step 2: a runner whose entitlement is not in force refuses every
+    # request ahead of reading it, so it never reaches the §4.2 refusal this
+    # probe expects. That answer says nothing about whether the verb is
+    # implemented, either way.
+    preempted = entitlement_preempted(response, context)
+    if preempted is not None:
+        return [skipped(SECTION, title, preempted)]
 
-    return [
-        failed(
-            SECTION,
-            title,
-            f"answered 501 `not_implemented` to a request that should have "
-            f"been rejected as `bad_request` (§4.2). The runner declares Level "
-            f"{level}, at which `{verb}` is required. Either the level is "
-            "overstated or the verb is not wired up.",
-        )
-    ]
+    if response.status == 501:
+        return [
+            failed(
+                SECTION,
+                title,
+                f"answered 501 `not_implemented` to a request that should have "
+                f"been rejected as `bad_request` (§4.2). The runner declares Level "
+                f"{level}, at which `{verb}` is required. Either the level is "
+                "overstated or the verb is not wired up.",
+            )
+        ]
+
+    # 404 and 405 are the other two ways a verb says it is not served here,
+    # and they used to pass: this check asked only whether the answer was
+    # 501, so every other status counted as implemented. A runner that never
+    # routed `stream` at all answered 404 and was read as a Level 3 runner.
+    if response.status in (404, 405):
+        return [
+            failed(
+                SECTION,
+                title,
+                f"answered {response.status} at `/postern/v0/{verb}`. The "
+                f"runner declares Level {level}, at which `{verb}` is "
+                f"required — and §2.1 gives a runner's 404 exactly one "
+                "meaning, a path it does not implement. The verb is not "
+                "routed, which is the same finding a 501 reports and was "
+                "passing because only 501 was asked about.",
+            )
+        ]
+
+    if response.status >= 500:
+        return [
+            warned(
+                SECTION,
+                title,
+                f"answered {response.status} to a request it was obliged to "
+                "refuse as `bad_request`. The verb is routed — this is not a "
+                "level finding — but it could not answer, and a client meets "
+                "a failure where the specification promises a refusal it can "
+                "read.",
+            )
+        ]
+
+    return [passed(SECTION, title)]
 
 
 def _post(runner: Runner, verb: str, body: dict[str, Any]) -> Response:
