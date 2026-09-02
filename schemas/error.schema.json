@@ -14,6 +14,7 @@
           "type": "string",
           "enum": [
             "bad_request",
+            "unauthorized",
             "not_found",
             "not_entitled",
             "idempotency_conflict",
@@ -24,7 +25,7 @@
             "unavailable",
             "run_timeout"
           ],
-          "description": "The codes a conforming implementation emits. A client MUST tolerate a code outside this set, treating it as a generic failure of its HTTP status class (SPEC.md section 2.1) — this enum is not a licence to reject. not_entitled is only valid from a local runner reporting its own state. Distributors MUST answer not_found instead, so the entitlement endpoint cannot be used to enumerate a private catalogue."
+          "description": "The codes a conforming implementation emits. A client MUST tolerate a code outside this set, treating it as a generic failure of its HTTP status class (SPEC.md section 2.1) — this enum is not a licence to reject. not_entitled is only valid from a local runner reporting its own state, and unauthorized only from a runner that requires inbound authentication of its own (SPEC.md section 7). Distributors MUST answer not_found instead of either, so the entitlement endpoint cannot be used to enumerate a private catalogue."
         },
         "message": {
           "type": "string",
