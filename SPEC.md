@@ -1033,6 +1033,43 @@ so with its `level` (§3) and a `501`, which tells a client that retrying is
 pointless; a `0` here would say the same thing in a second vocabulary, and
 in one a client would reasonably read as a temporary condition.
 
+`update` is **OPTIONAL** and reports what a runner learned when it asked its
+distributor whether a newer version of the agent exists. It is present only
+where such a check actually ran: a runner with no version check configured
+omits it entirely, which is a different fact from a check that ran and found
+no distributor to ask.
+
+`update.state` is `not_required`, `unreachable`, `current` or
+`update_available`. `not_required` mirrors `entitlement`'s own state (§5.1)
+and means no distributor is configured; `unreachable` means one is and could
+not be asked. The last two are the answer itself — the version the runner is
+running and the version the distributor reports are equal, or they are not.
+
+`update.current` is the runner's own `describe.agent.version`, present
+whenever it is knowable and `unreachable` included: a runner always knows
+what it is running, whatever it could not reach. `update.latest` is the
+version the distributor reported, and is present only under `current` and
+`update_available`, those being the only states in which one was obtained.
+
+**An unreachable check is not a failure.** A runner **MUST NOT** refuse to
+start, or refuse a run, because it could not determine whether a newer
+version exists. That is the posture §5.7 already takes for an entitlement a
+runner cannot re-check, and for the same reason: the machine may have no
+network, and an agent that has already been pulled is an agent that already
+works. A client reads `unreachable` as *not known*, never as *out of date*.
+
+**How a runner obtains `latest` is the distributor's to define**, and this
+specification adds no path for it. §5 fixes the two distributor paths a
+runner must call to serve its agent at all — the entitlement check and the
+bundle — and a version answer is neither: nothing else here depends on one,
+and a runner that never asks is fully conforming. A distributor offering the
+answer publishes how in its own profile, and §8 records Sigrix's.
+
+It belongs in `status` rather than `describe` for the reason `limits` does,
+one paragraph up: which version this runner happens to be running, against a
+distributor it happens to be configured for, is a fact about the deployment.
+`describe` answers for the agent.
+
 `status` **MUST** answer at Level 1, and **MUST NOT** require credentials.
 
 ### 4.5 The life of a run
@@ -1791,6 +1828,13 @@ and informative for everyone else. Postern is usable with no reference to it.*
   running a week later.
 - Withdrawn listings answer `410` with a twelve-month tail from the
   withdrawal date for buyers who owned them.
+- A version answer for §4.4's `update` is served at
+  `GET /postern/v0/versions/{owner}/{name}`, and reads no bearer token: it
+  names no buyer and carries only the identifier it was asked about and a
+  version string, so there is nothing in it to protect and §5.5's
+  indistinguishability rule has nothing to hide. It answers for the listing
+  types Sigrix can resolve a version for and `404`s for the rest, which a
+  runner reports as `unreachable` rather than as an update.
 
 ---
 
@@ -2101,6 +2145,23 @@ and informative for everyone else. Postern is usable with no reference to it.*
   the line that keeps the field from being re-proposed. The conformance
   checker's `streaming`/`level` agreement warning goes with it — that rule
   was the tool's own inference from §3, with no sentence to cite (§3, §4.1).
+- `status` gains an **OPTIONAL** `update` block, reporting what a runner
+  learned when it asked its distributor whether a newer version of the agent
+  exists: a `state` of `not_required`, `unreachable`, `current` or
+  `update_available`, with the running version as `current` and the reported
+  one as `latest`. It is present only where a check ran, so a runner
+  configured for none omits it — a different fact from a check that ran and
+  found no distributor. An unreachable check is explicitly not a failure: a
+  runner **MUST NOT** refuse to start or to run because it could not tell,
+  which is §5.7's posture for an entitlement it cannot re-check, and a client
+  reads `unreachable` as *not known* rather than as *out of date*. It sits in
+  `status` rather than `describe` for the reason `limits` does — the version
+  a runner happens to be running, against a distributor it happens to be
+  configured for, is a fact about the deployment. **No distributor path is
+  added**: §5 fixes the two a runner must call to serve its agent at all, a
+  version answer is neither, and a runner that never asks conforms fully — so
+  how `latest` is obtained is the distributor's to publish, and §8 records
+  Sigrix's, unauthenticated because it names no buyer (§4.4, §8).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
