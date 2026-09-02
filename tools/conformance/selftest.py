@@ -363,6 +363,14 @@ def _the_build_hook_bundles_every_schema(problems: list[str]) -> int:
     the hook produces a wheel that installs cleanly, reports its schemas as
     bundled, and then cannot find the one it needs.
 
+    It must also write none of them into the source tree. That is the
+    second half of the same rule rather than a tidiness preference: the
+    hook used to copy the schemas into `src/postern_conformance/_schemas`
+    and return early whenever that directory was already populated, so
+    every wheel built in a checkout after the first carried the first
+    build's schemas. A hook that leaves no copy behind has nothing to go
+    stale, so `shutil` appearing here again is the defect returning.
+
     Read with `ast` rather than imported, because importing `hatch_build`
     needs hatchling — a build dependency, and not one a self-test that
     otherwise runs on the standard library should drag in.
@@ -406,6 +414,30 @@ def _the_build_hook_bundles_every_schema(problems: list[str]) -> int:
                 else ""
             )
         )
+
+    writes = sorted(
+        {
+            node.module or ""
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("shutil")
+        }
+        | {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+            if alias.name.startswith("shutil")
+        }
+    )
+    if writes:
+        problems.append(
+            "hatch_build.py imports "
+            + ", ".join(writes)
+            + ", so it is copying the schemas into the tree again — the copy "
+            "is what goes stale, and a rebuilt wheel then ships the previous "
+            "build's schemas."
+        )
+
     return len(read)
 
 

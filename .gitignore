@@ -12,8 +12,11 @@ __pycache__/
 .venv/
 venv/
 
-# Written into the package by tools/conformance/hatch_build.py at build
-# time. The repository keeps one copy of the schemas, in schemas/.
+# The repository keeps one copy of the schemas, in schemas/. A wheel built
+# from a checkout now takes them straight from there and writes nothing
+# here, but any tree built before that change has this directory in it —
+# and an sdist extracted in place puts one here too. Left ignored so
+# neither shows up as an untracked change to review.
 tools/conformance/src/postern_conformance/_schemas/
 
 # Build artifacts
