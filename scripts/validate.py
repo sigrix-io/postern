@@ -101,6 +101,11 @@ PAIRS = [
     # which to ask again.
     ("entitlement.schema.json", "entitlement.json"),
     ("entitlement.schema.json", "entitlement-revoked.json"),
+    # The other distributor answer, and the only payload in this list whose
+    # path this specification does not define — §5 fixes the two a runner
+    # must call, and a version answer is neither, so §8 records where Sigrix
+    # serves it. The shape is fixed here regardless of who serves it.
+    ("version.schema.json", "version.json"),
     # The state §5.7 makes reachable. `unknown` carries neither of the fields
     # §4.4 requires of `active` and `revoked`, so nothing else in examples/
     # exercises a runner reporting an entitlement it cannot presently vouch
@@ -513,13 +518,14 @@ _IDENTIFIER_POINTERS = {
     "describe.schema.json": ("agent", "id"),
     "status.schema.json": ("agent", "id"),
     "entitlement.schema.json": ("agent_id",),
+    "version.schema.json": ("agent_id",),
 }
 
 
 def _identifier_pattern() -> bool:
     """SPEC.md §1.5 publishes the agent identifier grammar as a regular
-    expression, and three schemas carry it as a `pattern`. Four copies of one
-    rule is four places to edit and three chances to forget, and the symptom of
+    expression, and four schemas carry it as a `pattern`. Five copies of one
+    rule is five places to edit and four chances to forget, and the symptom of
     forgetting is the one §1.5 exists to prevent: two implementations that
     disagree about which strings are identifiers.
 
@@ -543,7 +549,7 @@ def _identifier_pattern() -> bool:
         print(f"        {pattern}")
         return True
 
-    print("ok    SPEC.md and all three schemas carry one agent id pattern")
+    print("ok    SPEC.md and all four schemas carry one agent id pattern")
     return False
 
 

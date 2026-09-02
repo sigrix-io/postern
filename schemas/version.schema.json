@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sigrix.io/schemas/postern/0.1/version.schema.json",
+  "title": "Postern version check response",
+  "description": "The answer a distributor gives when asked which version of an agent it currently offers, and the source of status.update.latest (SPEC.md section 4.4). Postern defines no path for it: section 5 fixes the two distributor paths a runner must call to serve its agent at all, and a version answer is neither, so a distributor offering one publishes how in its own profile. Section 8 records Sigrix's. Unauthenticated, because the answer names no buyer and carries nothing beyond an identifier and a version string.",
+  "type": "object",
+  "required": ["postern", "agent_id", "version"],
+  "properties": {
+    "postern": {
+      "type": "string",
+      "const": "0.1",
+      "description": "The specification version this payload conforms to, carried like every other success payload in the protocol. A client MUST NOT infer it from the /postern/v0/ path prefix, which VERSIONING.md keeps deliberately coarser."
+    },
+    "agent_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+      "maxLength": 128,
+      "description": "The identifier the request addressed (SPEC.md section 1.5), echoed octet-for-octet. A mismatch is a failed check rather than something for a runner to reconcile, the same rule the entitlement answer follows."
+    },
+    "version": {
+      "type": "string",
+      "description": "The version the distributor currently offers. Compared against the runner's own describe.agent.version for equality only: equal means current, unequal means an update is available. No ordering is implied, so a client MUST NOT read one version as newer than another, and a distributor is free to change its versioning scheme without breaking that comparison."
+    }
+  },
+  "additionalProperties": true
+}

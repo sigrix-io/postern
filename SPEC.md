@@ -1834,7 +1834,10 @@ and informative for everyone else. Postern is usable with no reference to it.*
   version string, so there is nothing in it to protect and §5.5's
   indistinguishability rule has nothing to hide. It answers for the listing
   types Sigrix can resolve a version for and `404`s for the rest, which a
-  runner reports as `unreachable` rather than as an update.
+  runner reports as `unreachable` rather than as an update. The payload is
+  [`version.schema.json`](schemas/version.schema.json): the shape is fixed
+  here even though the path is not, so a second distributor offering the
+  same answer answers it the same way.
 
 ---
 
@@ -2162,6 +2165,17 @@ and informative for everyone else. Postern is usable with no reference to it.*
   version answer is neither, and a runner that never asks conforms fully — so
   how `latest` is obtained is the distributor's to publish, and §8 records
   Sigrix's, unauthenticated because it names no buyer (§4.4, §8).
+- `version.schema.json` fixes the shape of a version answer — `postern`, the
+  `agent_id` echoed octet-for-octet, and a `version` string compared for
+  equality only, with no ordering implied. It is the source of §4.4's
+  `status.update.latest`, and the first schema here whose *path* this
+  specification does not define: §5 fixes the two distributor paths a runner
+  must call to serve its agent at all, a version answer is neither, and §8
+  records where Sigrix serves it. Fixing the shape without fixing the path is
+  the point — a second distributor offering the same answer answers it the
+  same way, and a runner reads both with one parser. It joins
+  `entitlement.schema.json` as a distributor payload the conformance checker
+  does not bundle, since a runner never emits one (§4.4, §8).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
