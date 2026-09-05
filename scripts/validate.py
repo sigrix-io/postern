@@ -248,6 +248,16 @@ MUST_ACCEPT = [
     ),
     (
         "describe.schema.json",
+        "a null default on a number input, which means no value was supplied",
+        {
+            "postern": "0.1",
+            "agent": _AGENT,
+            "inputs": [{"key": "n", "label": "N", "type": "number",
+                        "required": False, "default": None}],
+        },
+    ),
+    (
+        "describe.schema.json",
         "an input key using every class §4.1.1's grammar admits",
         {
             "postern": "0.1",
@@ -398,6 +408,30 @@ MUST_REJECT = [
             "inputs": [
                 {"key": "d", "label": "D", "type": "select", "required": False}
             ],
+        },
+    ),
+    # §4.1.1 fixed the value space of `default` by the declared type in prose
+    # and nowhere else, so both of these validated cleanly until the schema
+    # carried the rule. Nothing in the repository violated it, which is what
+    # kept it invisible -- every example already agreed.
+    (
+        "describe.schema.json",
+        "a number input whose default is a string",
+        {
+            "postern": "0.1",
+            "agent": _AGENT,
+            "inputs": [{"key": "n", "label": "N", "type": "number",
+                        "required": False, "default": "not a number"}],
+        },
+    ),
+    (
+        "describe.schema.json",
+        "a text input whose default is a number",
+        {
+            "postern": "0.1",
+            "agent": _AGENT,
+            "inputs": [{"key": "t", "label": "T", "type": "text",
+                        "required": False, "default": 42}],
         },
     ),
     (

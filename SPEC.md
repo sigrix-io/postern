@@ -583,6 +583,15 @@ shape it implies — can be added later, which is additive; withdrawing a
 value shape a runner had already relied on would not be, which is why the
 narrower set is the one published first.
 
+`describe.schema.json` enforces that pairing on `default`, which it can
+because the type and the default sit in one object. It cannot on `run`'s
+`inputs`: the values there are in a different document from the
+declarations that type them, so `run-request.schema.json` admits the union
+of the three value spaces and the per-input check stays the runner's, which
+§4.2 already requires of it. A `default` disagreeing with its own `type` was
+never conforming under the sentence above; it now fails validation as well
+as prose.
+
 `validation` is an open object. Recognised members: `max_length`, `min`,
 `max`, `pattern`, `options` (**REQUIRED** when `type` is `select`).
 Unrecognised members **MUST** be ignored rather than rejected.
@@ -2013,6 +2022,20 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before the first tagged release.
 
+- `describe.schema.json` enforces the pairing §4.1.1 already stated between
+  an input's `type` and its `default`. The sentence fixing the value space —
+  *text and select carry a string, number carries a number* — was prose
+  only, so `{"type": "number", "default": "not a number"}` validated
+  cleanly, as did a numeric default on a text input. Nothing in the
+  repository violated it, which is why it went unseen. `null` stays legal
+  under every type, since it is what says no value was supplied. The two new
+  branches are keyed positively on the types they constrain, never
+  negatively on the ones they do not: this section anticipates a fourth
+  type, and a branch reading *anything that is not `number`* would constrain
+  it the moment it arrived. `run-request.schema.json` deliberately does not
+  follow — the values there sit in a different document from the
+  declarations that type them, so it admits the union of the three value
+  spaces and §4.2 leaves the per-input check to the runner (§4.1.1, §4.2).
 - §4.1.1 states the grammar an input `key` has to satisfy.
   `describe.schema.json` has enforced `[A-Za-z0-9_.-]+` from the first
   commit and §4.1.1 said only that a declaration **MUST** carry the member,
