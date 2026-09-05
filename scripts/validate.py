@@ -248,6 +248,16 @@ MUST_ACCEPT = [
     ),
     (
         "describe.schema.json",
+        "an input key using every class §4.1.1's grammar admits",
+        {
+            "postern": "0.1",
+            "agent": _AGENT,
+            "inputs": [{"key": "Max_Length.v2-beta", "label": "L", "type": "text",
+                        "required": False}],
+        },
+    ),
+    (
+        "describe.schema.json",
         "a text output carrying an example, which stays permitted",
         {
             "postern": "0.1",
@@ -388,6 +398,16 @@ MUST_REJECT = [
             "inputs": [
                 {"key": "d", "label": "D", "type": "select", "required": False}
             ],
+        },
+    ),
+    (
+        "describe.schema.json",
+        "an input key carrying a space, which no client can render as a name",
+        {
+            "postern": "0.1",
+            "agent": _AGENT,
+            "inputs": [{"key": "market segment", "label": "L", "type": "text",
+                        "required": False}],
         },
     ),
     (

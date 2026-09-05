@@ -123,7 +123,7 @@
         "key": {
           "type": "string",
           "pattern": "^[a-zA-Z0-9_.-]+$",
-          "description": "Key used in the run request's inputs map. The key 'prompt' is reserved for a single free-text brief."
+          "description": "Key used in the run request's inputs map, and the input's identifier: ASCII letters and digits, underscore, dot and hyphen, one character or more (SPEC.md section 4.1.1). A client renders it as the name of a thing - a form field, a command-line flag, a column heading - and label carries the human-facing name, so the key does not have to. Length is deliberately unbounded, unlike an agent identifier's, because a key crosses no trust boundary. The key 'prompt' is reserved for a single free-text brief."
         },
         "label": { "type": "string", "minLength": 1 },
         "type": {
