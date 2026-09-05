@@ -140,6 +140,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         "reused key with different inputs",
         {"execute": True, "idempotent": True},
     ),
+    Fault.RUNS_WITHOUT_ITS_CREDENTIALS: (
+        "4.6",
+        "run refuses a credential it has not got",
+        {"execute": True, "credentials_missing": True},
+    ),
 }
 
 
@@ -153,6 +158,8 @@ def _report(
     strict_origin: bool = False,
     requires_nothing: bool = False,
     returns_bytes: bool = False,
+    credentials_missing: bool = False,
+    credentials_unreported: bool = False,
     origin: str | None = ALLOWED_ORIGIN,
 ):
     with fake_runner(
@@ -164,6 +171,8 @@ def _report(
         strict_origin=strict_origin,
         requires_nothing=requires_nothing,
         returns_bytes=returns_bytes,
+        credentials_missing=credentials_missing,
+        credentials_unreported=credentials_unreported,
     ) as (base, counter):
         report = check(
             Runner(base, timeout=10.0),
@@ -247,6 +256,58 @@ def _baseline_is_clean(problems: list[str]) -> int:
                 "never completed an entitlement check: "
                 + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
             )
+
+    # §4.6 step 5's runner: `status` reports a declared credential unset, and
+    # every `run` is refused `424` before the agent starts. Conformant, and a
+    # posture rather than a fault for the same reason `revoked` is -- the
+    # refusal is what the specification asks for.
+    #
+    # Both modes, because the two are different claims. Without --execute the
+    # rule is not reached at all and nothing may fail on the way past it; with
+    # it, the checker sends a request satisfying every declared input, and the
+    # checks that need a real run have to stand down rather than read the
+    # refusal as the agent failing to answer.
+    for execute in (False, True):
+        report = _report(execute=execute, credentials_missing=True)
+        checked += 1
+        if report.failures:
+            problems.append(
+                f"the conformant fake runner failed reporting a missing "
+                f"credential (execute={execute}): "
+                + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+            )
+        if report.runs:  # type: ignore[attr-defined]
+            problems.append(
+                f"the checker ran the agent {report.runs} time(s) against a "  # type: ignore[attr-defined]
+                f"runner refusing every run for a missing credential "
+                f"(execute={execute}) — the refusal happens before the agent "
+                "starts, so no run should have been counted."
+            )
+
+    # And the runner that says nothing about its credentials at all, which
+    # §4.4 permits and most runners will be. It must sweep clean, and the
+    # rule must be reported as unreachable rather than silently omitted:
+    # a check that emits nothing here is indistinguishable from one nobody
+    # wrote, which is the whole failure mode this self-test exists for.
+    report = _report(execute=True, credentials_unreported=True)
+    checked += 1
+    if report.failures:
+        problems.append(
+            "the conformant fake runner failed reporting no credential state "
+            "at all, which §4.4 permits: "
+            + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+        )
+    if not [
+        c
+        for c in report.checks
+        if c.outcome is Outcome.SKIP and "credential it has not got" in c.title
+    ]:
+        problems.append(
+            "a runner publishing no `status.credentials` drew no skip for "
+            "§4.6 step 5 — the rule is unreachable against it, and saying so "
+            "is the difference between a checker that could not ask and one "
+            "that never had the check."
+        )
 
     # A runner that refuses a stranger's preflight with 403 rather than 204.
     # §2.3 asks for the 204 as a SHOULD, so this is a permitted deviation and

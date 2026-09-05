@@ -116,6 +116,41 @@ class Context:
         return [name for name in missing if isinstance(name, str)] if isinstance(missing, list) else []
 
     @property
+    def declared_credentials(self) -> list[str]:
+        """The environment variable names `describe` says the agent needs.
+
+        §4.1.3 declares credentials by name only, so this is the whole of
+        what a client — or this checker — can know about them from outside.
+        """
+        if not isinstance(self.describe, dict):
+            return []
+        declared = self.describe.get("credentials")
+        if not isinstance(declared, list):
+            return []
+        return [
+            entry["env"]
+            for entry in declared
+            if isinstance(entry, dict) and isinstance(entry.get("env"), str)
+        ]
+
+    @property
+    def reports_a_missing_credential(self) -> bool:
+        """Whether `status` says the environment is short of something declared.
+
+        Either half is enough. `satisfied: false` is the runner's own
+        summary; a non-empty `missing` names the variables, and a runner
+        that publishes one while claiming to be satisfied has contradicted
+        itself in the direction that names something — so the names win.
+
+        False therefore covers two different situations, which is why
+        callers have to ask what `credentials_satisfied` says as well: a
+        runner reporting `satisfied: true`, and one reporting nothing at
+        all. §4.4 makes the block OPTIONAL, so the second is conformant and
+        indistinguishable from a complete environment from outside.
+        """
+        return self.credentials_satisfied is False or bool(self.missing_credentials)
+
+    @property
     def declares_idempotent_retry(self) -> bool:
         if not isinstance(self.describe, dict):
             return False

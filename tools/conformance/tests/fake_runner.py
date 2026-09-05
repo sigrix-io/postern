@@ -88,6 +88,10 @@ class Fault(enum.Enum):
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
     )
+    RUNS_WITHOUT_ITS_CREDENTIALS = (
+        "reports a declared credential as unset and runs the agent anyway "
+        "(§4.6 step 5)"
+    )
 
     def __str__(self) -> str:  # pragma: no cover - readable test ids
         return self.name.lower()
@@ -351,6 +355,23 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(400, _error("bad_request", invalid))
                 return
 
+        # §4.6 step 5, and the position is the point: after the request
+        # checks above, so an incomplete environment cannot mask a
+        # malformed request, and before the agent starts, so the client is
+        # told the name of the variable to set rather than whatever the
+        # agent fails with.
+        #
+        # The fault skips the gate rather than moving it, which is what
+        # makes it the defect §4.6 obliges rather than a second ordering
+        # bug: the runner reports the credential as unset in `status` and
+        # runs the agent regardless.
+        if (
+            self.server.credentials_missing  # type: ignore[attr-defined]
+            and Fault.RUNS_WITHOUT_ITS_CREDENTIALS not in self.faults
+        ):
+            self._send(424, _error("missing_credential", "OPENAI_API_KEY is not set."))
+            return
+
         if verb == "run":
             self._answer_run(inputs)
         else:
@@ -431,7 +452,21 @@ class _Handler(BaseHTTPRequestHandler):
             "state": "ready",
             "agent": {"id": agent_id, "version": "1.3.0"},
             "entitlement": entitlement,
-            "credentials": {"satisfied": True, "missing": []},
+            **(
+                {}
+                # §4.4 makes the block OPTIONAL, and a runner omitting it is
+                # the ordinary case rather than a broken one -- the posture
+                # exists so the checker's answer to "cannot tell" is exercised
+                # by something.
+                if self.server.credentials_unreported  # type: ignore[attr-defined]
+                else {
+                    "credentials": (
+                        {"satisfied": False, "missing": ["OPENAI_API_KEY"]}
+                        if self.server.credentials_missing  # type: ignore[attr-defined]
+                        else {"satisfied": True, "missing": []}
+                    )
+                }
+            ),
             "limits": {"max_run_seconds": 900, "max_concurrent_runs": 1},
         }
 
@@ -574,6 +609,8 @@ def fake_runner(
     strict_origin: bool = False,
     requires_nothing: bool = False,
     returns_bytes: bool = False,
+    credentials_missing: bool = False,
+    credentials_unreported: bool = False,
 ) -> Iterator[tuple[str, "RunCounter"]]:
     """Serve a runner with the given faults; yields its origin and run counter.
 
@@ -592,6 +629,8 @@ def fake_runner(
     server.strict_origin = strict_origin  # type: ignore[attr-defined]
     server.requires_nothing = requires_nothing  # type: ignore[attr-defined]
     server.returns_bytes = returns_bytes  # type: ignore[attr-defined]
+    server.credentials_missing = credentials_missing  # type: ignore[attr-defined]
+    server.credentials_unreported = credentials_unreported  # type: ignore[attr-defined]
     server.runs = 0  # type: ignore[attr-defined]
     # Idempotency-Key -> (the inputs it was first answered for, that answer).
     server.answered_keys = {}  # type: ignore[attr-defined]
