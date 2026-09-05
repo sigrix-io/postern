@@ -1309,6 +1309,34 @@ table that no other section of this specification requires, and step 5 is
 the rule that emits it; before this section it was a code the protocol
 defined and never asked anyone to send.
 
+**Step 5 is a check a runner performs, not only one it orders.** The
+**MUST** above binds each row as well as the sequence: where `describe`
+declares a credential and the runner's environment does not carry it, a
+conforming runner answers `424` rather than starting the agent and
+reporting whatever the agent's own failure turns out to be.
+
+That is worth stating because the obligation could be read off the table
+two ways, and the weaker reading — that the table orders a check a runner
+*may* perform, so one that never inspects its environment simply never
+reaches the condition — left two conforming runners answering one request
+differently. A `424` names the variable to set; the `500` `agent_error`
+that follows a run started without it names nothing. A client could not
+tell which kind of runner it held until it met an unset credential, and
+nothing said it might have to.
+
+**The check is available to every runner, which is what makes this a
+MUST rather than a SHOULD.** §4.1.3 has `describe` declare credentials by
+environment variable name, and §4.1 requires every runner to answer
+`describe` — so a runner already holds the list, and reading its own
+environment against it needs no capability it lacks.
+
+The optionality that suggests otherwise is a different thing.
+`status.credentials` (§4.4) is **OPTIONAL**, and it governs whether a
+runner *publishes* which credentials are satisfied, not whether it checks
+one before a run. A runner may perform step 5 and report no credential
+state at all. A runner whose `describe` declares no credentials has
+nothing to check and passes the step vacuously.
+
 §4.5's capacity refusal is deliberately **not** placed in this sequence. A
 runner that cannot start another run has nothing to gain by validating one
 first, and **MAY** answer `503` with `unavailable` at any point before the
@@ -1929,6 +1957,19 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before the first tagged release.
 
+- A runner **MUST** perform the credential check, not merely order it.
+  §4.6 placed the environment check last and gave `missing_credential` its
+  producing rule, but bound only the sequence — so a runner that never
+  inspected its environment never reached the condition, started the agent,
+  and answered `agent_error`. Two conforming runners therefore answered one
+  request differently, a `424` naming the variable to set against a `500`
+  naming nothing, and a client could not tell which it held. It is a
+  **MUST** rather than a **SHOULD** because every runner can perform it:
+  `describe` declares credentials by environment variable name (§4.1.3) and
+  every runner answers `describe` (§4.1), so the list is already in hand.
+  `status.credentials` staying **OPTIONAL** is not the same obligation — it
+  governs publishing the satisfied set, not checking one before a run
+  (§4.1.3, §4.4, §4.6).
 - Added `unauthorized` (401), the answer a runner gives when it requires
   inbound authentication of its own and a request does not satisfy it (§2.1,
   §7). §7 has always obliged a runner binding a non-loopback interface to
