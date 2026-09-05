@@ -29,10 +29,14 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Both workflows. This is what turns an action deprecation into a pull
-  # request, rather than a warning at the top of a log nobody reads until the
-  # runtime is withdrawn and checkout starts failing on whichever pull request
-  # happens to be open that day.
+  # Every workflow, rather than a list of them: the directory is the
+  # repository root, so this covers whatever .github/workflows holds and does
+  # not fall out of date as workflows are added.
+  #
+  # This is what turns an action deprecation into a pull request, rather than
+  # a warning at the top of a log nobody reads until the runtime is withdrawn
+  # and checkout starts failing on whichever pull request happens to be open
+  # that day.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
