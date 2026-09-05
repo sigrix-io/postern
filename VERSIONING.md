@@ -76,7 +76,12 @@ Two rules make "additive only" mean something:
 1. **Unknown members are ignored, never rejected.** Required of clients and
    runners in several places in the specification. A parser that rejects an
    unrecognised field converts every future minor release into a breaking
-   one for its users.
+   one for its users. Two schemas nonetheless close an object —
+   `error.schema.json` at its root, and each `credentials[]` entry in
+   `describe.schema.json` — and neither takes this rule back: those files
+   state what a conforming implementation *emits*, while this rule binds
+   what a parser *accepts*. [`schemas/README.md`](schemas/README.md) sets
+   out the four places that difference is load-bearing.
 2. **Optional stays optional.** Promoting an existing optional field to
    required is a major change, however obvious the field has become.
 
