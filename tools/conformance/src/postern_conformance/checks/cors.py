@@ -237,113 +237,19 @@ def _allowed_origin(runner: Runner, context: Context) -> list[Check]:
         ]
 
     checks: list[Check] = []
-    preflight = _preflight(runner, "run", origin)
-    allowed = preflight.header_values("access-control-allow-origin")
+    # Both preflighting verbs, not `run` alone. §2.3's table binds the
+    # answer a runner gives to a preflight, and §4.2 spells the plural out
+    # for the one rule that could be read narrowly: a runner declaring
+    # `idempotent_retry` MUST name `Idempotency-Key` in "the
+    # Access-Control-Allow-Headers of its preflight answer*s*". A browser
+    # preflights `stream` exactly as it preflights `run`, so a runner
+    # admitting `Content-Type` on one and not the other is a runner no page
+    # can stream from -- and the checker asked only the one that worked.
+    for verb in ("run", "stream"):
+        checks.extend(_allowed_origin_for(runner, context, verb, origin))
 
-    # A wildcard is not a refusal, and reading it as one silenced every
-    # rule below. `*` does not contain `origin`, so this skip swallowed a
-    # runner that answers a configured origin with `*` -- the whole
-    # allowed-origin block reported "could not be checked" for a runner
-    # whose answer was the finding.
-    if "*" in allowed:
-        return [
-            failed(
-                SECTION,
-                "preflight echoes the origin octet-for-octet",
-                f"the preflight for {origin} answered "
-                "`Access-Control-Allow-Origin: *` rather than the origin "
-                "echoed back. §2.3 requires the requesting origin "
-                "octet-for-octet; a wildcard reaches every page instead of "
-                "the one configured, and reads from outside exactly like a "
-                "runner that refused this origin.",
-            )
-        ]
-
-    if origin not in allowed:
-        return [
-            skipped(
-                SECTION,
-                "allowed-origin headers",
-                f"the runner did not allow {origin} (preflight answered "
-                f"{preflight.status}, Access-Control-Allow-Origin "
-                f"{allowed or 'absent'}). Refusing an origin is a legitimate "
-                "configuration, so this is not a failure — but it means the "
-                "header rules could not be checked. Name an origin the runner "
-                "is configured for.",
-            )
-        ]
-
-    checks.append(
-        passed(SECTION, "preflight echoes the origin octet-for-octet", f"{origin}")
-    )
-
-    # Vary: Origin, on the preflight and on the actual response. A browser
-    # keys its preflight cache by origin already; a shared cache between the
-    # page and the runner keys on the URL, so a runner echoing an origin
-    # without Vary invites that cache to hand the first caller's permission
-    # to the second.
-    checks.append(_vary(preflight, "preflight"))
-
-    methods = _joined(preflight.header_values("access-control-allow-methods"))
-    if "POST" in methods.upper():
-        checks.append(passed(SECTION, "preflight allows POST on run"))
-    else:
-        checks.append(
-            failed(
-                SECTION,
-                "preflight allows POST on run",
-                f"Access-Control-Allow-Methods was {methods!r}; `run` is a POST.",
-            )
-        )
-
-    headers_allowed = _joined(preflight.header_values("access-control-allow-headers")).lower()
-    if "content-type" in headers_allowed:
-        checks.append(passed(SECTION, "preflight allows Content-Type"))
-    else:
-        checks.append(
-            failed(
-                SECTION,
-                "preflight allows Content-Type",
-                f"Access-Control-Allow-Headers was {headers_allowed!r}. `run` "
-                "carries `application/json`, which a browser will not send "
-                "unless the preflight admits the header.",
-            )
-        )
-
-    # Naming Idempotency-Key is a MUST for a runner that declares
-    # idempotent_retry: a browser cannot send a header its preflight did not
-    # admit, so the promise would otherwise hold for every client kind
-    # except the one that has to ask permission to take it up.
-    if context.declares_idempotent_retry:
-        title = "preflight allows Idempotency-Key"
-        if "idempotency-key" in headers_allowed:
-            checks.append(passed(SECTION, title))
-        else:
-            checks.append(
-                failed(
-                    SECTION,
-                    title,
-                    "the runner declares `capabilities.idempotent_retry` and "
-                    "its preflight does not admit `Idempotency-Key`. To a "
-                    "browser client alone, this runner looks like one ignoring "
-                    "a header it never received.",
-                )
-            )
-
-    if preflight.header_values("access-control-allow-credentials"):
-        checks.append(
-            warned(
-                SECTION,
-                "no Access-Control-Allow-Credentials",
-                "the runner sends `Access-Control-Allow-Credentials`. Postern "
-                "defines no cookie and no browser-presented token, so the "
-                "header can only admit ambient credentials this protocol never "
-                "asked for.",
-            )
-        )
-    else:
-        checks.append(passed(SECTION, "no Access-Control-Allow-Credentials"))
-
+    # Once, not per verb: this asks `GET status`, which is the same response
+    # whichever preflight was being checked above.
     # "MUST ride the actual response as well, and not only the preflight."
     # `status` is the actual response used, because it is the one verb
     # guaranteed to answer at every level and to need nothing.
@@ -385,6 +291,127 @@ def _allowed_origin(runner: Runner, context: Context) -> list[Check]:
             )
         )
     checks.append(_vary(actual, "actual response"))
+    return checks
+
+
+def _allowed_origin_for(
+    runner: Runner, context: Context, verb: str, origin: str
+) -> list[Check]:
+    """The header rules for one preflighting verb's answer.
+
+    Reported per verb rather than once, because the answers can differ and
+    a runner is only usable from a browser where both are right. Where they
+    agree — which is the ordinary case — this costs a second line per rule
+    and says the same thing twice, which is the price of being able to see
+    the case where they do not.
+    """
+    checks: list[Check] = []
+    preflight = _preflight(runner, verb, origin)
+    allowed = preflight.header_values("access-control-allow-origin")
+
+    # A wildcard is not a refusal, and reading it as one silenced every
+    # rule below. `*` does not contain `origin`, so this skip swallowed a
+    # runner that answers a configured origin with `*` -- the whole
+    # allowed-origin block reported "could not be checked" for a runner
+    # whose answer was the finding.
+    if "*" in allowed:
+        return [
+            failed(
+                SECTION,
+                f"{verb} preflight echoes the origin octet-for-octet",
+                f"the preflight for {origin} answered "
+                "`Access-Control-Allow-Origin: *` rather than the origin "
+                "echoed back. §2.3 requires the requesting origin "
+                "octet-for-octet; a wildcard reaches every page instead of "
+                "the one configured, and reads from outside exactly like a "
+                "runner that refused this origin.",
+            )
+        ]
+
+    if origin not in allowed:
+        return [
+            skipped(
+                SECTION,
+                f"{verb} allowed-origin headers",
+                f"the runner did not allow {origin} (preflight answered "
+                f"{preflight.status}, Access-Control-Allow-Origin "
+                f"{allowed or 'absent'}). Refusing an origin is a legitimate "
+                "configuration, so this is not a failure — but it means the "
+                "header rules could not be checked. Name an origin the runner "
+                "is configured for.",
+            )
+        ]
+
+    checks.append(
+        passed(SECTION, f"{verb} preflight echoes the origin octet-for-octet", f"{origin}")
+    )
+
+    # Vary: Origin, on the preflight and on the actual response. A browser
+    # keys its preflight cache by origin already; a shared cache between the
+    # page and the runner keys on the URL, so a runner echoing an origin
+    # without Vary invites that cache to hand the first caller's permission
+    # to the second.
+    checks.append(_vary(preflight, f"{verb} preflight"))
+
+    methods = _joined(preflight.header_values("access-control-allow-methods"))
+    if "POST" in methods.upper():
+        checks.append(passed(SECTION, f"{verb} preflight allows POST"))
+    else:
+        checks.append(
+            failed(
+                SECTION,
+                f"{verb} preflight allows POST",
+                f"Access-Control-Allow-Methods was {methods!r}; `{verb}` is a POST.",
+            )
+        )
+
+    headers_allowed = _joined(preflight.header_values("access-control-allow-headers")).lower()
+    if "content-type" in headers_allowed:
+        checks.append(passed(SECTION, f"{verb} preflight allows Content-Type"))
+    else:
+        checks.append(
+            failed(
+                SECTION,
+                f"{verb} preflight allows Content-Type",
+                f"Access-Control-Allow-Headers was {headers_allowed!r}. `{verb}` "
+                "carries `application/json`, which a browser will not send "
+                "unless the preflight admits the header.",
+            )
+        )
+
+    # Naming Idempotency-Key is a MUST for a runner that declares
+    # idempotent_retry: a browser cannot send a header its preflight did not
+    # admit, so the promise would otherwise hold for every client kind
+    # except the one that has to ask permission to take it up.
+    if context.declares_idempotent_retry:
+        title = f"{verb} preflight allows Idempotency-Key"
+        if "idempotency-key" in headers_allowed:
+            checks.append(passed(SECTION, title))
+        else:
+            checks.append(
+                failed(
+                    SECTION,
+                    title,
+                    "the runner declares `capabilities.idempotent_retry` and "
+                    "its preflight does not admit `Idempotency-Key`. To a "
+                    "browser client alone, this runner looks like one ignoring "
+                    "a header it never received.",
+                )
+            )
+
+    if preflight.header_values("access-control-allow-credentials"):
+        checks.append(
+            warned(
+                SECTION,
+                f"no Access-Control-Allow-Credentials on {verb}",
+                "the runner sends `Access-Control-Allow-Credentials`. Postern "
+                "defines no cookie and no browser-presented token, so the "
+                "header can only admit ambient credentials this protocol never "
+                "asked for.",
+            )
+        )
+    else:
+        checks.append(passed(SECTION, f"no Access-Control-Allow-Credentials on {verb}"))
 
     return checks
 

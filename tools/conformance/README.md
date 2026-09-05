@@ -145,7 +145,7 @@ postern-conformance self-test
   6 schemas, the build hook bundles each one
   2 declared formats, every one asserted
   3 stream shapes, each read to a bounded end
-  37 planted faults, each caught by its own check
+  38 planted faults, each caught by its own check
 
 Every check can fail.
 ```
