@@ -88,6 +88,9 @@ class Fault(enum.Enum):
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
     )
+    STREAM_RUN_ID_DISAGREES = (
+        "streams a start whose run_id is not the one done reports (§4.3)"
+    )
     RUNS_WITHOUT_ITS_CREDENTIALS = (
         "reports a declared credential as unset and runs the agent anyway "
         "(§4.6 step 5)"
@@ -516,8 +519,21 @@ class _Handler(BaseHTTPRequestHandler):
     def _stream(self) -> None:
         events: list[tuple[str, Any]] = []
 
+        # Built before `start` rather than at `done`, so the identifier
+        # `start` announces is the one `done` reports (§4.3). It used to be
+        # a literal here while `done` took one from the run counter, so the
+        # two disagreed on every stream this runner served -- and the
+        # baseline swept clean, because nothing compared them.
+        response = self._run_response()
+        run_id = response["run_id"]
+
         if Fault.NO_START_EVENT not in self.faults:
-            events.append(("start", {"run_id": "01JD8XW2Q9"}))
+            announced = (
+                "01JD8XW2Q-not-the-one-done-reports"
+                if Fault.STREAM_RUN_ID_DISAGREES in self.faults
+                else run_id
+            )
+            events.append(("start", {"run_id": announced}))
 
         events.append(
             (
@@ -541,7 +557,7 @@ class _Handler(BaseHTTPRequestHandler):
             if Fault.DELTAS_DISAGREE in self.faults:
                 deltas[-1] = "is thoroughly served."
             events.extend(("delta", {"text": chunk}) for chunk in deltas)
-        events.append(("done", self._run_response()))
+        events.append(("done", response))
         if Fault.TWO_TERMINALS in self.faults:
             events.append(("error", _error("agent_error", "and an error too.")))
 

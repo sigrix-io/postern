@@ -953,6 +953,7 @@ def _streams(runner: Runner, context: Context, body: dict[str, Any]) -> list[Che
         )
 
     checks.extend(_terminates_once(names, response.stream_truncated))
+    checks.extend(_one_run_is_named(events))
     checks.extend(_payloads(events, context))
     checks.extend(_bytes_run_emits_no_delta(events, context))
     checks.extend(_deltas_concatenate(events))
@@ -1006,6 +1007,57 @@ def _terminates_once(names: list[str], truncated: bool = False) -> list[Check]:
             f"`{terminals[0]}` was not last — {names[-1]!r} followed it.",
         )
     ]
+
+
+def _one_run_is_named(events: list[tuple[str, str]]) -> list[Check]:
+    """§4.3 — `done` repeats `start`'s `run_id`.
+
+    The only correlation a stream offers. The response committed to `200
+    text/event-stream` before any of this was decided, so there is no header
+    or status left to carry it, and a client that watched one run and was
+    handed another's identifier has no second source to notice with.
+
+    It spans two events, so neither `stream-event.schema.json` nor
+    `run-response.schema.json` can see it — the same reason §4.3's `delta`
+    concatenation rule is asserted rather than schema'd.
+
+    Silent where either end is missing or unreadable: `start is first` and
+    `exactly one done or error` already report those, and repeating them
+    here would file one defect twice under a title that is not about it.
+    """
+    started = _event_run_id(events, "start")
+    finished = _event_run_id(events, "done")
+    if started is None or finished is None:
+        return []
+
+    title = "start and done name the same run"
+    if started == finished:
+        return [passed(STREAM, title)]
+    return [
+        failed(
+            STREAM,
+            title,
+            f"`start` reported {started!r} and `done` reported {finished!r}. "
+            "A client correlates a stream with its result, and with the "
+            "runner's logs, on that identifier and on nothing else — the "
+            "response committed to `200 text/event-stream` before either was "
+            "written, so there is no status or header carrying it instead.",
+        )
+    ]
+
+
+def _event_run_id(events: list[tuple[str, str]], name: str) -> str | None:
+    """The `run_id` of the first event so named, or None if there is none to read."""
+    for event_name, data in events:
+        if event_name != name:
+            continue
+        try:
+            payload = json.loads(data)
+        except json.JSONDecodeError:
+            return None
+        run_id = payload.get("run_id") if isinstance(payload, dict) else None
+        return run_id if isinstance(run_id, str) else None
+    return None
 
 
 def _payloads(events: list[tuple[str, str]], context: Context) -> list[Check]:

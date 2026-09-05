@@ -140,6 +140,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         "reused key with different inputs",
         {"execute": True, "idempotent": True},
     ),
+    Fault.STREAM_RUN_ID_DISAGREES: (
+        "4.3",
+        "start and done name the same run",
+        {"execute": True},
+    ),
     Fault.RUNS_WITHOUT_ITS_CREDENTIALS: (
         "4.6",
         "run refuses a credential it has not got",

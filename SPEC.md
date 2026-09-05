@@ -999,6 +999,15 @@ this list grows without a version bump.
 least `name` and `status` — one saying which step, the other which edge of
 it. `model_id` is absent for a step that calls no model.
 
+**`done` repeats `start`'s `run_id`**, and a runner **MUST NOT** report two
+identifiers for one run. That is how a client correlates a stream with its
+result and with the runner's logs, and it is the only correlation a stream
+offers: the response began `200 text/event-stream` before any of this was
+decided (§4.5), so there is no header or status left to carry it. A stream
+naming one run at its start and another at its end tells a client something
+false about which run it watched, and does so on an answer that is
+otherwise correct in every particular.
+
 The `delta` invariant is text-shaped, which is why §4.1.4 forbids the event
 outright for a `bytes` output rather than reinterpreting it: base64
 fragments would satisfy the concatenation rule while giving a client that
@@ -2049,6 +2058,15 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before the first tagged release.
 
+- §4.3 states that `done` repeats `start`'s `run_id`, and that a runner
+  **MUST NOT** report two identifiers for one run. The rule was asserted in
+  `stream-event.schema.json` — whose `start` description has always said it
+  carries *"the `run_id` that the `done` payload repeats"* — and
+  demonstrated in `examples/stream.txt`, where both name `01JD8XW2Q9`. The
+  prose said only that `start` carries `run_id`, so the correlation was
+  documented everywhere except the document that binds it. It spans two
+  events, which is why neither schema can reach it and why it is asserted
+  the way §4.3's `delta` concatenation rule already is (§4.3, §4.5).
 - `status.agent`, `status.entitlement` and `describe.output` are
   **REQUIRED**, which the sections reasoning about them assumed and the
   schemas did not carry. Every top-level member §4.4 marks, it marks
