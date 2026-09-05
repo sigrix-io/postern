@@ -250,6 +250,7 @@ MUST_ACCEPT = [
         "describe.schema.json",
         "a null default on a number input, which means no value was supplied",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": _AGENT,
             "inputs": [{"key": "n", "label": "N", "type": "number",
@@ -260,6 +261,7 @@ MUST_ACCEPT = [
         "describe.schema.json",
         "an input key using every class §4.1.1's grammar admits",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": _AGENT,
             "inputs": [{"key": "Max_Length.v2-beta", "label": "L", "type": "text",
@@ -363,6 +365,7 @@ MUST_REJECT = [
         "describe.schema.json",
         "an idempotent_retry that is not a boolean, which promises nothing readable",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": {"id": "acme/a", "name": "A", "version": "1"},
             "inputs": [],
@@ -403,6 +406,7 @@ MUST_REJECT = [
         "describe.schema.json",
         "a select input that declares no options",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": _AGENT,
             "inputs": [
@@ -418,6 +422,7 @@ MUST_REJECT = [
         "describe.schema.json",
         "a number input whose default is a string",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": _AGENT,
             "inputs": [{"key": "n", "label": "N", "type": "number",
@@ -428,6 +433,7 @@ MUST_REJECT = [
         "describe.schema.json",
         "a text input whose default is a number",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": _AGENT,
             "inputs": [{"key": "t", "label": "T", "type": "text",
@@ -438,6 +444,7 @@ MUST_REJECT = [
         "describe.schema.json",
         "an input key carrying a space, which no client can render as a name",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": _AGENT,
             "inputs": [{"key": "market segment", "label": "L", "type": "text",
@@ -448,6 +455,7 @@ MUST_REJECT = [
         "describe.schema.json",
         "a credential carrying a value rather than only a name",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": _AGENT,
             "inputs": [],
@@ -458,6 +466,7 @@ MUST_REJECT = [
         "describe.schema.json",
         "a boolean default, which no declared input type can produce",
         {
+            "output": {"type": "text"},
             "postern": "0.1",
             "agent": _AGENT,
             "inputs": [
@@ -480,18 +489,21 @@ MUST_REJECT = [
         "describe.schema.json",
         "an agent id carrying uppercase, which comparison would have to fold",
         {"postern": "0.1", "agent": {**_AGENT, "id": "Acme/Market-Research-Crew"},
+         "output": {"type": "text"},
          "inputs": []},
     ),
     (
         "describe.schema.json",
         "an agent id with no owner part",
         {"postern": "0.1", "agent": {**_AGENT, "id": "market-research-crew"},
+         "output": {"type": "text"},
          "inputs": []},
     ),
     (
         "describe.schema.json",
         "an agent id one character past the 128-character bound",
         {"postern": "0.1", "agent": {**_AGENT, "id": "acme/" + "a" * 124},
+         "output": {"type": "text"},
          "inputs": []},
     ),
     (
@@ -575,6 +587,7 @@ MUST_REJECT = [
         "status.schema.json",
         "a checked_at that is not a timestamp",
         {"postern": "0.1", "level": 3, "state": "ready",
+         "agent": {"id": "acme/a"},
          "entitlement": {"state": "active", "checked_at": "yesterday",
                          "stale_after_seconds": 60}},
     ),
@@ -582,6 +595,30 @@ MUST_REJECT = [
         "entitlement.schema.json",
         "a checked_at that is nearly RFC 3339, with a space for the T",
         {**_ENTITLEMENT, "checked_at": "2026-08-15 09:14:02Z"},
+    ),
+    (
+        "status.schema.json",
+        "a status that names no agent, so §2.2's identity rule cannot be asked",
+        {"postern": "0.1", "level": 3, "state": "ready",
+         "entitlement": {"state": "not_required"}},
+    ),
+    (
+        "status.schema.json",
+        "a status whose agent block carries no identifier",
+        {"postern": "0.1", "level": 3, "state": "ready",
+         "agent": {"version": "1.0.0"},
+         "entitlement": {"state": "not_required"}},
+    ),
+    (
+        "status.schema.json",
+        "a status that reports no entitlement state at all",
+        {"postern": "0.1", "level": 3, "state": "ready",
+         "agent": {"id": "acme/a"}},
+    ),
+    (
+        "describe.schema.json",
+        "a describe that declares no output contract",
+        {"postern": "0.1", "agent": _AGENT, "inputs": []},
     ),
     (
         "error.schema.json",

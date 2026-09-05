@@ -4,7 +4,7 @@
   "title": "Postern describe response",
   "description": "Response body of GET /postern/v0/describe. See SPEC.md section 4.1.",
   "type": "object",
-  "required": ["postern", "agent", "inputs"],
+  "required": ["postern", "agent", "inputs", "output"],
   "properties": {
     "postern": {
       "type": "string",

@@ -4,7 +4,7 @@
   "title": "Postern status response",
   "description": "Response body of GET /postern/v0/status. Answerable at conformance Level 1 and without credentials. See SPEC.md section 4.4.",
   "type": "object",
-  "required": ["postern", "level", "state"],
+  "required": ["postern", "level", "state", "agent", "entitlement"],
   "properties": {
     "postern": { "type": "string", "const": "0.1" },
     "level": {
@@ -15,6 +15,8 @@
     "state": { "type": "string", "enum": ["ready", "running", "degraded"] },
     "agent": {
       "type": "object",
+      "description": "Which agent this runner serves. SPEC.md section 1.5 says the identifier appears here as well as in describe, and section 2.2's identity rule - one runner, one agent, its port that agent's address - is only checkable when it does. Only id is required: section 4.4's example carries version beside it and nothing obliges it.",
+      "required": ["id"],
       "properties": {
         "id": {
           "type": "string",
@@ -28,6 +30,7 @@
     },
     "entitlement": {
       "type": "object",
+      "description": "SPEC.md section 5.1 requires a runner with no distributor to report state as not_required, so the block is not omissible: saying nothing is indistinguishable from a runner that has not implemented entitlement at all, which is the one thing a client reads this to find out.",
       "required": ["state"],
       "properties": {
         "state": {
