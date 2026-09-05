@@ -15,7 +15,7 @@ from typing import Any
 from ..context import Context
 from ..probe import Runner
 from ..report import Check, failed, passed, warned
-from . import check_schema, error_envelope_checks
+from . import check_schema, error_envelope_checks, json_media_type
 
 SECTION = "4.1"
 
@@ -99,6 +99,7 @@ def run(runner: Runner, context: Context) -> list[Check]:
     checks.append(_side_effect_free(runner, response.body))
     checks.extend(_bytes_output_carries_no_example(body))
     checks.extend(_write_tools(body))
+    checks.extend(json_media_type(response, where="describe"))
     checks.extend(_credentials_are_names_only(body))
     checks.extend(_no_secret_shape_elsewhere(body))
     checks.extend(_agrees_with_status(body, context))

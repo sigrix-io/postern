@@ -29,7 +29,13 @@ from typing import Any
 from ..context import Context
 from ..probe import TERMINAL_EVENT_NAMES, Response, Runner
 from ..report import Check, failed, passed, skipped, warned
-from . import check_schema, error_code, error_envelope_checks, stream_event_errors
+from . import (
+    check_schema,
+    error_code,
+    error_envelope_checks,
+    json_media_type,
+    stream_event_errors,
+)
 
 RUN = "4.2"
 STREAM = "4.3"
@@ -404,6 +410,7 @@ def _executes(runner: Runner, context: Context, body: dict[str, Any]) -> list[Ch
         return checks
 
     checks.append(passed(RUN, "the agent runs and answers"))
+    checks.extend(json_media_type(response, where="run"))
 
     payload = response.json
     if not isinstance(payload, dict):

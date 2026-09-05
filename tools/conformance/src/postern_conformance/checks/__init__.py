@@ -79,6 +79,33 @@ def check_schema(
     return passed(section, title)
 
 
+def json_media_type(response: Response, *, where: str) -> list[Check]:
+    """§2 — every response body but `stream`'s is `application/json`.
+
+    One helper because the rule is one rule. It was asserted on `status`
+    alone, which is the response least likely to get it wrong: an error
+    body is the one most likely to, since a failure path often leaves the
+    serializer that would have set the header.
+
+    A client reads the header before it reads the body. One arriving as
+    `text/plain` is a body a strict client discards without parsing, and a
+    lenient one parses while logging a warning nobody sees — so the runner
+    looks, to the first kind, exactly like one that answered nothing.
+    """
+    title = f"{where} is served as application/json"
+    if response.media_type == "application/json":
+        return [passed("2", title)]
+    return [
+        failed(
+            "2",
+            title,
+            f"Content-Type was {response.header('content-type') or 'absent'!r}. "
+            "§2 requires JSON bodies for every verb but `stream`, which is "
+            "`text/event-stream` (§4.3).",
+        )
+    ]
+
+
 def error_envelope_checks(
     response: Response,
     *,
@@ -101,6 +128,7 @@ def error_envelope_checks(
     here, because it has different things to say about each.
     """
     checks: list[Check] = []
+    checks.extend(json_media_type(response, where=f"{context}: the error body"))
     body = response.json
 
     if body is None:

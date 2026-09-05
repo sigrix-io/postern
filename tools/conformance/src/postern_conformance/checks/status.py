@@ -16,7 +16,7 @@ from typing import Any
 from ..context import Context
 from ..probe import Response, Runner
 from ..report import Check, failed, passed, warned
-from . import check_schema, error_envelope_checks
+from . import check_schema, error_envelope_checks, json_media_type
 
 SECTION = "4.4"
 
@@ -58,29 +58,9 @@ def run(runner: Runner, context: Context) -> list[Check]:
 
     context.status = body
     checks.append(check_schema(SECTION, "status matches its schema", "status.schema.json", body))
-    checks.extend(_media_type(response))
+    checks.extend(json_media_type(response, where="status"))
     checks.extend(_entitlement(body))
     return checks
-
-
-def _media_type(response: Response) -> list[Check]:
-    """Section 2 — bodies are `application/json; charset=utf-8`.
-
-    Reported under this section rather than 2 because it is this response
-    that carries it, and a reader chasing a status failure should not have
-    to look somewhere else to find out that the content type was the
-    problem.
-    """
-    if response.media_type == "application/json":
-        return [passed(SECTION, "status is served as application/json")]
-    return [
-        failed(
-            SECTION,
-            "status is served as application/json",
-            f"Content-Type was {response.header('content-type')!r}. Section 2 "
-            "requires JSON bodies for every verb but `stream`.",
-        )
-    ]
 
 
 def _entitlement(body: dict[str, Any]) -> list[Check]:

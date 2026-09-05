@@ -88,6 +88,9 @@ class Fault(enum.Enum):
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
     )
+    BODY_NOT_JSON_MEDIA_TYPE = (
+        "serves its JSON bodies as text/plain (§2)"
+    )
     STREAM_PREFLIGHT_OMITS_CONTENT_TYPE = (
         "admits Content-Type on run's preflight and not on stream's (§2.3)"
     )
@@ -225,7 +228,15 @@ class _Handler(BaseHTTPRequestHandler):
     ) -> None:
         body = json.dumps(payload).encode("utf-8") if payload is not None else b""
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        # §2 binds every body but `stream`'s. A client reads this header
+        # before the body, so a strict one discards a payload that is
+        # perfectly good JSON and the runner looks like it answered nothing.
+        self.send_header(
+            "Content-Type",
+            "text/plain; charset=utf-8"
+            if Fault.BODY_NOT_JSON_MEDIA_TYPE in self.faults
+            else "application/json; charset=utf-8",
+        )
         self.send_header("Content-Length", str(len(body)))
         for key, value in (self._cors("") | (extra or {})).items():
             self.send_header(key, value)
