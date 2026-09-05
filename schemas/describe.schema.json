@@ -134,7 +134,7 @@
         "required": { "type": "boolean" },
         "default": {
           "type": ["string", "number", "null"],
-          "description": "Follows the value space of type (SPEC.md section 4.1.1): a string for text and select, a number for number, null for no value. No v0 input type produces a boolean."
+          "description": "Follows the value space of type (SPEC.md section 4.1.1): a string for text and select, a number for number, null for no value. No v0 input type produces a boolean. The allOf below enforces that pairing, which is possible here because the type and the default sit in one object; run-request.schema.json cannot, since the values there are in a different document from the declarations that type them, so it admits the union of the three value spaces and section 4.2 leaves the per-input check to the runner."
         },
         "validation": {
           "type": "object",
@@ -155,6 +155,25 @@
       },
       "additionalProperties": true,
       "allOf": [
+        {
+          "description": "This branch and the next hold default to the value space its type declares (SPEC.md section 4.1.1). Both are keyed positively on the types they constrain, never negatively on the ones they do not: section 4.1.1 anticipates a fourth type, and a branch reading 'anything that is not number' would constrain it the moment it arrived.",
+          "if": {
+            "properties": { "type": { "const": "number" } },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": { "default": { "type": ["number", "null"] } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "enum": ["text", "select"] } },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": { "default": { "type": ["string", "null"] } }
+          }
+        },
         {
           "if": {
             "properties": { "type": { "const": "select" } },
