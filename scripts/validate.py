@@ -28,8 +28,9 @@ Nine things are checked, because nine different kinds of edit go wrong:
    section number nobody kept is worse than no picture.
 8. examples/stream.txt is read as a transcript rather than trusted as prose:
    every event payload in it validates against the schema for its event
-   name, and the delta texts concatenate to the done payload's output.value
-   — the one section 4.3 rule that spans events, and so the one no schema
+   name, start and done name the same run, and the delta texts concatenate
+   to the done payload's output.value
+   — the section 4.3 rules that span events, and so the ones no schema
    can reach.
 9. Every line count docs/ cites is SPEC.md's real one. The pages there
    state its length as the thing a reader is deciding whether to take on,
@@ -1053,6 +1054,8 @@ def _stream_transcript() -> bool:
     failed = False
     deltas: list[str] = []
     final: str | None = None
+    started: str | None = None
+    finished: str | None = None
 
     for name, payload in events:
         where = f"examples/stream.txt event:{name}"
@@ -1083,10 +1086,13 @@ def _stream_transcript() -> bool:
                 print(f"        {location}: {error.message}")
             continue
 
-        if name == "delta":
+        if name == "start":
+            started = document.get("run_id")
+        elif name == "delta":
             deltas.append(document["text"])
         elif name == "done":
             final = document["output"]["value"]
+            finished = document.get("run_id")
 
     print(f"ok    examples/stream.txt — {len(events)} event payloads validate")
 
@@ -1104,6 +1110,17 @@ def _stream_transcript() -> bool:
             print(
                 f"ok    examples/stream.txt — {len(deltas)} deltas"
                 " rebuild output.value"
+            )
+
+    if started is not None and finished is not None:
+        if started != finished:
+            failed = True
+            print("FAIL  examples/stream.txt names two runs in one stream")
+            print(f"        start -> {started!r}")
+            print(f"        done  -> {finished!r}")
+        else:
+            print(
+                "ok    examples/stream.txt — start and done name the same run"
             )
 
     return failed
