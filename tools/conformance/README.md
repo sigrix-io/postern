@@ -67,6 +67,22 @@ uniqueness check already bound, and a conformant runner refuses it without
 running the agent. It rides on `--execute` because the key has to have been
 bound by a real run first, not because it buys another.
 
+Two refusals ride on it for the opposite reason — not because they need a
+run, but because a runner that breaks them performs one. A request failing
+a `validation` the agent's own `describe` declares, and a request sent
+while `status` reports a declared credential unset
+([§4.6](../../SPEC.md#46-the-order-of-refusals) step 5), are both bodies a
+conforming runner rejects before the agent starts, so against one they cost
+nothing. There is no way to ask that is free against a runner answering
+wrongly: the run *is* the answer, and you have to have agreed to pay for
+it.
+
+The second is askable only where the runner said so first.
+`status.credentials` is OPTIONAL ([§4.4](../../SPEC.md#44-get-posternv0status)),
+so a runner publishing no credential state is conformant and its
+environment cannot be read from outside — the report says so rather than
+passing it quietly.
+
 ## Usage
 
 ```console
@@ -124,12 +140,12 @@ passed just as happily against a runner that did none of it.
 $ python tools/conformance/selftest.py
 postern-conformance self-test
 
-  19 conformant baselines, none failing
+  22 conformant baselines, none failing
   11 error codes, table agrees with the schema
   6 schemas, the build hook bundles each one
   2 declared formats, every one asserted
   3 stream shapes, each read to a bounded end
-  34 planted faults, each caught by its own check
+  35 planted faults, each caught by its own check
 
 Every check can fail.
 ```

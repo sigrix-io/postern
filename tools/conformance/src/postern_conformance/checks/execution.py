@@ -33,6 +33,7 @@ from . import check_schema, error_code, error_envelope_checks, stream_event_erro
 
 RUN = "4.2"
 STREAM = "4.3"
+REFUSAL_ORDER = "4.6"
 
 # A run may legitimately take minutes. `status.limits.max_run_seconds` is
 # the runner's own bound where it declares one, and this is the fallback
@@ -114,6 +115,24 @@ def run(runner: Runner, context: Context) -> list[Check]:
         return checks
 
     checks.extend(_refuses_a_declared_validation(runner, context))
+    checks.extend(_refuses_without_its_credentials(runner, context, body))
+
+    if context.reports_a_missing_credential:
+        checks.append(
+            skipped(
+                RUN,
+                "the agent runs and answers",
+                "`status` reports "
+                + _credential_names(context)
+                + " unset, and §4.6 step 5 has a conforming runner refuse a "
+                "run rather than start the agent without it — so there is no "
+                "result to measure here whichever way this one answered. "
+                "Whether it refused is checked above. Set the credential and "
+                "run this again to reach the rules that need a real run.",
+            )
+        )
+        return checks
+
     checks.extend(_executes(runner, context, body))
     if context.level == 3:
         checks.extend(_streams(runner, context, body))
@@ -598,6 +617,114 @@ def _refuses_a_declared_validation(runner: Runner, context: Context) -> list[Che
             + (
                 " — and this one ran the agent, so the constraint `describe` "
                 "publishes is one the runner does not apply."
+                if response.status == 200
+                else "."
+            ),
+        )
+    ]
+
+
+def _credential_names(context: Context) -> str:
+    """How the reports name what is missing, or a phrase for "it did not say"."""
+    missing = context.missing_credentials
+    if missing:
+        return ", ".join(f"`{name}`" for name in missing)
+    return "a credential it does not name"
+
+
+def _refuses_without_its_credentials(
+    runner: Runner, context: Context, body: dict[str, Any]
+) -> list[Check]:
+    """§4.6 step 5 — a declared credential the environment lacks is a `424`.
+
+    The **MUST** binds each row of the sequence as well as the sequence
+    itself: where `describe` declares a credential and the runner does not
+    hold it, the runner answers `424 missing_credential` rather than
+    starting the agent and reporting whatever the agent's own failure turns
+    out to be. That is the difference this asks about, and it is the one a
+    client cannot discover any other way — a `424` names the variable to
+    set, and the `500 agent_error` that follows a run started without it
+    names nothing.
+
+    Only askable because the runner said so first. §4.4 makes
+    `status.credentials` **OPTIONAL**, so a runner that publishes no
+    credential state is conformant and its environment is not observable
+    from outside; the skip says as much rather than passing it quietly.
+    That optionality governs *publishing*, not checking — a runner may
+    perform step 5 and report nothing — so the absence is a limit on this
+    checker, not a finding about the runner.
+
+    Under `--execute` for the same reason `_refuses_a_declared_validation`
+    is: the body satisfies every declared input, so a runner that skips
+    step 5 has no grounds to refuse it and runs the agent. Against a
+    conforming runner it costs nothing, because the refusal happens before
+    the agent starts.
+
+    `run` only, though §4.6 orders `stream` the same way. Every state the
+    entitlement checks cover refuses both verbs, so probing both is free
+    there; here the second probe is free only against a runner that
+    passes, and buys a second execution against exactly the runner that
+    does not.
+    """
+    title = "run refuses a credential it has not got"
+
+    if not context.reports_a_missing_credential:
+        if context.credentials_satisfied is True:
+            # The runner says its environment is complete, so there is no
+            # request it owes a 424 and the step passes vacuously. Reported
+            # as nothing rather than as a skip: this is the ordinary state
+            # of a working runner, and a line saying so on every clean run
+            # would be noise.
+            return []
+        if not context.declared_credentials:
+            # §4.1.3 declares credentials by name, and this agent names
+            # none — so there is nothing for step 5 to check.
+            return []
+        return [
+            skipped(
+                REFUSAL_ORDER,
+                title,
+                "`describe` declares "
+                + ", ".join(f"`{name}`" for name in context.declared_credentials)
+                + ", and `status` reports no credential state. §4.4 makes "
+                "`status.credentials` OPTIONAL, so this runner is conformant "
+                "and its environment cannot be read from outside — publish "
+                "the block and this rule becomes checkable.",
+            )
+        ]
+
+    response = runner.post_json("run", body, timeout=_timeout(context))
+    names = _credential_names(context)
+
+    if response.status == 424:
+        checks = [
+            passed(
+                REFUSAL_ORDER,
+                title,
+                f"refused a request satisfying every declared input, with "
+                f"`status` reporting {names} unset.",
+            )
+        ]
+        checks.extend(
+            error_envelope_checks(
+                response,
+                context="run without a declared credential",
+                expected_code="missing_credential",
+            )
+        )
+        return checks
+
+    return [
+        failed(
+            REFUSAL_ORDER,
+            title,
+            f"answered {response.status} to a request satisfying every "
+            f"declared input, while `status` reports {names} unset. §4.6 "
+            "step 5 requires `424` `missing_credential` here"
+            + (
+                " — and this one started the agent, so a client meeting an "
+                "unset credential learns about it from whatever the agent "
+                "fails with rather than from the name of the variable to set."
                 if response.status == 200
                 else "."
             ),
