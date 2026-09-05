@@ -128,6 +128,7 @@ postern-conformance self-test
   11 error codes, table agrees with the schema
   6 schemas, the build hook bundles each one
   2 declared formats, every one asserted
+  3 stream shapes, each read to a bounded end
   34 planted faults, each caught by its own check
 
 Every check can fail.

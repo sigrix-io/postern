@@ -27,7 +27,7 @@ import json
 from typing import Any
 
 from ..context import Context
-from ..probe import Response, Runner
+from ..probe import TERMINAL_EVENT_NAMES, Response, Runner
 from ..report import Check, failed, passed, skipped, warned
 from . import check_schema, error_code, error_envelope_checks, stream_event_errors
 
@@ -825,28 +825,41 @@ def _streams(runner: Runner, context: Context, body: dict[str, Any]) -> list[Che
             )
         )
 
-    checks.extend(_terminates_once(names))
+    checks.extend(_terminates_once(names, response.stream_truncated))
     checks.extend(_payloads(events, context))
     checks.extend(_bytes_run_emits_no_delta(events, context))
     checks.extend(_deltas_concatenate(events))
     return checks
 
 
-def _terminates_once(names: list[str]) -> list[Check]:
-    """A stream MUST end with exactly one `done` or one `error`."""
-    terminals = [name for name in names if name in ("done", "error")]
+def _terminates_once(names: list[str], truncated: bool = False) -> list[Check]:
+    """A stream MUST end with exactly one `done` or one `error`.
+
+    `truncated` says the reader stopped on its own deadline rather than at
+    the end of the stream, which changes what the absence of a terminal
+    event means and so what this reports. Reading "the stream ended
+    carrying neither" off a stream that never ended sends an implementer
+    looking for an early close that did not happen.
+    """
+    terminals = [name for name in names if name in TERMINAL_EVENT_NAMES]
     title = "the stream ends with exactly one done or error"
 
-    if len(terminals) == 1 and names[-1] in ("done", "error"):
+    if len(terminals) == 1 and names[-1] in TERMINAL_EVENT_NAMES:
         return [passed("4.3", title, f"ended with `{names[-1]}`.")]
 
     if not terminals:
+        ended = (
+            "the checker stopped reading before either arrived, so the run "
+            "is still open as far as a client is concerned"
+            if truncated
+            else f"the stream ended after {names[-1]!r} with neither"
+        )
         return [
             failed(
                 "4.3",
                 title,
-                f"the stream ended after {names[-1]!r} with neither. A client "
-                "cannot tell a finished run from a dropped connection.",
+                f"{ended}. A client cannot tell a finished run from a "
+                "dropped connection.",
             )
         ]
 

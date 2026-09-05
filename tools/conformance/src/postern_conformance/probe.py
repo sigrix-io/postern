@@ -25,8 +25,9 @@ import http.client
 import json
 import socket
 import ssl
+import time
 import urllib.parse
-from typing import Any, Iterator
+from typing import Any, Callable
 
 PATH_PREFIX = "/postern/v0"
 
@@ -34,6 +35,21 @@ PATH_PREFIX = "/postern/v0"
 # failure, short enough that an unreachable port does not hold the run.
 # A `run` is given its own, much longer, budget by the caller.
 DEFAULT_TIMEOUT_SECONDS = 30.0
+
+# SPEC.md section 4.3: a stream MUST end with exactly one of these. The
+# reader needs the names because they are what tells it the stream is over
+# — a transport fact here rather than a conformance rule, and the checks
+# import this rather than spelling the pair a second time.
+TERMINAL_EVENT_NAMES = ("done", "error")
+
+# How long to keep reading once a terminal event has arrived. A conformant
+# runner closes the connection, so this costs it nothing — the read ends at
+# EOF. It is spent only by a runner that holds the connection open, and it
+# is spent deliberately: section 4.3 also forbids a second terminal and any
+# event after the first, and both are only visible to a reader that is
+# still listening. Stopping dead on the terminal would turn those two
+# checks into ones that cannot fail.
+TRAILING_GRACE_SECONDS = 2.0
 
 
 class Unreachable(RuntimeError):
@@ -56,6 +72,12 @@ class Response:
     # chunked encoding — which `stream` needs to send events as they
     # happen rather than at the end.
     http_version: int = 11
+    # Set only by `stream`, and only when the reader stopped on its own
+    # deadline rather than because the stream ended. The distinction
+    # reaches the report: "the stream ended carrying no terminal event"
+    # and "we gave up waiting for one" send an implementer looking in
+    # different places.
+    stream_truncated: bool = False
 
     def header(self, name: str) -> str | None:
         """The single value of a header, or None.
@@ -234,6 +256,12 @@ class Runner:
         connection = self._connect(timeout)
         try:
             connection.request("POST", f"{PATH_PREFIX}/stream", body=encoded, headers=headers)
+            # Held before `getresponse`, which hands the socket to the
+            # response and leaves `connection.sock` as None for a body read
+            # to EOF — which every SSE stream is. Reaching for it afterwards
+            # arms nothing, silently, and the grace below never bounds
+            # anything.
+            stream_socket = connection.sock
             raw = connection.getresponse()
             headers = tuple((key, value) for key, value in raw.getheaders())
 
@@ -246,16 +274,44 @@ class Runner:
                     [],
                 )
 
-            events = list(_read_sse(raw))
-            return Response(raw.status, headers, b"", raw.version), events
+            def arm_grace(seconds: float) -> None:
+                # The grace has to bound a runner that goes *quiet* after
+                # its terminal event as well as one that keeps talking, and
+                # a clock checked between lines cannot end a wait for a line
+                # that never comes. Shortening the socket's own timeout is
+                # what covers that half.
+                if stream_socket is not None:
+                    stream_socket.settimeout(seconds)
+
+            events, truncated = _read_sse(
+                raw,
+                deadline=time.monotonic() + timeout,
+                arm_grace=arm_grace,
+            )
+            return (
+                Response(
+                    raw.status,
+                    headers,
+                    b"",
+                    raw.version,
+                    stream_truncated=truncated,
+                ),
+                events,
+            )
         except (OSError, socket.timeout, http.client.HTTPException) as exc:
             raise Unreachable(f"POST {PATH_PREFIX}/stream: {exc}") from exc
         finally:
             connection.close()
 
 
-def _read_sse(stream: Any) -> Iterator[tuple[str, str]]:
-    """Parse an SSE body into (event, data) pairs.
+def _read_sse(
+    stream: Any,
+    *,
+    deadline: float,
+    grace: float = TRAILING_GRACE_SECONDS,
+    arm_grace: Callable[[float], None] | None = None,
+) -> tuple[list[tuple[str, str]], bool]:
+    """Parse an SSE body into (event, data) pairs, under two bounds.
 
     Only as much of the format as this protocol uses: `event:` and `data:`,
     events separated by a blank line, and `data:` accumulating across lines
@@ -264,34 +320,80 @@ def _read_sse(stream: Any) -> Iterator[tuple[str, str]]:
     skipped — Postern defines no use for any of the three, and a checker
     that choked on one would fail a runner for sending something the wire
     format allows.
+
+    Returns the events and whether the read was cut short.
+
+    **It used to read to EOF, which is a bound only if the runner closes.**
+    The socket's own timeout is not a second one: it is per read, so any
+    traffic resets it, and a comment line is exactly the traffic a keepalive
+    is made of. Measured against a runner emitting `done` and then a comment
+    a second, on an eight-second socket timeout, the old reader was still
+    going after two minutes.
+
+    So the clock is checked **per line, not per event** — a comment yields
+    no event, and a bound that only advances when an event arrives is one a
+    silent keepalive never reaches. That is the whole reason this function
+    owns both bounds rather than its caller.
+
+    `grace` starts at the terminal event. Section 4.3 forbids a second
+    terminal and any event after the first, so stopping dead on the first
+    would leave both of those checks unable to fail; waiting a little is
+    what keeps them real. A conformant runner closes and never spends it.
     """
     event_name = ""
     data_lines: list[str] = []
+    events: list[tuple[str, str]] = []
+    terminal_at: float | None = None
 
-    for raw_line in stream:
-        line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+    def flush() -> None:
+        nonlocal event_name, data_lines, terminal_at
+        if data_lines or event_name:
+            name = event_name or "message"
+            events.append((name, "\n".join(data_lines)))
+            if terminal_at is None and name in TERMINAL_EVENT_NAMES:
+                terminal_at = time.monotonic()
+                if arm_grace is not None:
+                    arm_grace(grace)
+        event_name = ""
+        data_lines = []
 
-        if not line:
-            if data_lines or event_name:
-                yield (event_name or "message", "\n".join(data_lines))
-            event_name = ""
-            data_lines = []
-            continue
+    try:
+        for raw_line in stream:
+            now = time.monotonic()
+            if now >= deadline:
+                return events, True
+            if terminal_at is not None and now - terminal_at >= grace:
+                return events, False
 
-        if line.startswith(":"):
-            continue
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
 
-        field, _, value = line.partition(":")
-        if value.startswith(" "):
-            value = value[1:]
+            if not line:
+                flush()
+                continue
 
-        if field == "event":
-            event_name = value
-        elif field == "data":
-            data_lines.append(value)
+            if line.startswith(":"):
+                continue
+
+            field, _, value = line.partition(":")
+            if value.startswith(" "):
+                value = value[1:]
+
+            if field == "event":
+                event_name = value
+            elif field == "data":
+                data_lines.append(value)
+    except (socket.timeout, TimeoutError):
+        # After the terminal event this is a runner that will not hang up,
+        # and the read is complete. Before it, nothing said the stream was
+        # over — hand back what arrived rather than claiming it ended, and
+        # let a read that learned nothing at all raise as it always did.
+        if terminal_at is None:
+            if not events:
+                raise
+            return events, True
 
     # A stream that ends without a trailing blank line still delivered its
     # last event. Dropping it here would report a missing `done` that was
     # sent, which is a failure invented by the reader.
-    if data_lines or event_name:
-        yield (event_name or "message", "\n".join(data_lines))
+    flush()
+    return events, False
