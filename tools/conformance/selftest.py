@@ -47,7 +47,7 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
     Fault.WILDCARD_CORS: ("2.3", "no wildcard", {}),
     Fault.NULL_ORIGIN_ALLOWED: ("2.3", "Origin: null is not allowed", {}),
     Fault.NO_RUN_PREFLIGHT: ("2.3", "answers OPTIONS on run", {}),
-    Fault.NO_VARY: ("2.3", "Vary: Origin on the preflight", {}),
+    Fault.NO_VARY: ("2.3", "Vary: Origin on the run preflight", {}),
     # --execute, and this is a finding rather than a detail. The default
     # probe sends a body the runner must reject anyway, so a runner that
     # parses `text/plain` still answers 400 and the check still passes —
@@ -140,6 +140,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         "reused key with different inputs",
         {"execute": True, "idempotent": True},
     ),
+    Fault.STREAM_PREFLIGHT_OMITS_CONTENT_TYPE: (
+        "2.3",
+        "stream preflight allows Content-Type",
+        {},
+    ),
     Fault.SECRET_SHAPE_OUTSIDE_CREDENTIALS: (
         "4.1.3",
         "no credential value elsewhere in describe",
@@ -219,6 +224,25 @@ def _baseline_is_clean(problems: list[str]) -> int:
                         f"the conformant fake runner failed at Level {level} "
                         f"(execute={execute}, idempotent={idempotent}): "
                         + "; ".join(f"§{c.section} {c.title}" for c in report.failures)
+                    )
+
+                # No rule is reported twice. A check that runs once per verb
+                # has to name the verb in its title, and one that does not
+                # belongs outside that loop -- both are easy to get wrong
+                # while widening a check's reach, and the result reads as two
+                # findings where the runner has one. Nothing else here can
+                # see it: a duplicate passes as readily as it fails.
+                seen: dict[tuple[str, str], int] = {}
+                for check_ in report.checks:
+                    key = (check_.section, check_.title)
+                    seen[key] = seen.get(key, 0) + 1
+                repeated = sorted(k for k, n in seen.items() if n > 1)
+                if repeated:
+                    problems.append(
+                        f"at Level {level} (execute={execute}, "
+                        f"idempotent={idempotent}) these were reported more "
+                        "than once: "
+                        + "; ".join(f"§{s} {title}" for s, title in repeated)
                     )
 
     # And the same runner with its entitlement revoked, which is a posture

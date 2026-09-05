@@ -88,6 +88,9 @@ class Fault(enum.Enum):
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
     )
+    STREAM_PREFLIGHT_OMITS_CONTENT_TYPE = (
+        "admits Content-Type on run's preflight and not on stream's (§2.3)"
+    )
     SECRET_SHAPE_OUTSIDE_CREDENTIALS = (
         "puts a key-shaped string in describe outside the credentials block "
         "(§4.1.3)"
@@ -171,7 +174,7 @@ class _Handler(BaseHTTPRequestHandler):
     def level(self) -> int:
         return self.server.level  # type: ignore[attr-defined]
 
-    def _cors(self, methods: str) -> dict[str, str]:
+    def _cors(self, methods: str, verb: str = "") -> dict[str, str]:
         origin = self.headers.get("Origin")
         headers: dict[str, str] = {}
 
@@ -199,12 +202,21 @@ class _Handler(BaseHTTPRequestHandler):
             headers["Vary"] = "Origin"
         if methods:
             headers["Access-Control-Allow-Methods"] = methods
-            allowed = "Content-Type"
+            # Narrower than dropping it everywhere, on the same reasoning as
+            # WILDCARD_ON_GETS: `run`'s preflight is perfect, so a probe that
+            # only ever asked `run` saw nothing -- while no browser could
+            # reach `stream` at all, since it cannot send a header its
+            # preflight did not admit.
+            omit_content_type = (
+                verb == "stream"
+                and Fault.STREAM_PREFLIGHT_OMITS_CONTENT_TYPE in self.faults
+            )
+            allowed = "" if omit_content_type else "Content-Type"
             if (
                 Fault.IDEMPOTENT_WITHOUT_HEADER not in self.faults
                 and self.server.idempotent  # type: ignore[attr-defined]
             ):
-                allowed += ", Idempotency-Key"
+                allowed = f"{allowed}, Idempotency-Key" if allowed else "Idempotency-Key"
             headers["Access-Control-Allow-Headers"] = allowed
         return headers
 
@@ -244,7 +256,7 @@ class _Handler(BaseHTTPRequestHandler):
 
         methods = "GET, OPTIONS" if verb in ("describe", "status") else "POST, OPTIONS"
         self.send_response(204)
-        for key, value in self._cors(methods).items():
+        for key, value in self._cors(methods, verb).items():
             self.send_header(key, value)
         self.send_header("Content-Length", "0")
         self.end_headers()
