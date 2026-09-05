@@ -80,6 +80,7 @@
       "description": "Credentials declared by environment variable NAME only. A value here is nonconformant.",
       "items": {
         "type": "object",
+        "description": "One declared credential. Closed on purpose, and the only closed object in these schemas outside error.schema.json's root (error.code and output.type are closed enums, a different thing): SPEC.md section 4.1.3 says there is nowhere in the protocol for a secret to travel, and an open object here is somewhere - value beside env would be schema-valid, as would every other spelling of the leak that section forbids. It catches the structural half and not the whole of it, since a value written into purpose is a conforming shape carrying a nonconformant string. Like every file here this describes what a conforming runner emits, so a client MUST NOT reject a describe over a member it does not recognise (see schemas/README.md).",
         "required": ["env"],
         "properties": {
           "env": {
@@ -87,8 +88,15 @@
             "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
             "description": "Environment variable name. Never a value."
           },
-          "purpose": { "type": "string" },
-          "signup_url": { "type": "string", "format": "uri" }
+          "purpose": {
+            "type": "string",
+            "description": "One line on what the agent does with it. Written for a person reading a listing before they install anything; no runner reads it."
+          },
+          "signup_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Where a buyer obtains one. Same audience as purpose, and no runner reads it either."
+          }
         },
         "additionalProperties": false
       }

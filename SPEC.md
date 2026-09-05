@@ -605,6 +605,39 @@ This is the property that makes "your keys stay on your machine" checkable
 rather than promised: there is nowhere in the protocol for a secret to
 travel, and a bundle carrying one is nonconformant.
 
+**Each entry carries `env`, and OPTIONALLY `purpose` and `signup_url`.**
+`env` is the environment variable's name, never its value. `purpose` says in
+one line what the agent does with it, and `signup_url` points at where a
+buyer obtains one — both written for a person reading a listing before they
+install anything, and neither read by a runner.
+
+**A conforming runner emits no other member**, and
+[`describe.schema.json`](schemas/describe.schema.json) closes the object to
+say so. It is the only closed *object* in these schemas outside the error
+envelope's root (§2.1) — `error.code` and `output.type` are closed enums,
+a different thing — and it is what makes the sentence above true rather than
+aspirational. An open object *is* somewhere in the protocol for a secret to
+travel: `value` beside `env` would be schema-valid, and so would every other
+spelling of the leak this section forbids.
+
+The closure catches the structural half of that and not the whole of it. A
+value written into `purpose` is a conforming shape carrying a nonconformant
+string, which no schema can see — only reading the field finds it, which is
+why a checker reads it. What the closure removes is the easier mistake, and
+the likelier one: a runner that serialises its own credential record and
+ships the value beside the name without noticing. It removes it at the parse
+boundary rather than by review.
+
+**The cost is a member added here later.**
+[VERSIONING.md](VERSIONING.md#before-10) promises a minor release adds only
+optional fields, and this closure does not take that back: these schemas
+describe what a conforming runner *emits*, not what a client must accept.
+[`schemas/README.md`](schemas/README.md) states that posture and the four
+places it is load-bearing, this being one. A future member is therefore
+additive for runners, and for any client that does not use an emit-side
+schema as an acceptance filter; it breaks only one that does — the parser
+VERSIONING already describes, and already declines to design around.
+
 #### 4.1.4 `output`
 
 Declares what the agent returns: a `type`, and an **OPTIONAL** `example`.
@@ -1957,6 +1990,23 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before the first tagged release.
 
+- §4.1.3 states what a `credentials[]` entry carries, and what its closure
+  is for. `describe.schema.json` has always closed that object, and it was
+  the only statement of the entry's shape anywhere — §4.1.3 described the
+  rule and never the record. The closure is not a list of today's members:
+  §4.1.3's own claim that there is *nowhere in the protocol for a secret to
+  travel* is true only while the object is closed, since an open one would
+  make `value` beside `env` schema-valid, along with every other spelling
+  of the leak the section forbids. It catches the structural half and not
+  the whole of it — a value written into `purpose` is a conforming shape
+  carrying a nonconformant string, which only reading the field finds. The
+  cost is named too: a member added here later is additive for runners and
+  for any client that does not use an emit-side schema as an acceptance
+  filter, and breaks only one that does. It is the only closed object in
+  these schemas outside `error.schema.json`'s root, which
+  [`schemas/README.md`](schemas/README.md) now records as a fourth place
+  the emit/accept difference is load-bearing rather than as three
+  (§2.1, §4.1.3).
 - A runner **MUST** perform the credential check, not merely order it.
   §4.6 placed the environment check last and gave `missing_credential` its
   producing rule, but bound only the sequence — so a runner that never

@@ -14,28 +14,35 @@ a wider question than emitting ([§2.1](../SPEC.md#21-errors)):
 > *emits*, which is a narrower question than the set a client **MUST**
 > accept.
 
-Three places where that difference is load-bearing, and all three are ones a
+Four places where that difference is load-bearing, and all four are ones a
 generated parser gets wrong by default:
 
 - **`error.code` is a closed enum.** §2.1 requires a client to treat an
   unrecognised code as a generic failure of its HTTP status class. New codes
   may be added in a minor release.
 - **`error.schema.json` is closed at its root** — the only schema here that
-  is. §2.1 requires a client not to reject a response for carrying a sibling
-  of `error`.
+  is, though not the only closed object; see the next one. §2.1 requires a
+  client not to reject a response for carrying a sibling of `error`.
+- **`describe.schema.json` closes each `credentials[]` entry**, the one
+  closed object here that is not a root. It is not a description of today's three
+  members: §4.1.3 forbids a `describe` from carrying a credential *value*,
+  and an open object is precisely where one would sit, so the closure is
+  that rule's structural half. A client still **MUST NOT** reject a
+  `describe` over a member it does not recognise, and a member added here in
+  a minor release stays additive for every client that obeys that.
 - **`output.type` is a closed enum, and the one unknown a client may not
   ignore either.** §4.1.4 requires a client not to reject an output type it
-  does not recognise — and, unlike the two above, not to shrug it off: it
+  does not recognise — and, unlike the three above, not to shrug it off: it
   **MUST NOT** present `value` as text. A generated parser gets this wrong
   in both directions at once, rejecting what it should accept and, once
   relaxed, reading bytes it cannot interpret as prose.
 
 So generating client types from these files produces a parser that rejects
-exactly what the specification spends three rules forbidding it to reject —
+exactly what the rules above forbid it to reject —
 the parser [VERSIONING.md](../VERSIONING.md#before-10) describes, where *"a
 parser that rejects an unrecognised field converts every future minor
 release into a breaking one for its users."* Generate from them freely;
-relax both before shipping.
+relax all four before shipping.
 
 There are no lenient mirrors of these files, deliberately. A second set
 would double the surface that has to stay in step, which is the drift
