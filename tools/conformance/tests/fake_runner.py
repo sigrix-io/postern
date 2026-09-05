@@ -88,6 +88,10 @@ class Fault(enum.Enum):
         "replays the first result for a reused Idempotency-Key carrying "
         "different inputs (§4.2)"
     )
+    SECRET_SHAPE_OUTSIDE_CREDENTIALS = (
+        "puts a key-shaped string in describe outside the credentials block "
+        "(§4.1.3)"
+    )
     STREAM_RUN_ID_DISAGREES = (
         "streams a start whose run_id is not the one done reports (§4.3)"
     )
@@ -488,6 +492,14 @@ class _Handler(BaseHTTPRequestHandler):
             document["capabilities"]["idempotent_retry"] = True
         if Fault.CREDENTIAL_VALUE in self.faults:
             document["credentials"][0]["value"] = "sk-abcdefghijklmnopqrstuvwxyz012345"
+        if Fault.SECRET_SHAPE_OUTSIDE_CREDENTIALS in self.faults:
+            # §4.1.3 binds the whole response. The summary is where a key
+            # most plausibly ends up by accident -- pasted in while writing
+            # the listing copy -- and it is nowhere the narrow scan looks.
+            document["agent"]["summary"] = (
+                "Researches a market segment. Configured with "
+                "sk-abcdefghijklmnopqrstuvwxyz012345."
+            )
         if Fault.WRITE_TOOLS_NOT_SUBSET in self.faults:
             document["capabilities"]["write_tools"] = ["file_write", "wire_transfer"]
         return document

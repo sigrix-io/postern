@@ -28,16 +28,25 @@ _CREDENTIAL_VALUE_NAMES = frozenset(
     {"value", "secret", "token", "key", "api_key", "apikey", "password", "credential"}
 )
 
-# Shapes of well-known credentials, matched only inside the `credentials`
-# block. Scoped there deliberately: an agent's `examples` may legitimately
-# discuss an API key, and a checker that failed a runner for documenting one
-# would be unusable by exactly the agents that most need to.
+# Shapes of well-known credentials, each labelled so a finding can name the
+# family without quoting the string that matched. That matters more here
+# than it looks: a conformance report is pasted into issues and pull
+# requests, and a checker that echoed a live key into one would have moved
+# it somewhere worse than where it found it.
+#
+# A failure inside the `credentials` block, a warning anywhere else in the
+# document. §4.1.3's MUST NOT binds the whole `describe` response, so the
+# scan cannot stop at that block -- but an agent's `examples` may
+# legitimately discuss an API key, and a checker that failed a runner for
+# documenting one would be unusable by exactly the agents that most need
+# it. Outside the block the shape is evidence rather than proof, and the
+# report says which it is.
 _SECRET_SHAPES = (
-    re.compile(r"\bsk-[A-Za-z0-9_-]{16,}"),
-    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}"),
-    re.compile(r"\bAIza[0-9A-Za-z_-]{28,}"),
+    ("an OpenAI-style key", re.compile(r"\bsk-[A-Za-z0-9_-]{16,}")),
+    ("a GitHub token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}")),
+    ("an AWS access key id", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("a Slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}")),
+    ("a Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{28,}")),
 )
 
 
@@ -91,6 +100,7 @@ def run(runner: Runner, context: Context) -> list[Check]:
     checks.extend(_bytes_output_carries_no_example(body))
     checks.extend(_write_tools(body))
     checks.extend(_credentials_are_names_only(body))
+    checks.extend(_no_secret_shape_elsewhere(body))
     checks.extend(_agrees_with_status(body, context))
     checks.extend(_capabilities_agree_with_level(body, context))
     return checks
@@ -196,6 +206,68 @@ def _write_tools(body: dict[str, Any]) -> list[Check]:
     return [passed(section, "write_tools is a subset of tools")]
 
 
+def _no_secret_shape_elsewhere(body: dict[str, Any]) -> list[Check]:
+    """§4.1.3 binds the whole `describe` response, not only `credentials`.
+
+    *"A `describe` response **MUST NOT** contain a credential value"* — the
+    response, not the block. The check above reads `credentials` alone,
+    which was a deliberate scoping and left four other places in the same
+    document where a key travels unremarked: `agent.summary`, an input's
+    `default`, `output.example`, and any `examples[].inputs` value.
+
+    A warning rather than a failure, for the reason the scoping was chosen
+    in the first place: an agent whose subject *is* an API may legitimately
+    show a key-shaped string in an example, and a checker that failed it
+    would be unusable by exactly the agents that most need running. Inside
+    `credentials` there is no such reading — the block declares names — so
+    that stays a failure.
+
+    The finding names the location and the family and never the string. A
+    conformance report is pasted into issues and pull requests, and a
+    checker that quoted a live key into one would have moved it somewhere
+    worse than where it found it.
+    """
+    findings = list(_secret_shaped_paths(body))
+    title = "no credential value elsewhere in describe"
+    if not findings:
+        return [passed("4.1.3", title)]
+
+    return [
+        warned(
+            "4.1.3",
+            title,
+            "\n".join(findings)
+            + "\n§4.1.3 forbids a credential value anywhere in this response, "
+            "not only in `credentials`. Reported as a warning because a "
+            "key-shaped string is evidence rather than proof: a placeholder "
+            "in an example reads identically from out here, and that is the "
+            "likely explanation. The value itself is deliberately not quoted.",
+        )
+    ]
+
+
+def _secret_shaped_paths(node: Any, path: str = "") -> Any:
+    """Every location under `node` whose string matches a known shape.
+
+    `credentials` is skipped at the root because the check above already
+    reports it, as a failure — the same finding arriving twice under two
+    titles would read as two problems.
+    """
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if not path and key == "credentials":
+                continue
+            yield from _secret_shaped_paths(value, f"{path}/{key}")
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            yield from _secret_shaped_paths(item, f"{path}/{index}")
+    elif isinstance(node, str):
+        for label, shape in _SECRET_SHAPES:
+            if shape.search(node):
+                yield f"{path or '/'} matches the shape of {label}"
+                break
+
+
 def _credentials_are_names_only(body: dict[str, Any]) -> list[Check]:
     """Section 4.1.3 — a `describe` response MUST NOT contain a credential value."""
     credentials = body.get("credentials")
@@ -212,11 +284,11 @@ def _credentials_are_names_only(body: dict[str, Any]) -> list[Check]:
                     f"credentials[{index}] carries a member named {member!r}"
                 )
             if isinstance(value, str):
-                for shape in _SECRET_SHAPES:
+                for label, shape in _SECRET_SHAPES:
                     if shape.search(value):
                         findings.append(
-                            f"credentials[{index}].{member} matches the shape of a "
-                            "well-known credential"
+                            f"credentials[{index}].{member} matches the shape of "
+                            f"{label}"
                         )
                         break
 

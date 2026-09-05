@@ -140,6 +140,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         "reused key with different inputs",
         {"execute": True, "idempotent": True},
     ),
+    Fault.SECRET_SHAPE_OUTSIDE_CREDENTIALS: (
+        "4.1.3",
+        "no credential value elsewhere in describe",
+        {"as_warning": True},
+    ),
     Fault.STREAM_RUN_ID_DISAGREES: (
         "4.3",
         "start and done name the same run",
@@ -391,6 +396,25 @@ def _every_fault_is_caught(problems: list[str]) -> int:
                 f"    the runner {fault.value}\n"
                 f"    {kind} reported: {other or 'none at all'}"
             )
+
+    # §4.1.3 is scanned twice — a failure inside `credentials`, a warning
+    # everywhere else — and the wide scan skips that block so one value is
+    # not reported as two problems under two titles. Nothing above can see
+    # that: an extra warning does not stop a fault being "caught", so the
+    # skip would go on reading as deliberate long after it stopped working.
+    report = _report(Fault.CREDENTIAL_VALUE)
+    doubled = [
+        c
+        for c in report.checks
+        if c.outcome is Outcome.WARN and "elsewhere in describe" in c.title
+    ]
+    if doubled:
+        problems.append(
+            "a credential value inside `credentials` was reported twice — once "
+            "as §4.1.3's failure and again as its warning. The wide scan skips "
+            "that block precisely so one value is one finding."
+        )
+
     return len(EXPECTED)
 
 
