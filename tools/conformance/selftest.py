@@ -140,6 +140,11 @@ EXPECTED: dict[Fault, tuple[str, str, dict]] = {
         "reused key with different inputs",
         {"execute": True, "idempotent": True},
     ),
+    Fault.BODY_NOT_JSON_MEDIA_TYPE: (
+        "2",
+        "describe is served as application/json",
+        {},
+    ),
     Fault.STREAM_PREFLIGHT_OMITS_CONTENT_TYPE: (
         "2.3",
         "stream preflight allows Content-Type",
@@ -420,6 +425,33 @@ def _every_fault_is_caught(problems: list[str]) -> int:
                 f"    the runner {fault.value}\n"
                 f"    {kind} reported: {other or 'none at all'}"
             )
+
+    # §2 binds every body but `stream`'s, and the expectation above names
+    # one of them. Removing the wiring from any other surface leaves that
+    # expectation satisfied and the rule unchecked there — which is how the
+    # gap this fault exists for arrived in the first place, with `status`
+    # asserted and `describe`, `run` and every error body not.
+    report = _report(Fault.BODY_NOT_JSON_MEDIA_TYPE, execute=True)
+    reached = {
+        c.title
+        for c in report.failures
+        if c.section == "2" and "served as application/json" in c.title
+    }
+    for surface in ("status", "describe", "run"):
+        if not any(t.startswith(f"{surface} is served") for t in reached):
+            problems.append(
+                f"a runner serving every body as text/plain was not reported "
+                f"for its `{surface}` response. §2 binds that body too, and an "
+                "expectation naming one surface cannot see another going "
+                "unchecked."
+            )
+    if not any("error body is served" in t for t in reached):
+        problems.append(
+            "a runner serving every body as text/plain was not reported for "
+            "any of its error bodies — the response most likely to get this "
+            "wrong, since a failure path often leaves the serializer that "
+            "would have set the header."
+        )
 
     # §4.1.3 is scanned twice — a failure inside `credentials`, a warning
     # everywhere else — and the wide scan skips that block so one value is

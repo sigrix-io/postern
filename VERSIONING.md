@@ -2,7 +2,7 @@
 
 ## Where the version lives
 
-Four places, and they move at different speeds:
+Five places, and they move at different speeds:
 
 | Version | Example | Changes when |
 |---|---|---|
@@ -10,6 +10,7 @@ Four places, and they move at different speeds:
 | **Path prefix** | `/postern/v0/` | Only on a breaking revision. `v0` covers every `0.x`. |
 | **`postern` field** in payloads | `"postern": "0.1"` | Tracks the specification version exactly. |
 | **Schema `$id`** | `https://sigrix.io/schemas/postern/0.1/describe.schema.json` | Tracks the specification version exactly. A new version publishes a new directory; see below. |
+| **Release tag** | `spec-v0.1` | Cut when a specification version is released. None exists yet. |
 
 A client reads the `postern` field to know what it is talking to. It **must
 not** infer the specification version from the path prefix, which is
@@ -24,8 +25,19 @@ successor describing a release nobody ever saw. [Appendix
 A](SPEC.md#appendix-a--changes) lists them under *Unreleased* for that
 reason.
 
-This is the one carve-out, and it closes at the **first tagged release** —
-not at this repository becoming public. Those two are easy to conflate, so
+**The tag that closes it is `spec-v*`, and no such tag exists.** This
+repository already carries two — `conformance-v0.1.0` and
+`conformance-v0.1.1` — and they release `postern-conformance`, the checker
+in [`tools/conformance/`](tools/conformance), which ships more often than
+the protocol and on a version line of its own. Reading either as this
+document's trigger would say the carve-out closed on 2026-08-30 and that
+every correction since breached the promise, which is the opposite of what
+those tags mean: a checker release is evidence the specification was stable
+enough to check, not that it was published.
+
+This is the one carve-out, and it closes at the **first tagged release** of
+the specification — not at this repository becoming public, and not at a
+release of something else in it. Those two are easy to conflate, so
 the distinction is stated rather than left to be inferred: anyone can hold a
 copy of a public repository, but what the rule protects is a reader who has
 *pinned* to a version, and there is nothing to pin until a release exists.
