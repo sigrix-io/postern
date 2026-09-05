@@ -86,16 +86,21 @@ def _media_type(response: Response) -> list[Check]:
 def _entitlement(body: dict[str, Any]) -> list[Check]:
     entitlement = body.get("entitlement")
     if not isinstance(entitlement, dict):
-        # `entitlement` is not required — an agent with no distributor may
-        # omit the block entirely rather than saying `not_required`.
+        # `status.schema.json` requires the block now, so "status matches
+        # its schema" already fails here and this is the sentence saying
+        # why -- the same reason §2.1's sibling rule is stated beside the
+        # closed root rather than left to an `additionalProperties`
+        # violation. It stays a warning rather than becoming a second
+        # failure for one answer.
         return [
             warned(
                 SECTION,
                 "entitlement state is reported",
-                "no `entitlement` block. A runner with no distributor is "
-                "clearer saying `not_required` (§5.1) than saying nothing, "
-                "since a client cannot otherwise tell that from a runner "
-                "that has not implemented entitlement at all.",
+                "no `entitlement` block. §5.1 requires a runner with no "
+                "distributor to report `not_required`, and saying nothing "
+                "is not a quieter way of saying it: a client cannot tell "
+                "that from a runner that has not implemented entitlement "
+                "at all.",
             )
         ]
 

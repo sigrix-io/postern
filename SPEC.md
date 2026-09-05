@@ -258,11 +258,17 @@ for it. Emit the shape exactly; accept more than the shape.
 
 ### 2.2 One agent per runner
 
-A runner **MUST** serve exactly one agent. None of `describe`, `run`,
-`stream` or `status` carries an agent identifier, so a client **MAY** treat
-a runner's port as that agent's address. Only the distributor paths in §5
-address an agent by identifier (§1.5), because a distributor answers for a
-catalogue while a runner only ever answers for itself.
+A runner **MUST** serve exactly one agent. No runner *path* carries an
+agent identifier — `describe`, `run`, `stream` and `status` are addressed
+by nothing but the runner's origin — so a client **MAY** treat a runner's
+port as that agent's address. Only the distributor paths in §5 address an
+agent by identifier (§1.5), because a distributor answers for a catalogue
+while a runner only ever answers for itself.
+
+The *bodies* do carry one, and must: `describe` and `status` both report
+`agent.id` (§4.1, §4.4), which is what lets a client confirm that the port
+it holds is the agent it meant. One runner serving one agent is a rule
+about what a port answers for, not a reason to leave the answer unnamed.
 
 Serving several agents means running several runners. A client that wants a
 catalogue holds a list of ports; a client that wants two agents to work
@@ -673,6 +679,12 @@ VERSIONING already describes, and already declines to design around.
 #### 4.1.4 `output`
 
 Declares what the agent returns: a `type`, and an **OPTIONAL** `example`.
+The block itself is **REQUIRED** — §4.1's first sentence promises an input
+*and output* contract, `run` and `stream` both **MUST** carry an `output`
+with a `type` (§4.2, §4.3), and this is the only place a client can learn
+what that type will be before it asks. A `describe` omitting it leaves the
+client the one thing this section says it may not do: meet a `type` it has
+no declaration for.
 §4.2's `run` response carries the same `type` beside the `value` it actually
 produced, and so does a stream's `done` payload (§4.3).
 
@@ -1061,6 +1073,21 @@ Liveness, conformance level, and entitlement state.
 
 `state` is `ready`, `running`, or `degraded`. `entitlement.state` is
 `active`, `revoked`, `unknown`, or `not_required` (§5.1).
+
+`agent` and `entitlement` are **REQUIRED**, which the rest of this section
+assumed and never said. Every *top-level* member it marks, it marks
+**OPTIONAL** — `limits`, `update` — and the two it marks **REQUIRED** are
+conditional members inside `entitlement`, so these two were unmarked rather
+than decided. `agent` carries the identifier
+§1.5 says appears here, and without it §2.2's identity rule cannot be
+checked at all: a runner omitting it is not caught disagreeing with its own
+`describe`, it simply cannot be asked. `entitlement` carries the state §5.1
+**MUST**s a runner with no distributor to report as `not_required`, and
+omitting the block is not a quieter way of saying that — it is
+indistinguishable from a runner that has not implemented entitlement,
+which is the one thing a client reads this to find out. Only `agent.id` is
+required within the block; `version` sits beside it in the example above
+and nothing obliges it.
 
 `entitlement.stale_after_seconds` is **REQUIRED** whenever
 `entitlement.state` is `active` or `revoked` — wherever a check actually
@@ -2022,6 +2049,33 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before the first tagged release.
 
+- `status.agent`, `status.entitlement` and `describe.output` are
+  **REQUIRED**, which the sections reasoning about them assumed and the
+  schemas did not carry. Every top-level member §4.4 marks, it marks
+  **OPTIONAL** — `limits`, `update` — and the two it marks **REQUIRED** are
+  conditional members inside `entitlement`, so `agent` and `entitlement`
+  themselves were unmarked rather than decided, and
+  `status.agent` required nothing at all inside it, admitting `{"agent":
+  {}}` while `describe` required `id`, `name` and `version`. Each omission
+  cost something stated elsewhere: §5.1 **MUST**s a runner with no
+  distributor to report `entitlement.state` as `not_required`, and saying
+  nothing is indistinguishable from a runner that has not implemented
+  entitlement; §1.5's "one agent, one identifier, spelled one way in all
+  four places" is false of a `status` that names none, and §2.2's identity
+  rule cannot be checked against a runner that omits it — such a runner is
+  not caught disagreeing with its own `describe`, it cannot be asked;
+  `run` and `stream` both **MUST** carry an `output` with a `type`, and
+  §4.1's `describe` is the only place a client can learn that type before
+  it asks. Only `agent.id` is required within `status.agent`. No example,
+  fenced block or reference-runner path in this repository emitted a
+  document any of this now refuses (§1.5, §2.2, §4.1.4, §4.4, §5.1).
+- §2.2 says no runner *path* carries an agent identifier, where it used to
+  say none of the four verbs did. The narrower claim was false as written —
+  `describe` carries `agent.id` and §1.5 says so — and only the addressing
+  reading supports the conclusion drawn from it, that a client **MAY** treat
+  a runner's port as its agent's address. The next sentence, contrasting
+  with distributor paths that *address* an agent by identifier, always meant
+  the same thing (§1.5, §2.2).
 - `describe.schema.json` enforces the pairing §4.1.1 already stated between
   an input's `type` and its `default`. The sentence fixing the value space —
   *text and select carry a string, number carries a number* — was prose
