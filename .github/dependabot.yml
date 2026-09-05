@@ -1,4 +1,4 @@
-# Keeps the two things this repository pins from ageing quietly.
+# Keeps the three things this repository pins from ageing quietly.
 #
 # scripts/requirements.txt is pinned because a floating install lets an
 # unrelated release turn a green repository red. That trade has a second half
@@ -35,5 +35,19 @@ updates:
   # happens to be open that day.
   - package-ecosystem: "github-actions"
     directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # The conformance checker's own dependencies. It pins the same three
+  # packages as scripts/requirements.txt, at the same versions and for the
+  # same two reasons — its own comment says so — so without an entry here a
+  # bump lands on one half of a matched pair and not the other.
+  #
+  # The drift that follows is silent, and it runs in the worse direction: the
+  # validator this repository runs on itself moves forward, while the copy
+  # published to PyPI and installed by implementers stays behind. Nothing
+  # compares the two, and both files look correct on their own.
+  - package-ecosystem: "pip"
+    directory: "/tools/conformance"
     schedule:
       interval: "weekly"
