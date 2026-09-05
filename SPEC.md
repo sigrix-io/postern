@@ -548,6 +548,29 @@ longer means anything, and a client reading it was already reading something
 An ordered array of input declarations. Each **MUST** carry `key`, `label`,
 `type` and `required`.
 
+**`key` is `[A-Za-z0-9_.-]+`** — ASCII letters and digits, underscore, dot
+and hyphen, one character or more. `label` is the human-facing name and is
+free text; the two exist so neither has to do the other's job, and it is
+`label` carrying the human's that lets the key stay this narrow.
+
+The narrowness is for the client, which renders a key as the *name* of a
+thing: a form field, a command-line flag, a column heading, a variable in a
+config file. Each of those escapes a space or a quote differently and some
+cannot escape one at all, so a key needing escape is a key that renders
+differently in every client that meets it. Excluding whitespace and
+everything outside ASCII also makes two keys that look alike *be* alike —
+no trailing space, no non-breaking space, and no Cyrillic `а` beside a Latin
+`a` in a list a person has to read.
+
+Its length is deliberately unbounded where an agent identifier's is capped
+(§1.5), and the difference is what the string crosses: an identifier is
+handed to a distributor in a request path (§5.3), while a key is the
+runner's own name for its own field and travels only between that runner and
+a client already talking to it. The grammar binds the declaration and
+reaches `run` through it, since `inputs` there is a map keyed by `describe`'s
+input keys (§4.2) — so there is nothing separate for a client to check, and
+nothing a conforming one can send that this does not admit.
+
 `type` is one of `text`, `number`, `select`. A runner **MUST NOT** emit a
 type outside this set in v0; a client **MUST** treat an unrecognised type as
 `text` rather than failing.
@@ -1990,6 +2013,21 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 **Unreleased** — corrections made before the first tagged release.
 
+- §4.1.1 states the grammar an input `key` has to satisfy.
+  `describe.schema.json` has enforced `[A-Za-z0-9_.-]+` from the first
+  commit and §4.1.1 said only that a declaration **MUST** carry the member,
+  so a key with a space in it was refused with no sentence to cite — and
+  nothing asserted the pattern either way, which by `validate.py`'s own
+  doctrine made it a rule deletable without anything going red. The reason
+  is now stated with it: a client renders a key as the *name* of a thing
+  and `label` carries the human-facing name, so the key does not have to,
+  and excluding whitespace and non-ASCII keeps two keys that look alike
+  alike. Its length stays unbounded, unlike an agent identifier's, because
+  a key crosses no trust boundary — it travels between one runner and a
+  client already talking to it, never to a distributor. The grammar binds
+  the declaration and reaches `run` through §4.2's "map keyed by
+  `describe`'s input keys" rather than being restated there (§1.5, §4.1.1,
+  §4.2, §5.3).
 - §4.1.3 states what a `credentials[]` entry carries, and what its closure
   is for. `describe.schema.json` has always closed that object, and it was
   the only statement of the entry's shape anywhere — §4.1.3 described the
