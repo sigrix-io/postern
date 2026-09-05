@@ -24,6 +24,8 @@ from __future__ import annotations
 import ast
 import pathlib
 import sys
+import time
+from typing import Iterator
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "tests"))
@@ -496,6 +498,73 @@ def _every_declared_format_is_asserted(problems: list[str]) -> int:
     return len(declared)
 
 
+def _the_stream_reader_stops_without_going_blind(problems: list[str]) -> int:
+    """The bounded SSE read must still see what section 4.3 forbids.
+
+    `stream` used to read to EOF, which hangs against a runner that will
+    not close — so the read is bounded now. The tempting bound is "stop at
+    the terminal event", and it is the wrong one: section 4.3 forbids a
+    *second* terminal and any event *after* the first, so a reader that
+    stopped on the first would leave both of `_terminates_once`'s failure
+    branches with nothing to fire on. Those two checks would go on passing
+    and could no longer fail, which is the false green this whole suite is
+    against.
+
+    Driven over a plain list of lines rather than a socket: the property is
+    about what the reader keeps, and a real connection would make this slow
+    and flaky for nothing.
+    """
+    from postern_conformance.probe import _read_sse
+
+    def framed(*events: tuple[str, str]) -> list[bytes]:
+        lines: list[bytes] = []
+        for name, data in events:
+            lines += [f"event: {name}\n".encode(), f"data: {data}\n".encode(), b"\n"]
+        return lines
+
+    far = time.monotonic() + 30.0
+    shapes = 0
+
+    shapes += 1
+    events, truncated = _read_sse(iter(framed(("start", "{}"), ("done", "{}"), ("step", "{}"))), deadline=far)
+    if [name for name, _ in events] != ["start", "done", "step"] or truncated:
+        problems.append(
+            "the stream reader drops what follows a terminal event, so "
+            "`the stream ends with exactly one done or error` can no longer "
+            f"catch an event after `done` — it read {[n for n, _ in events]}."
+        )
+
+    shapes += 1
+    events, truncated = _read_sse(iter(framed(("start", "{}"), ("done", "{}"), ("done", "{}"))), deadline=far)
+    if [name for name, _ in events] != ["start", "done", "done"] or truncated:
+        problems.append(
+            "the stream reader drops a second terminal event, so "
+            "`the stream ends with exactly one done or error` can no longer "
+            f"catch two — it read {[n for n, _ in events]}."
+        )
+
+    shapes += 1
+
+    # Bounded, though the reader under test should never reach the end of
+    # it: a guard for "this reads forever" must not itself read forever, or
+    # the regression it catches arrives as a hung run rather than a
+    # failing one. A working reader stops on the deadline after a few
+    # thousand of these; a broken one exhausts them and reports.
+    def keepalives() -> Iterator[bytes]:
+        for _ in range(2_000_000):
+            yield b": keepalive\n"
+
+    events, truncated = _read_sse(keepalives(), deadline=time.monotonic() + 0.05)
+    if not truncated:
+        problems.append(
+            "the stream reader does not stop on its own deadline, so a "
+            "runner that never terminates reads forever — the socket's "
+            "timeout is per read and a keepalive resets it."
+        )
+
+    return shapes
+
+
 def _the_readme_quotes_this_run(tallies: list[str], problems: list[str]) -> None:
     """README.md's transcript of this command must be what it prints.
 
@@ -559,6 +628,9 @@ def main() -> int:
 
     formats = _every_declared_format_is_asserted(problems)
     say(f"  {formats} declared formats, every one asserted")
+
+    shapes = _the_stream_reader_stops_without_going_blind(problems)
+    say(f"  {shapes} stream shapes, each read to a bounded end")
 
     faults = _every_fault_is_caught(problems)
     say(f"  {faults} planted faults, each caught by its own check")
