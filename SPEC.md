@@ -353,7 +353,7 @@ Where the runner allows the origin, that answer carries:
 on any 2xx status; `204` is the usual choice.
 
 Naming `Idempotency-Key` there is a **MUST** rather than a courtesy for a
-runner that declares `capabilities.idempotent_retry` (§4.2). A browser
+runner that declares `status.idempotent_retry` (§4.2, §4.4). A browser
 cannot send a header its preflight did not admit, so the promise would
 otherwise hold for every client kind except the one that has to ask
 permission to take it up — and the runner would look, to that client alone,
@@ -531,7 +531,6 @@ and **MUST** be answerable without credentials and without an entitlement.
     "example": "## Positioning brief\n\nThe mid-market segment…"
   },
   "capabilities": {
-    "idempotent_retry": true,
     "tools": ["serper_search", "file_read", "file_write"],
     "write_tools": ["file_write"]
   },
@@ -572,6 +571,17 @@ Withdrawing it breaks no runner. `capabilities` is an open object, so one
 still emitting `streaming` validates exactly as before — the field simply no
 longer means anything, and a client reading it was already reading something
 §3 told it not to trust.
+
+**`capabilities.idempotent_retry` has moved rather than been withdrawn**, to
+`status` (§4.4), on the first half of that reasoning and not the second.
+Whether a repeat executes the agent twice is a fact about the runner, like
+`level` and `limits`, so it does not belong in an object describing the
+agent. It was not a second vocabulary for anything: no other field states
+it, `limits.idempotency_retention_seconds` bounds how long the promise lasts
+rather than whether it is made, and a client reading it broke no rule. So it
+kept its meaning and changed its address. A runner still emitting it here
+validates — `capabilities` is open — and means nothing by it; a client
+**MUST** read the answer from `status`.
 
 #### 4.1.1 `inputs`
 
@@ -649,11 +659,14 @@ A client **SHOULD** surface `write_tools` to the user before the first
 `run`, and **MAY** require confirmation. It is the reason `tools` is not a
 flat list.
 
-`capabilities.idempotent_retry` (§4.2) is the other half of the same warning
-and the only other safety-relevant field here: `write_tools` says what an
-agent does that nothing can undo, and `idempotent_retry` says whether asking
-twice does it twice. A client with a reason to surface the first has the same
-reason to read the second before it retries.
+The other half of that warning is `status.idempotent_retry` (§4.2, §4.4),
+and it is deliberately not here. `write_tools` says what an agent does that
+nothing can undo, which is a fact about the agent; whether asking twice does
+it twice is a fact about the runner serving it, and this object describes
+the agent (§4.1). A client with a reason to surface the first has the same
+reason to read the second before it retries — from two documents rather than
+one, which costs a request and nothing else: both answer at Level 1, and
+neither requires credentials or an entitlement (§4.1, §4.4).
 
 #### 4.1.3 `credentials`
 
@@ -914,9 +927,10 @@ which defeats the correlation the **SHOULD** above exists for.
 `run` is not idempotent. A runner **MAY** honour an `Idempotency-Key`
 request header; behaviour when it does not is to execute again.
 
-**A runner that honours it says so**, as `capabilities.idempotent_retry` in
-`describe` (§4.1) — an **OPTIONAL** boolean. `true` is a promise about the
-agent rather than about the response: a request carrying an
+**A runner that honours it says so**, as `idempotent_retry` in `status`
+(§4.4) — an **OPTIONAL** boolean. `true` is a promise about what a repeat
+does to the agent rather than about what the response looks like: a request
+carrying an
 `Idempotency-Key` the runner has already answered **MUST NOT** execute the
 agent a second time, and **MUST** answer with the result of the first
 execution, whether that was a success or the error the agent produced
@@ -1126,6 +1140,7 @@ Liveness, conformance level, and entitlement state.
     "stale_after_seconds": 60
   },
   "credentials": {"satisfied": true, "missing": []},
+  "idempotent_retry": true,
   "limits": {"max_run_seconds": 900, "max_concurrent_runs": 1}
 }
 ```
@@ -1203,6 +1218,19 @@ unset, and says so explicitly against this block's optionality: a runner may
 perform that check and report no credential state at all. What the block adds
 is that a client can see the answer before it sends a run, rather than
 discovering it from a refusal.
+
+`idempotent_retry` is **OPTIONAL** and says whether this runner honours an
+`Idempotency-Key` (§4.2). It sits here rather than in `describe`'s
+`capabilities` for the reason `limits` does, below: whether a repeat
+executes the agent a second time is a fact about the runner and how it is
+deployed, where `capabilities` describes the agent and answers the same from
+every runner serving it (§4.1).
+
+It is not *inside* `limits`, which carries bounds — a boolean is not one,
+and `idempotency_retention_seconds` is already the odd member there for
+bounding a promise rather than a run. The two are read together and stated
+apart: this says whether the promise is made at all, that says how long it
+lasts.
 
 `limits` is **OPTIONAL** and carries the bounds a runner puts on a run.
 Each member is **OPTIONAL** in turn: `max_run_seconds` is the maximum

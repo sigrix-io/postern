@@ -125,6 +125,10 @@
         }
       ]
     },
+    "idempotent_retry": {
+      "type": "boolean",
+      "description": "Whether this runner honours an Idempotency-Key (SPEC.md section 4.2): a request carrying a key it has already answered MUST NOT execute the agent again, and is answered with the result of the first execution. OPTIONAL, and a client reads absent and false identically \u2014 a retry executes again. It sits in status rather than in describe.capabilities because whether a repeat executes the agent twice is a fact about the runner, where capabilities describes the agent; and beside limits rather than inside it because a boolean is not a bound \u2014 limits.idempotency_retention_seconds says how long the promise lasts, this says whether it is made. A Level 1 runner implements no run and SHOULD NOT declare it."
+    },
     "limits": {
       "type": "object",
       "description": "Bounds the runner puts on a run in flight (SPEC.md section 4.5). These belong to the deployment rather than to the agent, which is why they sit here and not in describe: two runners serving one agent may answer differently.",

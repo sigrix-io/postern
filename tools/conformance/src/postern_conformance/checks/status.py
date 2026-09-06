@@ -60,7 +60,38 @@ def run(runner: Runner, context: Context) -> list[Check]:
     checks.append(check_schema(SECTION, "status matches its schema", "status.schema.json", body))
     checks.extend(json_media_type(response, where="status"))
     checks.extend(_entitlement(body))
+    checks.extend(_idempotent_retry_agrees_with_level(body))
     return checks
+
+
+def _idempotent_retry_agrees_with_level(body: dict[str, Any]) -> list[Check]:
+    """Section 4.2: a Level 1 runner SHOULD NOT declare `idempotent_retry`.
+
+    It has no `run` for a key to make idempotent, so the field promises
+    something about a verb the runner answers `501`.
+
+    This is asked here rather than against `describe` because section 4.4 is
+    where the field lives: it moved out of `describe.capabilities`, which
+    describes the *agent*, on the ground that whether a repeat executes the
+    agent twice is a fact about the runner. Both halves of the comparison are
+    now in one document, which is the other thing the move bought.
+
+    Nothing else in `status` is checked against `level` — `capabilities.
+    streaming` was, against `level >= 3`, and that was this tool's own
+    inference rather than a rule: section 3 makes `level` the authority and
+    never bound a second field to it. That field is withdrawn (section 4.1),
+    so there is nothing left to disagree.
+    """
+    if body.get("level") != 1 or "idempotent_retry" not in body:
+        return []
+    return [
+        warned(
+            "4.2",
+            "Level 1 declares no idempotent_retry",
+            "`status.idempotent_retry` is declared by a Level 1 runner, "
+            "which implements no `run` for a key to make idempotent.",
+        )
+    ]
 
 
 def _entitlement(body: dict[str, Any]) -> list[Check]:

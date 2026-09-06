@@ -497,6 +497,14 @@ class _Handler(BaseHTTPRequestHandler):
                     )
                 }
             ),
+            **(
+                # §4.4. It lived in `describe.capabilities` until the move,
+                # and a fake declaring it in both places would let a checker
+                # reading the old one keep passing.
+                {"idempotent_retry": True}
+                if self.server.idempotent  # type: ignore[attr-defined]
+                else {}
+            ),
             "limits": {"max_run_seconds": 900, "max_concurrent_runs": 1},
         }
 
@@ -511,8 +519,6 @@ class _Handler(BaseHTTPRequestHandler):
                 # §4.1.4: `example` stays text-only. An inline artifact
                 # would inflate a document every catalogue listing fetches.
                 document["output"]["example"] = BYTES_OUTPUT_VALUE
-        if self.server.idempotent:  # type: ignore[attr-defined]
-            document["capabilities"]["idempotent_retry"] = True
         if Fault.CREDENTIAL_VALUE in self.faults:
             document["credentials"][0]["value"] = "sk-abcdefghijklmnopqrstuvwxyz012345"
         if Fault.SECRET_SHAPE_OUTSIDE_CREDENTIALS in self.faults:

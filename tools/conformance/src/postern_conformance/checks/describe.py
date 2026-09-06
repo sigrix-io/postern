@@ -103,7 +103,6 @@ def run(runner: Runner, context: Context) -> list[Check]:
     checks.extend(_credentials_are_names_only(body))
     checks.extend(_no_secret_shape_elsewhere(body))
     checks.extend(_agrees_with_status(body, context))
-    checks.extend(_capabilities_agree_with_level(body, context))
     return checks
 
 
@@ -334,33 +333,3 @@ def _agrees_with_status(body: dict[str, Any], context: Context) -> list[Check]:
             )
         ]
     return [passed("2.2", "describe and status name the same agent")]
-
-
-def _capabilities_agree_with_level(body: dict[str, Any], context: Context) -> list[Check]:
-    checks: list[Check] = []
-    capabilities = body.get("capabilities")
-    level = context.level
-    if not isinstance(capabilities, dict) or level is None:
-        return checks
-
-    # `capabilities.streaming` was checked here against `level >= 3`, and the
-    # rule was this tool's own inference: section 3 makes `level` the
-    # authority, and nothing in the specification ever bound the two fields
-    # together. The field is withdrawn (section 4.1) rather than described, so
-    # there is nothing left to disagree — a runner still emitting it validates
-    # against an open `capabilities` and means nothing by it.
-
-    # Section 4.2: "A Level 1 runner has no `run` to be idempotent about and
-    # SHOULD NOT declare the field at all."
-    if level == 1 and "idempotent_retry" in capabilities:
-        checks.append(
-            warned(
-                "4.2",
-                "Level 1 declares no idempotent_retry",
-                "`capabilities.idempotent_retry` is declared by a Level 1 "
-                "runner, which implements no `run` for a key to make "
-                "idempotent.",
-            )
-        )
-
-    return checks
