@@ -364,15 +364,18 @@ MUST_REJECT = [
             "output": {"type": "bytes"},
         },
     ),
+    # The member moved to `status` (§4.4), so this is the document that types
+    # it now. `capabilities` is open, so the same value under `describe` is
+    # admitted and means nothing — which is the point of the move, and why
+    # there is no second case asserting a rejection there.
     (
-        "describe.schema.json",
+        "status.schema.json",
         "an idempotent_retry that is not a boolean, which promises nothing readable",
         {
-            "output": {"type": "text"},
-            "postern": "0.1",
-            "agent": {"id": "acme/a", "name": "A", "version": "1"},
-            "inputs": [],
-            "capabilities": {"idempotent_retry": "yes"},
+            "postern": "0.1", "level": 3, "state": "ready",
+            "agent": {"id": "acme/a"},
+            "entitlement": {"state": "not_required"},
+            "idempotent_retry": "yes",
         },
     ),
     (

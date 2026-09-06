@@ -152,12 +152,19 @@ class Context:
 
     @property
     def declares_idempotent_retry(self) -> bool:
-        if not isinstance(self.describe, dict):
+        """Whether the runner promises to replay an `Idempotency-Key`.
+
+        Read from `status`, which is where §4.4 puts it. It was under
+        `describe.capabilities` until the move, and that object is open —
+        so a runner still emitting it there validates and this reads
+        `False`, which is the whole content of the move: `capabilities`
+        describes the agent, and whether a repeat executes it twice is a
+        fact about the runner. Falling back to the old location would
+        re-honour a field §4.1 says means nothing.
+        """
+        if not isinstance(self.status, dict):
             return False
-        capabilities = self.describe.get("capabilities")
-        if not isinstance(capabilities, dict):
-            return False
-        return capabilities.get("idempotent_retry") is True
+        return self.status.get("idempotent_retry") is True
 
     @property
     def inputs(self) -> list[dict[str, Any]]:

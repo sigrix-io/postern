@@ -16,6 +16,7 @@
     "satisfied": true,
     "missing": []
   },
+  "idempotent_retry": true,
   "limits": {
     "max_run_seconds": 900,
     "max_concurrent_runs": 1

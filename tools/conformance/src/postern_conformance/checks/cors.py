@@ -392,7 +392,7 @@ def _allowed_origin_for(
                 failed(
                     SECTION,
                     title,
-                    "the runner declares `capabilities.idempotent_retry` and "
+                    "the runner declares `status.idempotent_retry` and "
                     "its preflight does not admit `Idempotency-Key`. To a "
                     "browser client alone, this runner looks like one ignoring "
                     "a header it never received.",

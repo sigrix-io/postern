@@ -772,7 +772,7 @@ def _a_repeat_is_replayed(
             skipped(
                 RUN,
                 title,
-                "the runner does not declare `capabilities.idempotent_retry`, "
+                "the runner does not declare `status.idempotent_retry`, "
                 "so it promises no replay and owes nothing here.",
             )
         ]
@@ -837,7 +837,7 @@ def _a_reused_key_is_refused(
 ) -> list[Check]:
     """Section 4.2 — a key already answered, presented with different `inputs`.
 
-    A runner declaring `capabilities.idempotent_retry` binds a key to the
+    A runner declaring `status.idempotent_retry` binds a key to the
     inputs it was first answered for, and MUST refuse a repeat carrying
     different ones with `409` `idempotency_conflict` rather than replaying
     the first execution.
@@ -861,7 +861,7 @@ def _a_reused_key_is_refused(
             skipped(
                 RUN,
                 title,
-                "the runner does not declare `capabilities.idempotent_retry`, "
+                "the runner does not declare `status.idempotent_retry`, "
                 "so it has made no promise about a key and binds none.",
             )
         ]
