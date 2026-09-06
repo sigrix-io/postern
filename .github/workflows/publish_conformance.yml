@@ -6,11 +6,13 @@
 # same version can never be replaced, only yanked — so this is the one
 # workflow in the repository whose trigger is deliberately manual.
 #
-# The tag namespace is `conformance-v*`, separate from anything the
-# specification might later tag. VERSIONING.md is clear that Postern 0.1 is
-# not released and has no tag to pin to; the checker will be released more
-# often than the protocol regardless, so its versions must not read as the
-# specification's. `conformance-v0.1.0` is the shape.
+# The tag namespace is `conformance-v*`, and the specification's is
+# `spec-v*`. VERSIONING.md names both, and says which one closes its
+# pre-release carve-out: Postern 0.1 has no `spec-v*` tag to pin to, so a
+# `conformance-v*` tag releases the checker without releasing the protocol.
+# The checker will ship more often than the protocol regardless, so its
+# versions must not read as the specification's. `conformance-v0.1.0` is
+# the shape.
 #
 # Before the first run, a maintainer configures a **trusted publisher** on
 # PyPI (Manage project → Publishing) for:

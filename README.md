@@ -140,9 +140,11 @@ It is a test suite, not an SDK, and not a reference implementation.
 
 **This is a draft, and nothing in it is stable yet.** Version 0.1 is drafted
 in the open, deliberately: a specification benefits most from being read
-while changing it is still free. It is not released — there is no tag to pin
-to, and until there is, changes land under *Unreleased* rather than moving
-the version. Breaking changes will happen before 1.0, and
+while changing it is still free. It is not released — there is no `spec-v*`
+tag to pin to, and until there is, changes land under *Unreleased* rather
+than moving the version. The `conformance-v*` tags this repository does
+carry release the checker in `tools/conformance/`, not the specification
+([VERSIONING.md](VERSIONING.md)). Breaking changes will happen before 1.0, and
 [VERSIONING.md](VERSIONING.md) says which of them move what.
 
 There is no reference implementation in this repository. There is one
