@@ -2173,6 +2173,25 @@ and informative for everyone else. Postern is usable with no reference to it.*
 **Unreleased** — corrections made before the first tagged release. Each
 entry carries the date it landed and the pull request that carried it.
 
+- 2026-09-06 · #156 —
+  `idempotent_retry` moves from `describe.capabilities` to `status`. §4.1
+  opens "`capabilities` describes the **agent**", and the field falsified
+  it: whether a repeat executes the agent a second time is a fact about the
+  runner serving it, like `level` and `limits`. It is **moved rather than
+  withdrawn**, which the `capabilities.streaming` withdrawal above it makes
+  easy to conflate — that rested on two arguments and only one transfers.
+  `streaming` was also a second vocabulary for a fact §3 already stated, so
+  a client acting on it broke a **MUST**; nothing else states whether a
+  runner honours the header, `limits.idempotency_retention_seconds` bounds
+  how long the promise lasts rather than whether it is made, and a client
+  reading this one broke no rule. It sits beside `limits` and not inside
+  it, `limits` carrying bounds and a boolean being none. §4.1.2 keeps its
+  pairing with `write_tools` — what an agent does that nothing can undo,
+  and whether asking twice does it twice — and now says the two are read
+  from two documents, both answerable at Level 1. A runner still emitting
+  the field under `capabilities` validates, that object being open, and
+  means nothing by it; a client **MUST** read the answer from `status`
+  (§4.1, §4.1.2, §4.2, §4.4, §2.3).
 - 2026-09-06 · #155 —
   §4.2 says what an `Idempotency-Key` does before the first execution is
   answered. The replay promise was keyed on a key already *answered*, so a
