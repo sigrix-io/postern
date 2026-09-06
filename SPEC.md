@@ -188,7 +188,8 @@ the only thing this changes: the protocol itself is unchanged.
 
 ### 2.1 Errors
 
-Every non-2xx response body **MUST** be:
+Every non-2xx response to a path this specification defines **MUST** carry
+this body:
 
 ```json
 {
@@ -199,6 +200,21 @@ Every non-2xx response body **MUST** be:
   }
 }
 ```
+
+**A path this specification defines** is one under the `/postern/v0/…`
+prefix (§2), and the rule binds every request that reaches one — a path a
+runner does not implement included, which answers `404` `not_found` in this
+envelope like any other refusal. It binds nothing outside the prefix. A
+runner sharing its port with something that is not Postern answers that
+something's requests however that something answers them, and the `404` a
+web server gives an unrelated path is not a Postern response in the wrong
+shape. Read without the scope, this sentence made a request for a favicon a
+conformance failure.
+
+The one request under the prefix it does not bind is a CORS preflight, and
+§2.3 says why rather than repeating it here: a refused origin is answered
+`204` — a 2xx, so a conforming runner never reaches this rule — and the
+browser blocks the call either way, so neither side can read a body.
 
 `code` is a stable machine-readable token; `message` is human-readable and
 **SHOULD** be safe to show a user verbatim. Defined codes:
@@ -308,6 +324,14 @@ section is about not giving that up.
 `/postern/v0/run` and `/postern/v0/stream`. It **SHOULD** answer `OPTIONS`
 on `describe` and `status` too, for a client that sends a request header
 outside the browser's safelist and so preflights its `GET` as well.
+
+**Answering is responding to the request, not admitting the origin.** A
+runner that refuses one has answered, and the rule below says with what.
+What this **MUST** forbids is leaving the method unhandled — a reset
+connection, or the `405` a framework returns for a method nobody registered
+— because a browser reports either as a preflight that failed and gives the
+page nothing to distinguish a runner that refused it from one that is not
+running. A refusal at least means what it says.
 
 A preflight **MUST** be side-effect free and **MUST NOT** require
 credentials or an entitlement. It is not the verb behind it, and its answer
