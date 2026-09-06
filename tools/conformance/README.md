@@ -169,6 +169,49 @@ under their own.
 
 ## Changes
 
+### 0.1.2
+
+**Verdicts move in both directions.** A runner that reported clean under
+0.1.1 may report findings here, and one that reported a finding may come
+back clean. Almost all of it is checks that were narrower than the rule
+they named — asked on one surface where the specification binds several —
+so read a new finding the way 0.1.1 asked you to: as a rule that was always
+there and is only now being checked. 10 conformant baselines became 22 and
+24 planted faults became 39.
+
+- **`idempotent_retry` moved from `describe.capabilities` to `status`.**
+  §4.1 opens "`capabilities` describes the **agent**", and whether a repeat
+  executes it a second time is a fact about the runner serving it. The
+  checker reads `status` and deliberately does not fall back to the old
+  location; a runner still declaring it under `capabilities` validates and
+  means nothing by it.
+- **§2's media type is checked on every body it binds**, not on `status`
+  alone. `describe`, `run`'s success body and every error body went
+  unasked — and an error body is the one most likely to get it wrong, since
+  a failure path often leaves the serializer that would have set the header.
+- **The §2.3 preflight rules are asked on both preflighting verbs.** A
+  runner admitting `Content-Type` on `run` and not on `stream` passed,
+  while no browser could stream from it at all.
+- **§4.1.3 is read as written** — the *whole* `describe` response is
+  scanned for a credential value, where the check had read the
+  `credentials` block alone.
+- **A stream's `start` and `done` must name the same run**, which
+  `stream-event.schema.json` has always said and nothing checked.
+- **§4.6 step 5 is a check a runner performs, not only one it orders.**
+  Where `describe` declares a credential the environment does not carry, a
+  conforming runner answers `424 missing_credential`.
+- **`status.agent`, `status.entitlement` and `describe.output` are
+  required**, and `status.agent` requires its own members — `{"agent": {}}`
+  used to validate while `describe` required `id`, `name` and `version`.
+- **A held-open stream is reported rather than hanging the report**, and
+  the bounded read still sees what a runner sends after `done`.
+- **Five checks a non-conformant runner was passing are closed**, and
+  separately the checker stopped failing runners the specification permits.
+- **A rebuilt wheel no longer ships the previous build's schemas.** A wheel
+  built over an earlier build's artifacts validated against a specification
+  nobody was reading — the one entry here that is a packaging fault rather
+  than a check.
+
 ### 0.1.1
 
 **A runner that reported clean under 0.1.0 may report findings here.** That
