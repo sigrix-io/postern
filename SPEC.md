@@ -927,6 +927,32 @@ and so binds no key. On `stream` a replayed result arrives as `start` then
 `done`, a shape §4.3 already admits: `delta` is optional, and a replay has
 no incremental text to produce.
 
+**A repeat arriving before the first execution is answered is not yet a
+replay.** The promise above is keyed on a request the runner has *answered*,
+and one holding an execution in flight has answered nothing yet. A runner
+**MAY** hold the second request until the first finishes and answer it with
+that result — the same replay, a moment later — and **SHOULD** bound the
+wait by `limits.max_run_seconds` (§4.4), which is already the longest the
+answer it is waiting for can take.
+
+A client **MUST NOT** assume it will. A runner that does not hold executes
+again, which is what a runner not honouring the header does at any time and
+what a client budgets for whenever it retries: the promise is about a key
+already answered, and this one is not yet. §4.5's capacity refusal is the
+third answer and needs nothing added here — a runner at
+`limits.max_concurrent_runs` refuses the second request `503` `unavailable`
+whatever key it carries, and that is the one refusal where retrying does
+help for a reason this section can name, since the retry arrives after the
+first execution has been answered and is an ordinary replay.
+
+**One keyspace spans both verbs.** The replay rule above assumes it already,
+where it says what a replayed result looks like on `stream`: a key first
+answered by `run` replays on `stream` and the reverse, and a runner
+**MUST NOT** treat the same key on a different verb as a different key. A
+client whose `run` answer was lost on the way back and which retried over
+`stream` to watch the second attempt is the case that makes this worth
+stating rather than leaving to be read out of one clause.
+
 **A key identifies a request, not merely a caller's wish to retry one.** A
 runner **MUST** treat a key as bound to the `inputs` it was first answered
 for, and **MUST** refuse a request carrying that key with different `inputs`,
@@ -2119,6 +2145,20 @@ and informative for everyone else. Postern is usable with no reference to it.*
 **Unreleased** — corrections made before the first tagged release. Each
 entry carries the date it landed and the pull request that carried it.
 
+- 2026-09-06 · #155 —
+  §4.2 says what an `Idempotency-Key` does before the first execution is
+  answered. The replay promise was keyed on a key already *answered*, so a
+  repeat arriving mid-execution fell outside every sentence in the
+  section — and that is the window a client retries in, since §4.2's own
+  reasoning is that a connection dropping mid-`run` looks the same whether
+  the agent was halfway through or writing its last byte. A runner **MAY**
+  hold the second request and answer it with the first execution's result,
+  bounded by `limits.max_run_seconds`; a client **MUST NOT** assume it
+  will, the posture this section already takes toward the retention
+  window; and §4.5's capacity refusal needed nothing added, being the one
+  `503` whose retry lands on an answered key. It also states that one
+  keyspace spans both verbs, which the replay rule assumed where it says
+  what a replayed result looks like on `stream` (§4.2, §4.4, §4.5).
 - 2026-09-06 · #154 —
   §2.1's envelope binds "a path this specification defines" rather than
   every non-2xx response. A runner binds a port, and §2 gives Postern's own
