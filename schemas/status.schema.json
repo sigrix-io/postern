@@ -74,9 +74,17 @@
     },
     "credentials": {
       "type": "object",
+      "description": "Which of the environment variables describe declares (SPEC.md section 4.1.3) this deployment actually carries. OPTIONAL, and it belongs here rather than in describe for the reason limits does: which credentials one machine happens to hold is a fact about that deployment, where describe answers for the agent and answers the same everywhere. Publishing this block is a different obligation from performing the check \u2014 section 4.6's step 5 MUSTs every runner to answer 424 where a declared credential is unset, and a runner may perform that check and report no credential state at all.",
       "properties": {
-        "satisfied": { "type": "boolean" },
-        "missing": { "type": "array", "items": { "type": "string" } }
+        "satisfied": {
+          "type": "boolean",
+          "description": "True when every environment variable describe declares is set."
+        },
+        "missing": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The declared environment variable names this deployment does not carry \u2014 the same names a missing_credential refusal names as error.detail.missing (SPEC.md section 4.6)."
+        }
       },
       "additionalProperties": true
     },

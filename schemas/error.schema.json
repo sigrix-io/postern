@@ -33,7 +33,7 @@
         },
         "detail": {
           "type": ["object", "string", "null"],
-          "description": "Structured data about this failure, and the envelope's extension point: because the root is closed, whatever a bare code and message cannot carry rides here. Two members are defined so far: access_ends_at, the RFC 3339 date a withdrawn agent's access ends (SPEC.md section 5.6), and max_run_seconds, the duration bound a stopped run exceeded (section 4.5). Constraining those members is not the same as constraining detail: there is no required and no additionalProperties here, so an unrelated detail is unaffected and future members are still expected.",
+          "description": "Structured data about this failure, and the envelope's extension point: because the root is closed, whatever a bare code and message cannot carry rides here. Three members are defined so far: access_ends_at, the RFC 3339 date a withdrawn agent's access ends (SPEC.md section 5.6); max_run_seconds, the duration bound a stopped run exceeded (section 4.5); and missing, the environment variable names a missing_credential refusal names (section 4.6). Constraining those members is not the same as constraining detail: there is no required and no additionalProperties here, so an unrelated detail is unaffected and future members are still expected.",
           "properties": {
             "access_ends_at": {
               "type": "string",
@@ -44,6 +44,11 @@
               "type": "integer",
               "minimum": 1,
               "description": "SPEC.md section 4.5. Accompanies run_timeout: the declared duration bound the run exceeded, the same integer status reports as limits.max_run_seconds, so a client can name the limit that stopped it."
+            },
+            "missing": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "SPEC.md section 4.6 step 5. Accompanies missing_credential: the environment variable names describe declares and this runner's environment does not hold, the same names status reports as credentials.missing. An array because a runner reading its own environment against describe's list meets every unset one at once, and because a scalar here would be one fact in two shapes."
             }
           }
         }
