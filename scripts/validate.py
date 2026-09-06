@@ -43,6 +43,7 @@ reference implementation here yet.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import pathlib
@@ -1167,6 +1168,108 @@ def _docs_list_every_error_code() -> bool:
     return failed
 
 
+# Which keywords hold members of the instance, rather than a condition on it.
+# Walking only these is what keeps _tighten off the applicators — see its
+# docstring for the two ways closing one goes wrong.
+_MEMBER_KEYWORDS = ("properties", "items", "$defs", "additionalProperties")
+
+
+def _tighten(node: object) -> object:
+    """Close every object in a schema that declares its own members.
+
+    Mutates and returns `node`, so hand it a copy.
+
+    It walks `properties`, `items` and `$defs` and nothing else — never `if`,
+    `then`, `allOf` or the rest. Closing an applicator goes wrong in two
+    directions, and both are live in this repository's schemas:
+
+    - closing an `if` narrows what that branch matches, so its `then` stops
+      applying and every constraint under it is silently dropped;
+    - closing a `then` that names one property forbids every *other* member
+      of the object it applies to, which fails a correct example.
+
+    describe.schema.json carries three `if`/`then` branches keyed on an
+    input's `type`, and a first draft of this closed every one of them. The
+    two faults cancelled — the `then` that would have rejected a valid input
+    never fired, because the `if` above it had been closed too — so the check
+    answered correctly by luck. Walking only the member-declaring keywords
+    avoids each.
+
+    An object that declares no `properties` is left open, which is what keeps
+    a free-form map free: `run-request`'s `inputs` is keyed by an agent's own
+    input keys and bounds its values with a schema-valued
+    `additionalProperties`, and closing that would demand the agent declare
+    its keys to this repository.
+    """
+    if not isinstance(node, dict):
+        return node
+    if "properties" in node and node.get("additionalProperties") is not False:
+        node["additionalProperties"] = False
+    for keyword in _MEMBER_KEYWORDS:
+        child = node.get(keyword)
+        if not isinstance(child, dict):
+            continue
+        if keyword in ("properties", "$defs"):
+            for subschema in child.values():
+                _tighten(subschema)
+        else:
+            _tighten(child)
+    return node
+
+
+def _examples_teach_only_declared_members() -> bool:
+    """Every member an example carries is one its schema declares.
+
+    `examples/` is documentation, and a member appearing only there is one an
+    implementer copies believing it is protocol. Two did: an input's `help`,
+    a string SPEC.md does not contain anywhere in any of its lines, and
+    `error.detail.env`, which #144 resolved by defining the member §4.6 had
+    been arguing for and never provided. Both validated, and legitimately —
+    `$defs.input` is `additionalProperties: true`, `detail` declares no
+    `additionalProperties` at all, and both are open deliberately.
+
+    So this asks a different question from the schemas, over the same files.
+    A schema says what a *runner* may emit, where openness is how an
+    implementation extends without a specification revision. This says what
+    this repository *teaches*, where an undeclared member is not an extension
+    but an accident — and the remedy is to define it or drop it, which is
+    what #144 decided one way each for the two.
+
+    Tightening a copy of the schema is how it is asked, rather than listing
+    the members each document may carry: whatever the schema declares is the
+    answer, so a member added to one is admitted the moment it lands and
+    there is no second list to keep in step.
+
+    No pairings at all is a failure rather than a pass, for the reason
+    _docs_cite_the_real_length gives: a check with nothing to assert reports
+    exactly like one that holds.
+
+    Returns True when an example carries an undeclared member.
+    """
+    if not PAIRS:
+        print("FAIL  no example is paired with a schema for this to check")
+        return True
+
+    failed = False
+    for schema_name, example_name in PAIRS:
+        schema = _tighten(copy.deepcopy(_load("schemas", schema_name)))
+        document = _load("examples", example_name)
+        for error in jsonschema.Draft202012Validator(schema).iter_errors(document):
+            if error.validator != "additionalProperties":
+                continue
+            failed = True
+            where = "/".join(str(part) for part in error.path) or "the root"
+            print(f"FAIL  examples/{example_name} at {where}: {error.message}")
+            print(f"        schemas/{schema_name} does not declare it.")
+            print("        Define the member, or drop it — an example is")
+            print("        documentation, and an undeclared member there")
+            print("        reads as protocol.")
+
+    if not failed:
+        print(f"ok    examples/ — {len(PAIRS)} documents carry only declared members")
+    return failed
+
+
 # examples/stream.txt is the only example that is not a JSON document, and it
 # was the only one nothing checked. Its payloads are JSON all the same, and the
 # rule that matters most in §4.3 — deltas concatenating to the final output —
@@ -1303,6 +1406,7 @@ def main() -> int:
         failed |= _check(
             f"examples/{example_name}", _load("examples", example_name), schema_name
         )
+    failed |= _examples_teach_only_declared_members()
 
     print()
     for line, source in _spec_blocks():
