@@ -155,6 +155,12 @@ nothing may fail, and then against the same runner with exactly one rule
 broken — asserting that the *named* check catches it, not merely that
 something did. Standard library only; it needs no runner and no network.
 
+That file is the suite, and it is run the way it is shown above rather
+than under a test runner: `tests/` holds the fake runner it imports and
+no test modules, so `pytest` collects nothing there by design.
+[`tests/README.md`](tests/README.md) says why, and what it would cost to
+change.
+
 ## Why this is not called `postern`
 
 [CONTRIBUTING.md](../../CONTRIBUTING.md) puts a language SDK out of scope,
