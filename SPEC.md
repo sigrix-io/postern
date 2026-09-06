@@ -1137,6 +1137,23 @@ Re-stamping discards the anchor and silently restores the stacking that
 that carries no such value is a `404`, which cannot: there is nothing to
 discard there, and §5.7.4 says what a runner reports instead.
 
+`credentials` is **OPTIONAL** and reports which of the environment variables
+`describe` declares (§4.1.3) this deployment actually carries: `satisfied` is
+true when every one of them is set, and `missing` names those that are not.
+Both are **OPTIONAL** in turn.
+
+It belongs in `status` rather than `describe` for the reason `limits` gives
+below — which credentials one machine happens to hold is a fact about that
+deployment, where `describe` answers for the agent and answers the same
+everywhere.
+
+**Publishing it is not the same obligation as performing the check.** §4.6's
+step 5 **MUST**s every runner to answer `424` where a declared credential is
+unset, and says so explicitly against this block's optionality: a runner may
+perform that check and report no credential state at all. What the block adds
+is that a client can see the answer before it sends a run, rather than
+discovering it from a refusal.
+
 `limits` is **OPTIONAL** and carries the bounds a runner puts on a run.
 Each member is **OPTIONAL** in turn: `max_run_seconds` is the maximum
 duration the runner will let a run reach, **REQUIRED** where it imposes one
@@ -1424,6 +1441,25 @@ differently. A `424` names the variable to set; the `500` `agent_error`
 that follows a run started without it names nothing. A client could not
 tell which kind of runner it held until it met an unset credential, and
 nothing said it might have to.
+
+**A `424` SHOULD name the variables.** The body **SHOULD** carry
+`error.detail.missing`, an array of the environment variable names
+`describe` declares and this runner's environment does not hold — the same
+names `status.credentials.missing` reports (§4.4), the way §4.5's
+`error.detail.max_run_seconds` is the same integer `status` declares. It
+rides inside `detail` because the envelope's root is closed (§2.1).
+
+The paragraph above turns on a `424` *naming* the variable to set, and until
+now only `message` did — prose a client shows a user rather than acts on
+(§2.1). It is an array rather than one name because a runner reading its own
+environment against `describe`'s list meets every unset one at once, so
+naming a single one would cost the operator a round trip per credential; and
+because `status` already publishes that set with that cardinality, where a
+scalar here would be one fact in two shapes. Naming them discloses nothing
+further than the refusal already does: §4.1 requires `describe` to publish
+which credentials an agent needs, so a caller already holds the list, and the
+disclosure note above says step 5 discloses only whether they are *currently*
+set — which a `424` says whether or not it names one.
 
 **The check is available to every runner, which is what makes this a
 MUST rather than a SHOULD.** §4.1.3 has `describe` declare credentials by
@@ -2057,6 +2093,32 @@ and informative for everyone else. Postern is usable with no reference to it.*
 ## Appendix A · Changes
 
 **Unreleased** — corrections made before the first tagged release.
+
+- A `424` `missing_credential` **SHOULD** carry `error.detail.missing`, an
+  array of the environment variable names `describe` declares and the
+  runner's environment does not hold. §4.6 makes step 5 a **MUST** on the
+  grounds that "a `424` names the variable to set; the `500` `agent_error`
+  that follows a run started without it names nothing" — and until now only
+  `message` did, which §2.1 makes prose a client shows a user rather than
+  acts on. So the argument for the **MUST** was sound and the field it turns
+  on did not exist. It is an array rather than one name because a runner
+  reading its own environment against `describe`'s list meets every unset
+  one at once, and because that is the cardinality
+  `status.credentials.missing` already publishes — a scalar here would be
+  one fact in two shapes. §4.5's `error.detail.max_run_seconds` is
+  already defined as "the same integer `status` declares", so echoing
+  `status` is the established shape for a `detail` member rather than a new
+  one. `examples/error.json` carried this member as `detail.env`, a spelling
+  nothing in this document defined (§2.1, §4.4, §4.6).
+- `status.credentials` is defined, which §4.4 showed in its own example and
+  never said. `satisfied` is true when every environment variable `describe`
+  declares (§4.1.3) is set, and `missing` names those that are not; the block
+  is **OPTIONAL**. §4.6 already relied on it — it distinguishes publishing
+  the satisfied set from performing the step-5 check, and cites §4.4 for an
+  optionality §4.4 never stated — so this is the definition that citation
+  pointed at. Every other member §4.4 carries it names: `limits`, `update`
+  and each of `entitlement`'s. `credentials` was the one it drew and left
+  unlabelled (§4.4).
 
 - §4.3 states that `done` repeats `start`'s `run_id`, and that a runner
   **MUST NOT** report two identifiers for one run. The rule was asserted in

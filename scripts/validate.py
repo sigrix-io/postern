@@ -82,14 +82,15 @@ PAIRS = [
     ("error.schema.json", "error.json"),
     # Four error examples rather than one. The envelope is identical in each;
     # what differs is `detail`, and that is the part prose alone leaves
-    # untested — a runner-side member (§4.1.3's env), a distributor-side one
-    # (§5.6's access_ends_at), §4.5's max_run_seconds, and, for §5.5's 404,
-    # nothing at all. The 404 is the load-bearing one: a detail saying which
-    # of "no such agent", "not entitled" and "dead token" applied would undo
-    # the rule the response exists to keep. §4.2's idempotency conflict is the
-    # other detail-less one, and for the opposite reason: everything a client
-    # needs is that its key is spoken for, and echoing the first request's
-    # inputs back would publish one caller's body to whoever guessed its key.
+    # untested — a runner-side member (§4.6 step 5's missing), a
+    # distributor-side one (§5.6's access_ends_at), §4.5's max_run_seconds,
+    # and, for §5.5's 404, nothing at all. The 404 is the load-bearing one:
+    # a detail saying which of "no such agent", "not entitled" and "dead
+    # token" applied would undo the rule the response exists to keep. §4.2's
+    # idempotency conflict is the other detail-less one, and for the opposite
+    # reason: everything a client needs is that its key is spoken for, and
+    # echoing the first request's inputs back would publish one caller's body
+    # to whoever guessed its key.
     ("error.schema.json", "error-withdrawn.json"),
     ("error.schema.json", "error-not-found.json"),
     ("error.schema.json", "error-run-timeout.json"),
@@ -596,6 +597,16 @@ MUST_REJECT = [
         "entitlement.schema.json",
         "a checked_at that is nearly RFC 3339, with a space for the T",
         {**_ENTITLEMENT, "checked_at": "2026-08-15 09:14:02Z"},
+    ),
+    # §4.6 step 5 says `missing` is an array, matching the cardinality
+    # `status.credentials.missing` already publishes. A single name is the
+    # shape `examples/error.json` taught while it carried `detail.env`, so it
+    # is the mistake an implementer who read that example would make.
+    (
+        "error.schema.json",
+        "a missing_credential naming one variable as a string rather than an array",
+        {"error": {"code": "missing_credential", "message": "x",
+                   "detail": {"missing": "SERPER_API_KEY"}}},
     ),
     (
         "status.schema.json",
