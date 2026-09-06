@@ -11,8 +11,7 @@
       "key": "series",
       "label": "Revenue series",
       "type": "text",
-      "required": true,
-      "help": "Comma-separated monthly totals."
+      "required": true
     }
   ],
   "output": {
