@@ -264,7 +264,7 @@ footer a{color:var(--iron)}
       <div><dt>Runner verbs</dt><dd>4<small><code>describe</code> · <code>run</code> · <code>stream</code> · <code>status</code></small></dd></div>
       <div><dt>Distributor paths</dt><dd>2<small><code>entitlements</code> · <code>bundles</code></small></dd></div>
       <div><dt>Conformance levels</dt><dd>3<small>cumulative; a level is discoverable</small></dd></div>
-      <div><dt>Error codes</dt><dd>8<small>closed enum on emit, open on receive</small></dd></div>
+      <div><dt>Error codes</dt><dd>11<small>closed enum on emit, open on receive</small></dd></div>
       <div><dt>Run outcomes</dt><dd>3<small>run · refused · cannot tell</small></dd></div>
     </dl>
   </div>
@@ -516,19 +516,22 @@ footer a{color:var(--iron)}
 
   <div class="twrap">
     <table>
-      <caption>The eight codes, and which half of the protocol can construct each</caption>
+      <caption>The eleven codes, and which half of the protocol can construct each</caption>
       <thead>
         <tr><th>Code</th><th>HTTP</th><th>Emitted by</th><th>Means</th></tr>
       </thead>
       <tbody>
         <tr><td><code>bad_request</code></td><td class="num">400</td><td><span class="chip c-iron">runner</span> <span class="chip c-iron">distributor</span></td><td>Malformed body, an input failing <code>describe</code>'s validation, or an identifier off §1.5's grammar.</td></tr>
+        <tr><td><code>unauthorized</code></td><td class="num">401</td><td><span class="chip c-iron">runner</span></td><td>A runner binding a non-loopback interface requires inbound authentication of its own (§7), and the request did not satisfy it. Unconstructible on a distributor — §5.5 forbids it there, and Figure 5 draws why.</td></tr>
         <tr><td><code>not_found</code></td><td class="num">404</td><td><span class="chip c-iron">runner</span> <span class="chip c-iron">distributor</span></td><td>The overloaded one. On a distributor: no such agent, <em>or</em> not entitled, <em>or</em> the token is dead. On a runner: an unimplemented path, saying nothing about the agent.</td></tr>
         <tr><td><code>not_entitled</code></td><td class="num">403</td><td><span class="chip c-iron">runner</span></td><td>A local runner reporting its own state to its own client. Unconstructible on a distributor — §5.5 forbids it there.</td></tr>
+        <tr><td><code>idempotency_conflict</code></td><td class="num">409</td><td><span class="chip c-iron">runner</span></td><td>An <code>Idempotency-Key</code> the runner has already answered, presented with different <code>inputs</code> (§4.2).</td></tr>
         <tr><td><code>withdrawn</code></td><td class="num">410</td><td><span class="chip c-iron">distributor</span></td><td>Was entitled; the agent has since been withdrawn. Carries <code>detail.access_ends_at</code>.</td></tr>
         <tr><td><code>missing_credential</code></td><td class="num">424</td><td><span class="chip c-iron">runner</span></td><td>A credential named by <code>describe</code> is absent from the environment.</td></tr>
         <tr><td><code>agent_error</code></td><td class="num">500</td><td><span class="chip c-iron">runner</span></td><td>The agent ran and failed.</td></tr>
         <tr><td><code>not_implemented</code></td><td class="num">501</td><td><span class="chip c-iron">runner</span></td><td>Above the declared conformance level. Retrying will not help, ever.</td></tr>
         <tr><td><code>unavailable</code></td><td class="num">503</td><td><span class="chip c-iron">runner</span> <span class="chip c-iron">distributor</span></td><td>Not ready. Retrying may help.</td></tr>
+        <tr><td><code>run_timeout</code></td><td class="num">504</td><td><span class="chip c-iron">runner</span></td><td>The run reached the runner's declared <code>limits.max_run_seconds</code> and was stopped (§4.5).</td></tr>
       </tbody>
     </table>
   </div>
@@ -536,8 +539,54 @@ footer a{color:var(--iron)}
   <div class="col">
     <p>A code marked for one side is not merely unusual on the other — it is
     <em>unconstructible</em> there, so a client receiving one has learned something about the
-    responder rather than about its request. There is deliberately no <code>401</code> anywhere
-    in the protocol; §5.5 explains why, and Figure 5 draws it.</p>
+    responder rather than about its request. A <em>distributor</em> deliberately answers no
+    <code>401</code> — §5.5 explains why, and Figure 5 draws it — which is a narrower claim than
+    it looks: the <code>401</code> in this table is a runner's, refusing a different credential
+    for a different reason (§7).</p>
+
+    <p>Which of those codes a runner sends when one request earns more than one is §4.6 — and a
+    <code>run</code> earns several routinely. A request omitting a <code>required</code> input,
+    sent to a runner whose environment is missing a credential <code>describe</code> declares,
+    is described correctly by both <code>bad_request</code> and <code>missing_credential</code>;
+    send that same request to a runner whose entitlement has lapsed and a third applies.</p>
+  </div>
+
+  <div class="twrap">
+    <table>
+      <caption>The order a runner refuses in — the first row that matches is the answer</caption>
+      <thead>
+        <tr><th>Step</th><th>Check</th><th>Refusal</th><th>Stated in</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">1</td><td>The verb sits above the runner's declared level</td><td><code>501</code> <code>not_implemented</code></td><td>§3</td></tr>
+        <tr><td class="num">2</td><td>The entitlement is not in force</td><td><code>403</code> <code>not_entitled</code> or <code>503</code> <code>unavailable</code></td><td>§5.7.4</td></tr>
+        <tr><td class="num">3</td><td>The media type is not <code>application/json</code></td><td><code>400</code> <code>bad_request</code></td><td>§2.3</td></tr>
+        <tr><td class="num">4</td><td>A <code>required</code> input is absent, or a declared <code>validation</code> fails</td><td><code>400</code> <code>bad_request</code></td><td>§4.2</td></tr>
+        <tr><td class="num">5</td><td>A credential <code>describe</code> declares is absent from the environment</td><td><code>424</code> <code>missing_credential</code></td><td>§2.1</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Steps 1 and 3 were already ordered where they are stated; what §4.6 adds is
+    <strong>2 before 3</strong> and <strong>4 before 5</strong>. Between 3 and 5 the rule is that
+    a runner decides what the request <em>says</em> before it inspects what it <em>holds</em> —
+    which keeps a malformed request answered identically on every deployment, and keeps §4.2
+    exercisable on a runner still being brought up. Under the reverse order one unset credential
+    answers <code>424</code> to every <code>run</code>, so the rule §4.2 states as a
+    <strong>MUST</strong> could not be tested at all.</p>
+
+    <p>Step 2 is neither of those, and sits above both because a refusal it produces applies to
+    every request whatever the request says. A <code>400</code> names something the caller can
+    fix, which on a revoked runner invites a retry that cannot succeed — the same rule §5.7.4
+    draws, one layer up. That step is the whole of Figure 3.</p>
+
+    <p>§4.5's capacity refusal is deliberately <em>outside</em> this sequence. A runner that
+    cannot start another run has nothing to gain by validating one first and <strong>MAY</strong>
+    answer <code>503</code> at any point before the agent starts. It shares a status and a code
+    with step 2's unreachable case and is a different refusal: that one says this runner cannot
+    establish it may serve you, this one says it cannot serve anyone right now. Nothing but
+    <code>status</code> (§4.4) tells them apart.</p>
   </div>
 </section>
 
@@ -560,6 +609,13 @@ footer a{color:var(--iron)}
     §5.7.4 handles a <code>404</code>. The table at the end of §5.7.4 collects the results but not
     the order in which the questions are asked.</p>
 
+    <p>One pair of them is easy to get backwards, so it is worth naming before the picture:
+    <strong>the refusal question is asked before the never-checked one.</strong> A
+    <code>404</code> is an answer rather than an outage, so §5.7.3 hands a runner holding one
+    straight to §5.7.4 — “including where that <code>404</code> was the first answer it ever
+    got.” Reversed, a first-ever <code>404</code> falls into <code>unknown</code> and a
+    <code>503</code>, telling a revoked caller to come back later.</p>
+
     <p>Asked in order, they terminate in exactly three ways — and the specification names the rule
     underneath them itself.</p>
 
@@ -570,7 +626,7 @@ footer a{color:var(--iron)}
 
   <figure>
     <div class="scroll">
-      <svg class="fig" viewBox="0 0 920 716" role="img" aria-label="Decision tree for whether a runner may execute run or stream. Six questions in sequence — distributor configured, any check ever succeeded, was the last answer a refusal, inside the staleness window, is the distributor reachable, inside the grace period — terminating in run, 403 not entitled, or 503 unavailable.">
+      <svg class="fig" viewBox="0 0 920 716" role="img" aria-label="Decision tree for whether a runner may execute run or stream. Six questions in sequence — distributor configured, was the last answer a refusal, any check ever succeeded, inside the staleness window, is the distributor reachable, inside the grace period — terminating in run, 403 not entitled, or 503 unavailable.">
         <defs>
           <marker id="f3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-ink"/></marker>
         </defs>
@@ -592,27 +648,27 @@ footer a{color:var(--iron)}
 
         <!-- row 2 -->
         <rect class="box-q" x="60" y="146" width="310" height="54" rx="5"/>
-        <text class="t-node" x="215" y="170" text-anchor="middle">Has a check ever succeeded?</text>
-        <text class="t-sub" x="215" y="188" text-anchor="middle">§5.7.3</text>
+        <text class="t-node" x="215" y="170" text-anchor="middle">Was the last answer a refusal?</text>
+        <text class="t-sub" x="215" y="188" text-anchor="middle">revoked, or a 404 · §5.7.4</text>
         <line class="line" x1="372" y1="173" x2="534" y2="173" marker-end="url(#f3a)"/>
-        <text class="t-mini" x="453" y="165" text-anchor="middle">no</text>
-        <rect class="tbox w-brass s-brass" x="540" y="146" width="360" height="54" rx="5"/>
-        <text class="t-code f-brass" x="558" y="170">503 · unavailable</text>
-        <text class="t-sub" x="558" y="188">state = unknown, with no checked_at</text>
+        <text class="t-mini" x="453" y="165" text-anchor="middle">yes</text>
+        <rect class="tbox w-bar s-bar" x="540" y="146" width="360" height="54" rx="5"/>
+        <text class="t-code f-bar" x="558" y="170">403 · not_entitled</text>
+        <text class="t-sub" x="558" y="188">state = revoked · no grace applies</text>
         <line class="line" x1="215" y1="200" x2="215" y2="242" marker-end="url(#f3a)"/>
-        <text class="t-mini" x="226" y="226">yes</text>
+        <text class="t-mini" x="226" y="226">no</text>
 
         <!-- row 3 -->
         <rect class="box-q" x="60" y="246" width="310" height="54" rx="5"/>
-        <text class="t-node" x="215" y="270" text-anchor="middle">Was the last answer a refusal?</text>
-        <text class="t-sub" x="215" y="288" text-anchor="middle">revoked, or a 404 · §5.7.4</text>
+        <text class="t-node" x="215" y="270" text-anchor="middle">Has a check ever succeeded?</text>
+        <text class="t-sub" x="215" y="288" text-anchor="middle">§5.7.3</text>
         <line class="line" x1="372" y1="273" x2="534" y2="273" marker-end="url(#f3a)"/>
-        <text class="t-mini" x="453" y="265" text-anchor="middle">yes</text>
-        <rect class="tbox w-bar s-bar" x="540" y="246" width="360" height="54" rx="5"/>
-        <text class="t-code f-bar" x="558" y="270">403 · not_entitled</text>
-        <text class="t-sub" x="558" y="288">state = revoked · no grace applies</text>
+        <text class="t-mini" x="453" y="265" text-anchor="middle">no</text>
+        <rect class="tbox w-brass s-brass" x="540" y="246" width="360" height="54" rx="5"/>
+        <text class="t-code f-brass" x="558" y="270">503 · unavailable</text>
+        <text class="t-sub" x="558" y="288">state = unknown, with no checked_at</text>
         <line class="line" x1="215" y1="300" x2="215" y2="342" marker-end="url(#f3a)"/>
-        <text class="t-mini" x="226" y="326">no</text>
+        <text class="t-mini" x="226" y="326">yes</text>
 
         <!-- row 4 -->
         <rect class="box-q" x="60" y="346" width="310" height="54" rx="5"/>
@@ -663,7 +719,7 @@ footer a{color:var(--iron)}
     </div>
     <figcaption><b>Figure 3 · The entitlement gate</b>Three endings, colour-coded throughout this
     page: green runs, rust refuses, brass cannot tell. Note where the two <em>brass</em> endings
-    sit — one at the very top of the walk and one at the very bottom — and that both report
+    sit — one early in the walk and one at its very end — and that both report
     <code>unknown</code>. §4.4 separates them by whether <code>checked_at</code> is present, which
     is the subtlest requirement in the document.</figcaption>
   </figure>
@@ -758,9 +814,8 @@ footer a{color:var(--iron)}
 <section id="blind">
   <div class="col">
     <h2><span class="marker">E · §5.5, §7 — The blind spot</span>Four questions, one answer</h2>
-    <p class="lede">Postern defines no <code>401</code> and forbids <code>403</code> on a
-    distributor. That is a deliberate loss of information, and it costs its own implementers
-    the most.</p>
+    <p class="lede">A distributor answers no <code>401</code> and is forbidden <code>403</code>.
+    That is a deliberate loss of information, and it costs its own implementers the most.</p>
 
     <p>A <code>403</code> confirms that an agent exists. Over a guessable identifier space that
     turns the entitlement endpoint into an enumeration oracle for a private catalogue, so §5.5
@@ -810,7 +865,7 @@ footer a{color:var(--iron)}
         <text class="t-mini" x="576" y="168">no status, no code and no field separates them</text>
 
         <text class="t-mini" x="468" y="200" text-anchor="middle">§5.5</text>
-        <text class="t-mini" x="576" y="204">Postern defines no 401 — saying "authenticate</text>
+        <text class="t-mini" x="576" y="204">a distributor answers no 401 — saying "authenticate</text>
         <text class="t-mini" x="576" y="219">and retry" would itself confirm the token was real</text>
 
         <line class="line-thin" x1="20" y1="262" x2="900" y2="262" opacity=".5"/>

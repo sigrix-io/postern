@@ -998,6 +998,164 @@ def _docs_cite_the_real_length() -> bool:
     return failed
 
 
+# §2.1's table is where an error code and its HTTP status are written down
+# together, so it is what the copies are measured against. One row of it:
+# `| `bad_request` | 400 | R · D | ... |`.
+_SPEC_ERROR_ROW = re.compile(r"^\|\s*`([a-z_]+)`\s*\|\s*(\d{3})\s*\|", re.MULTILINE)
+
+# The same pair as docs/flow.html renders it, inside one <tr>.
+_FLOW_ERROR_ROW = re.compile(
+    r"<td><code>([a-z_]+)</code></td><td class=\"num\">(\d{3})</td>"
+)
+
+# That page's table, found by the caption that claims to enumerate the codes.
+# Slicing on the caption ties the count and the rows to one table, which is
+# the relationship being asserted: the caption is the table's claim about
+# itself.
+_FLOW_ERROR_TABLE = re.compile(r"<caption>The (\w+) codes,.*?</table>", re.DOTALL)
+
+# The header ledger states the same number as a numeral, far enough from the
+# table to rot on its own — which is exactly what it did.
+_FLOW_ERROR_METRIC = re.compile(r"<dt>Error codes</dt><dd>(\d+)<")
+
+# The caption spells its number out. Anything outside this range fails loudly
+# rather than being skipped: an unrecognised word is a caption this check can
+# no longer read, which is not the same as one that agrees.
+_NUMBER_WORDS = {
+    "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+    "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+    "eighteen": 18, "nineteen": 19, "twenty": 20,
+}
+
+
+def _docs_list_every_error_code() -> bool:
+    """docs/flow.html's error table carries every code §2.1 defines.
+
+    That page renders §2.1's table a second time and nothing read the copy, so
+    three codes went missing into it: `run_timeout` (686c252),
+    `idempotency_conflict` (ed1fb51) and `unauthorized` (18ad2fc). The page
+    went on captioning itself "The eight codes" while the specification
+    defined eleven, which is the failure this family of checks exists for —
+    a stale count reads exactly like a current one.
+
+    The last of the three is the argument for this check rather than an
+    illustration of it. 18ad2fc *did* edit docs/flow.html, and the one line it
+    changed was the length citation, because _docs_cite_the_real_length
+    demanded it. The author had the file open, satisfied the only check that
+    reached it, and left the error table three hundred lines below untouched.
+
+    Three restatements are held to §2.1, which is the only place a code and
+    its status are written side by side:
+
+    - `error.schema.json`'s enum, which is what an implementation is actually
+      validated against. Nothing compared the two before, so the schema and
+      the prose were free to disagree about the vocabulary itself.
+    - every row of the page's table, name and status together. A row carrying
+      the wrong status is the same rot as a missing row and harder to see.
+    - the two places that page says how many there are — the table's own
+      caption, and the ledger metric in the header.
+
+    Finding no table at all is a failure rather than a pass, for the reason
+    _docs_cite_the_real_length gives one check up: a check with nothing to
+    assert reports exactly like one that holds. Removing the table is allowed
+    and has to be deliberate — remove this check with it.
+
+    Order is deliberately not asserted. The page follows §2.1's order today
+    and re-sorting by status would be a reasonable edit; what is an invariant
+    is the set, and the status each name carries.
+
+    Returns True on drift, so callers can accumulate.
+    """
+    spec = (ROOT / "SPEC.md").read_text(encoding="utf-8")
+    section = re.search(r"^#{2,4}\s+2\.1\b.*?$(.*?)^#{2,4}\s+\d", spec, re.S | re.M)
+    if section is None:
+        print("FAIL  SPEC.md has no §2.1 to read the error vocabulary from")
+        return True
+
+    defined = dict(_SPEC_ERROR_ROW.findall(section.group(1)))
+    if not defined:
+        print("FAIL  §2.1's table of error codes did not parse")
+        print(f"        looked for rows matching: {_SPEC_ERROR_ROW.pattern}")
+        return True
+
+    failed = False
+
+    enum = _load("schemas", "error.schema.json")["properties"]["error"]["properties"][
+        "code"
+    ]["enum"]
+    if set(enum) != set(defined):
+        failed = True
+        print("FAIL  error.schema.json's enum and §2.1's table name different codes")
+        for code in sorted(set(defined) - set(enum)):
+            print(f"        in §2.1, not in the enum: {code}")
+        for code in sorted(set(enum) - set(defined)):
+            print(f"        in the enum, not in §2.1: {code}")
+    else:
+        print(f"ok    error.schema.json enumerates §2.1's {len(defined)} codes")
+
+    where = pathlib.Path("docs/flow.html")
+    page = (ROOT / where).read_text(encoding="utf-8")
+
+    table = _FLOW_ERROR_TABLE.search(page)
+    if table is None:
+        failed = True
+        print(f"FAIL  {where} no longer has a table claiming to list the error codes")
+        print(f"        looked for: {_FLOW_ERROR_TABLE.pattern}")
+        print("        Reword the page or this check, not neither.")
+        return failed
+
+    drawn = dict(_FLOW_ERROR_ROW.findall(table.group(0)))
+    if drawn != defined:
+        failed = True
+        print(f"FAIL  {where}'s error table does not match §2.1")
+        for code in sorted(set(defined) - set(drawn)):
+            print(f"        missing: {code} ({defined[code]})")
+        for code in sorted(set(drawn) - set(defined)):
+            print(f"        not in §2.1: {code} ({drawn[code]})")
+        for code in sorted(set(drawn) & set(defined)):
+            if drawn[code] != defined[code]:
+                print(
+                    f"        {code}: the page says {drawn[code]}, "
+                    f"§2.1 says {defined[code]}"
+                )
+    else:
+        print(
+            f"ok    {where} draws all {len(defined)} of §2.1's codes, "
+            "each with its status"
+        )
+
+    counts = {}
+    spelled = _NUMBER_WORDS.get(table.group(1))
+    if spelled is None:
+        failed = True
+        print(f"FAIL  {where}'s caption says \"The {table.group(1)} codes\"")
+        print("        _NUMBER_WORDS has no such word, so that count went unread.")
+        print("        Extend the map rather than leaving the caption unchecked.")
+    else:
+        counts["the table's caption"] = spelled
+
+    metric = _FLOW_ERROR_METRIC.search(page)
+    if metric is None:
+        failed = True
+        print(f"FAIL  {where}'s header no longer states an error-code count")
+        print(f"        looked for: {_FLOW_ERROR_METRIC.pattern}")
+    else:
+        counts["the header ledger"] = int(metric.group(1))
+
+    for site, claimed in counts.items():
+        if claimed != len(defined):
+            failed = True
+            print(
+                f"FAIL  {where}: {site} says {claimed} error codes; "
+                f"§2.1 defines {len(defined)}"
+            )
+    if counts and all(claimed == len(defined) for claimed in counts.values()):
+        print(f"ok    {where} — {len(counts)} counts of the codes say {len(defined)}")
+
+    return failed
+
+
 # examples/stream.txt is the only example that is not a JSON document, and it
 # was the only one nothing checked. Its payloads are JSON all the same, and the
 # rule that matters most in §4.3 — deltas concatenating to the final output —
@@ -1195,6 +1353,7 @@ def main() -> int:
     print()
     failed |= _docs_cite_real_sections()
     failed |= _docs_cite_the_real_length()
+    failed |= _docs_list_every_error_code()
 
     return 1 if failed else 0
 

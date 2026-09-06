@@ -137,10 +137,19 @@ flowchart TD
 ```
 
 Two components means two runners on two ports — §2.2 permits no other shape. The
-client carries the value across, and that works with no adapter because §4.1.4
-makes `text` the v0 output type by decision and inputs take strings (§4.1.1).
-The reserved key `prompt` denotes a single free-text brief where an agent has
-one, which is the natural landing spot for a chained value.
+client carries the value across, and where A's `output.type` is `text` that works
+with no adapter: `text` is the type §4.1.1 records the matching decision for on
+the input side, so what A returns is what B's inputs already take. The reserved
+key `prompt` denotes a single free-text brief where an agent has one, which is
+the natural landing spot for a chained value.
+
+`bytes` is the case to check before assuming the chain holds (§4.1.4). Its
+`output.value` is a JSON string like `text`'s — base64, standard alphabet — so it
+*passes* into a `text` input without complaint, and B reads the encoding rather
+than the value. Nothing on either side reports that: A succeeded, B ran, and the
+result is prose about base64. A chain across a `bytes` output needs the client to
+know what to do with the artifact, which is the adapter this shape otherwise
+avoids.
 
 ### Or: the agent holds the client role
 
