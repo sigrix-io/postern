@@ -2145,6 +2145,20 @@ and informative for everyone else. Postern is usable with no reference to it.*
 **Unreleased** — corrections made before the first tagged release. Each
 entry carries the date it landed and the pull request that carried it.
 
+- 2026-09-06 · #155 —
+  §4.2 says what an `Idempotency-Key` does before the first execution is
+  answered. The replay promise was keyed on a key already *answered*, so a
+  repeat arriving mid-execution fell outside every sentence in the
+  section — and that is the window a client retries in, since §4.2's own
+  reasoning is that a connection dropping mid-`run` looks the same whether
+  the agent was halfway through or writing its last byte. A runner **MAY**
+  hold the second request and answer it with the first execution's result,
+  bounded by `limits.max_run_seconds`; a client **MUST NOT** assume it
+  will, the posture this section already takes toward the retention
+  window; and §4.5's capacity refusal needed nothing added, being the one
+  `503` whose retry lands on an answered key. It also states that one
+  keyspace spans both verbs, which the replay rule assumed where it says
+  what a replayed result looks like on `stream` (§4.2, §4.4, §4.5).
 - 2026-09-06 · #154 —
   §2.1's envelope binds "a path this specification defines" rather than
   every non-2xx response. A runner binds a port, and §2 gives Postern's own
