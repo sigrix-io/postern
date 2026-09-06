@@ -2092,9 +2092,11 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 ## Appendix A · Changes
 
-**Unreleased** — corrections made before the first tagged release.
+**Unreleased** — corrections made before the first tagged release. Each
+entry carries the date it landed and the pull request that carried it.
 
-- A `424` `missing_credential` **SHOULD** carry `error.detail.missing`, an
+- 2026-09-06 · #151 —
+  A `424` `missing_credential` **SHOULD** carry `error.detail.missing`, an
   array of the environment variable names `describe` declares and the
   runner's environment does not hold. §4.6 makes step 5 a **MUST** on the
   grounds that "a `424` names the variable to set; the `500` `agent_error`
@@ -2110,7 +2112,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   `status` is the established shape for a `detail` member rather than a new
   one. `examples/error.json` carried this member as `detail.env`, a spelling
   nothing in this document defined (§2.1, §4.4, §4.6).
-- `status.credentials` is defined, which §4.4 showed in its own example and
+- 2026-09-06 · #151 —
+  `status.credentials` is defined, which §4.4 showed in its own example and
   never said. `satisfied` is true when every environment variable `describe`
   declares (§4.1.3) is set, and `missing` names those that are not; the block
   is **OPTIONAL**. §4.6 already relied on it — it distinguishes publishing
@@ -2119,8 +2122,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   pointed at. Every other member §4.4 carries it names: `limits`, `update`
   and each of `entitlement`'s. `credentials` was the one it drew and left
   unlabelled (§4.4).
-
-- §4.3 states that `done` repeats `start`'s `run_id`, and that a runner
+- 2026-09-05 · #145 —
+  §4.3 states that `done` repeats `start`'s `run_id`, and that a runner
   **MUST NOT** report two identifiers for one run. The rule was asserted in
   `stream-event.schema.json` — whose `start` description has always said it
   carries *"the `run_id` that the `done` payload repeats"* — and
@@ -2129,7 +2132,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   documented everywhere except the document that binds it. It spans two
   events, which is why neither schema can reach it and why it is asserted
   the way §4.3's `delta` concatenation rule already is (§4.3, §4.5).
-- `status.agent`, `status.entitlement` and `describe.output` are
+- 2026-09-05 · #143 —
+  `status.agent`, `status.entitlement` and `describe.output` are
   **REQUIRED**, which the sections reasoning about them assumed and the
   schemas did not carry. Every top-level member §4.4 marks, it marks
   **OPTIONAL** — `limits`, `update` — and the two it marks **REQUIRED** are
@@ -2149,14 +2153,16 @@ and informative for everyone else. Postern is usable with no reference to it.*
   it asks. Only `agent.id` is required within `status.agent`. No example,
   fenced block or reference-runner path in this repository emitted a
   document any of this now refuses (§1.5, §2.2, §4.1.4, §4.4, §5.1).
-- §2.2 says no runner *path* carries an agent identifier, where it used to
+- 2026-09-05 · #143 —
+  §2.2 says no runner *path* carries an agent identifier, where it used to
   say none of the four verbs did. The narrower claim was false as written —
   `describe` carries `agent.id` and §1.5 says so — and only the addressing
   reading supports the conclusion drawn from it, that a client **MAY** treat
   a runner's port as its agent's address. The next sentence, contrasting
   with distributor paths that *address* an agent by identifier, always meant
   the same thing (§1.5, §2.2).
-- `describe.schema.json` enforces the pairing §4.1.1 already stated between
+- 2026-09-05 · #142 —
+  `describe.schema.json` enforces the pairing §4.1.1 already stated between
   an input's `type` and its `default`. The sentence fixing the value space —
   *text and select carry a string, number carries a number* — was prose
   only, so `{"type": "number", "default": "not a number"}` validated
@@ -2170,7 +2176,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   follow — the values there sit in a different document from the
   declarations that type them, so it admits the union of the three value
   spaces and §4.2 leaves the per-input check to the runner (§4.1.1, §4.2).
-- §4.1.1 states the grammar an input `key` has to satisfy.
+- 2026-09-05 · #140 —
+  §4.1.1 states the grammar an input `key` has to satisfy.
   `describe.schema.json` has enforced `[A-Za-z0-9_.-]+` from the first
   commit and §4.1.1 said only that a declaration **MUST** carry the member,
   so a key with a space in it was refused with no sentence to cite — and
@@ -2185,7 +2192,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   the declaration and reaches `run` through §4.2's "map keyed by
   `describe`'s input keys" rather than being restated there (§1.5, §4.1.1,
   §4.2, §5.3).
-- §4.1.3 states what a `credentials[]` entry carries, and what its closure
+- 2026-09-05 · #139 —
+  §4.1.3 states what a `credentials[]` entry carries, and what its closure
   is for. `describe.schema.json` has always closed that object, and it was
   the only statement of the entry's shape anywhere — §4.1.3 described the
   rule and never the record. The closure is not a list of today's members:
@@ -2202,7 +2210,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   [`schemas/README.md`](schemas/README.md) now records as a fourth place
   the emit/accept difference is load-bearing rather than as three
   (§2.1, §4.1.3).
-- A runner **MUST** perform the credential check, not merely order it.
+- 2026-09-05 · #134 —
+  A runner **MUST** perform the credential check, not merely order it.
   §4.6 placed the environment check last and gave `missing_credential` its
   producing rule, but bound only the sequence — so a runner that never
   inspected its environment never reached the condition, started the agent,
@@ -2215,7 +2224,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   `status.credentials` staying **OPTIONAL** is not the same obligation — it
   governs publishing the satisfied set, not checking one before a run
   (§4.1.3, §4.4, §4.6).
-- Added `unauthorized` (401), the answer a runner gives when it requires
+- 2026-09-02 · #121 —
+  Added `unauthorized` (401), the answer a runner gives when it requires
   inbound authentication of its own and a request does not satisfy it (§2.1,
   §7). §7 has always obliged a runner binding a non-loopback interface to
   authenticate its callers while specifying no scheme for it, which left the
@@ -2233,7 +2243,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   authenticate — and a runner requiring nothing **SHOULD NOT** name it, since
   the header is off the safelist and admitting it preflights a `describe`
   that would otherwise go without one (§2.1, §2.3, §5.5, §7).
-- A runner's refusals are ordered: it decides what the request says before
+- 2026-09-01 · #105 —
+  A runner's refusals are ordered: it decides what the request says before
   it inspects what it holds, so a `run` that both omits a `required` input
   and meets a runner missing a credential is answered `bad_request` rather
   than `missing_credential` (§4.6). Both were correct under the previous
@@ -2244,66 +2255,83 @@ and informative for everyone else. Postern is usable with no reference to it.*
   producing rule it never had: it was the only code in §2.1's table that no
   section required, defined and never asked for. §4.5's capacity refusal is
   deliberately left unordered (§2.1, §4.2, §4.6).
-- A client **MUST** tolerate an error `code` it does not recognise, so that
+- 2026-08-16 · #38 —
+  A client **MUST** tolerate an error `code` it does not recognise, so that
   adding a code stays an additive change (§2.1).
-- Added `not_implemented` (501). A Level 2 runner answers `stream` with it
+- 2026-08-16 · #38 —
+  Added `not_implemented` (501). A Level 2 runner answers `stream` with it
   rather than with `unavailable`, which is now 503 only (§2.1, §4.3).
-- Added `withdrawn` (410), so the withdrawn-agent response in §5.6 has a
+- 2026-08-16 · #38 —
+  Added `withdrawn` (410), so the withdrawn-agent response in §5.6 has a
   code and can be constructed at all (§2.1, §5.6).
-- The entitlement check response now carries `checked_at`, defined as the
+- 2026-08-16 · #38 —
+  The entitlement check response now carries `checked_at`, defined as the
   moment the distributor last consulted the authority rather than the moment
   it answered. A runner propagates it unchanged and **MUST NOT** re-stamp it,
   so the distributor's cache and the runner's cache share one deadline
   instead of stacking (§5.3, §5.4).
-- `entitlement.checked_at` is now **REQUIRED** in `status` when the
+- 2026-08-16 · #38 —
+  `entitlement.checked_at` is now **REQUIRED** in `status` when the
   entitlement state is `active` or `revoked` (§4.4).
-- The `delta` reconstruction rule applies only when a `delta` is emitted, so
+- 2026-08-16 · #38 —
+  The `delta` reconstruction rule applies only when a `delta` is emitted, so
   a Level 3 runner that cannot produce incremental text stays conformant by
   emitting none (§4.3).
-- A runner serves exactly one agent, stated normatively rather than left to
+- 2026-08-18 · #46 —
+  A runner serves exactly one agent, stated normatively rather than left to
   be inferred from the absence of an identifier in its paths. `not_found`'s
   "no such agent" meaning is distributor-side only; on a runner the code can
   only mean an unimplemented path. Each code in the §2.1 table now says
   which side emits it (§2.1, §2.2).
-- The error envelope's root is closed by design — nothing sits beside
+- 2026-08-18 · #48 —
+  The error envelope's root is closed by design — nothing sits beside
   `error`, so the envelope has one extension point rather than two. The
   schema already asserted this; §2.1 now states it, with the reason and with
   the fact that it constrains what an implementation emits rather than
   licensing a client to reject what it receives (§2.1).
-- The §5.6 `410` body carries the date access ends as
+- 2026-08-18 · #48 —
+  The §5.6 `410` body carries the date access ends as
   `error.detail.access_ends_at`. The closed root leaves `detail` as the only
   place it can go, and the specification previously left it unplaced (§5.6).
-- The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
+- 2026-08-16 · #38 —
+  The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
   mixed-case form (§2).
-- Removed `verification` from the `org.sigrix` member list (§8).
-- A runner answers *any* verb above its declared level with `501` and
+- 2026-08-16 · #38 —
+  Removed `verification` from the `org.sigrix` member list (§8).
+- 2026-08-19 · #50 —
+  A runner answers *any* verb above its declared level with `501` and
   `not_implemented`. The rule was previously stated only for a Level 2
   runner asked to `stream`, leaving a Level 1 runner asked to `run` with no
   defined answer; it now sits in §3, so it also covers any level added later
   (§3, §4.2, §4.3).
-- Narrowed input values to what the three declared types can produce.
+- 2026-08-19 · #50 —
+  Narrowed input values to what the three declared types can produce.
   `run`'s `inputs` map and an input's `default` no longer admit a boolean,
   which none of `text`, `number` or `select` yields. Adding a fourth type
   later is additive; withdrawing a value shape a runner had relied on would
   not be (§4.1.1).
-- Removed `status` from the `run` response. Its only legal value was `ok`,
+- 2026-08-19 · #50 —
+  Removed `status` from the `run` response. Its only legal value was `ok`,
   because §2.1 routes every failure through a non-2xx error envelope, and
   the partial-result case it might have grown into cannot be carried by a
   value an older client would read as a complete result (§4.2).
-- §5.5's indistinguishability rule covers token state, not only agents. An
+- 2026-08-19 · #53 —
+  §5.5's indistinguishability rule covers token state, not only agents. An
   unknown, revoked, or superseded token answers `404` with `not_found`, the
   same as a valid token presented for an agent the buyer may not have, and
   Postern defines no `401` — a status meaning "authenticate and try again"
   would confirm the token was once real. §5.3's success rule gains the
   failure branch it presupposed, and §7's "stop resolving" now names the
   answer it stops with (§2.1, §5.3, §5.5, §7).
-- `entitlement.stale_after_seconds` is now **REQUIRED** for `revoked` as
+- 2026-08-19 · #53 —
+  `entitlement.stale_after_seconds` is now **REQUIRED** for `revoked` as
   well as `active`, matching `checked_at`: it is required wherever a check
   actually happened. Without it a runner held a timestamp and no deadline,
   so §5.4's re-check rule could not be evaluated for a `revoked` answer and
   the restoration §5.4 obliges a distributor to support could never be
   observed (§4.4, §5.4).
-- `agent_id` has a grammar: two parts of lowercase ASCII alphanumerics, `-`
+- 2026-08-19 · #55 —
+  `agent_id` has a grammar: two parts of lowercase ASCII alphanumerics, `-`
   and `.`, joined by one `/`, bounded at 128 characters and compared
   octet-for-octet with no folding or normalisation of any kind (§1.5). It was
   previously only a non-empty string, and the canonical
@@ -2318,7 +2346,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   makes a missing branch indistinguishable from a correct refusal, so no
   client will ever report it (§5.5). `agent.id` carries the pattern and the
   bound in `describe.schema.json` and `status.schema.json` (§4.1, §4.4).
-- The entitlement check has a schema, and its response carries `postern`
+- 2026-08-19 · #56 —
+  The entitlement check has a schema, and its response carries `postern`
   like every other success payload in the protocol. It was the only one
   without a version marker, and a distributor's version is inferable from
   nothing else — [VERSIONING.md](VERSIONING.md) forbids reading it off the
@@ -2330,14 +2359,16 @@ and informative for everyone else. Postern is usable with no reference to it.*
   mismatch is a failed check rather than something to reconcile. The
   `validate.py` skip over the §5.3 block is gone with it — that payload was
   checked by nothing until now (§5.3).
-- `Digest: sha-256=<base64>` becomes
+- 2026-08-19 · #56 —
+  `Digest: sha-256=<base64>` becomes
   `Repr-Digest: sha-256=:<base64>:` on a bundle response. RFC 3230 was
   obsoleted by [RFC 9530](https://www.rfc-editor.org/rfc/rfc9530) before
   this specification shipped, and the replacement is a structured field, so
   the colons are syntax rather than decoration. `Repr-Digest` rather than
   `Content-Digest` because a client verifies the bundle it keeps, not the
   bytes of one hop (§5.6).
-- A runner has defined behaviour when the distributor cannot be reached
+- 2026-08-19 · #59 —
+  A runner has defined behaviour when the distributor cannot be reached
   (§5.7). The check response declares `grace_seconds` beside
   `stale_after_seconds`, and a runner whose answer has expired with nothing
   answering keeps running until
@@ -2348,7 +2379,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   evaluate the sum before publishing either. `0` is a valid grace and means
   *stop at the window*, so strictness is declared rather than inferred from
   an absent field. §8 puts Sigrix's at 86400 (§4.4, §5.3, §5.4, §5.7, §8).
-- §5.4's rule against persisting an `active` answer across a restart is
+- 2026-08-19 · #59 —
+  §5.4's rule against persisting an `active` answer across a restart is
   replaced. A runner **MAY** persist an answer, provided it persists
   `checked_at` with it and evaluates the deadlines against that value on
   load; a restart yields no fresh window. The old rule was written when the
@@ -2359,7 +2391,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   costs the case §5.7 exists for, where a machine reboots with no network
   and cannot tell an entitlement it held five minutes ago from one it never
   had (§5.4, §5.7).
-- A `404` from the check is an answer rather than an outage: no grace
+- 2026-08-19 · #59 —
+  A `404` from the check is an answer rather than an outage: no grace
   applies, the runner stops at once, reports `revoked`, and answers `run`
   and `stream` with `403` `not_entitled`. It reports `revoked` even though
   §5.5 stops it distinguishing a withdrawn entitlement from one that never
@@ -2368,7 +2401,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   not run at all, reports `unknown` with no `checked_at`, and answers `503`
   `unavailable`. The rule under both: unreachable answers `unavailable`,
   refused answers `not_entitled` (§5.7).
-- Browser clients have a defined answer: a runner **MUST** answer the
+- 2026-08-22 · #74 —
+  Browser clients have a defined answer: a runner **MUST** answer the
   `OPTIONS` preflight on `run` and `stream`, and the origin policy behind it
   is the operator's, defaulting to refusal rather than to
   `Access-Control-Allow-Origin: *`. The specification named a web UI as a
@@ -2380,7 +2414,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   the request preflight at all, and a runner accepting `text/plain` executes
   the agent for any origin without one, which is the whole of the preceding
   rule undone (§2.3, §7).
-- A run in flight has a defined life (§4.5). A runner **SHOULD** abort the
+- 2026-08-22 · #75 —
+  A run in flight has a defined life (§4.5). A runner **SHOULD** abort the
   agent when the client disconnects, on `run` and `stream` alike, and
   **MUST NOT** deliver an abandoned run's output anywhere else — there being
   no callback and no verb that takes a `run_id`, which is also why an abort
@@ -2389,14 +2424,16 @@ and informative for everyone else. Postern is usable with no reference to it.*
   that may already have happened, and a retry without an `Idempotency-Key`
   buys the work twice. Previously nothing said whether closing a laptop lid
   stopped an agent from spending money (§4.2, §4.3, §4.5).
-- Added `run_timeout` (504), and with it a runner's right to impose a maximum
+- 2026-08-22 · #75 —
+  Added `run_timeout` (504), and with it a runner's right to impose a maximum
   run duration. `agent_error` and `unavailable` both nearly fit and both
   mislead — one reports a working agent as broken, the other invites a retry
   into the same deadline. A runner imposing a limit **MUST** declare it as
   `status.limits.max_run_seconds` and **MUST NOT** declare one longer than it
   can enforce, and the refusal **SHOULD** carry it as
   `error.detail.max_run_seconds` (§2.1, §4.4, §4.5).
-- Concurrency is the runner's to decide and discoverable rather than assumed:
+- 2026-08-22 · #75 —
+  Concurrency is the runner's to decide and discoverable rather than assumed:
   it **MAY** refuse an overlapping run with `503` `unavailable`, needing no
   new code because the client's move is the one that code already asks for,
   and **SHOULD** declare `status.limits.max_concurrent_runs`.
@@ -2404,7 +2441,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   nothing about admission — a client **MUST** be ready for `503` whatever
   `status` last said, since the slot can go elsewhere between the two calls
   (§4.4, §4.5).
-- `output` has a section of its own (§4.1.4). `text` is the v0 output type
+- 2026-08-22 · #76 —
+  `output` has a section of its own (§4.1.4). `text` is the v0 output type
   by decision rather than by accident of the examples, matching what §4.1.1
   already said for inputs — and an unrecognised `output.type` now has a
   receive-side rule, which is the part that changes the contract rather than
@@ -2418,7 +2456,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   exist before a second output type can, or the addition breaks every client
   written against the closed set: the ordering the error-code enum already
   paid for (§2.1, §4.1.1, §4.1.4).
-- `stream`'s event payloads have schemas, and its rules about them are
+- 2026-08-22 · #82 —
+  `stream`'s event payloads have schemas, and its rules about them are
   stated rather than implied by a table cell. A `step` carries at least
   `name` and `status`; `latency_ms` is an elapsed time, so it is reported on
   `finished` and a runner **MUST NOT** emit it on a `started` step, where
@@ -2428,7 +2467,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   three payloads this specification defines itself; `done` and `error` carry
   bodies §4.2 and §2.1 already define, and the SSE framing spans events, so
   neither is expressible there (§4.3).
-- The plaintext-token prohibition has a loopback exception, on both halves:
+- 2026-08-22 · #87 —
+  The plaintext-token prohibition has a loopback exception, on both halves:
   a distributor reachable only on loopback may serve plaintext, and a runner
   may send its token when the peer address is loopback — the one case where
   the network the TLS rule exists to protect is not there. The condition is
@@ -2437,8 +2477,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   before connecting leaves a gap between the two answers. A runner
   **SHOULD** say when it takes the exception, to its operator rather than in
   `status` (§7).
-
-- `output.type` gains `bytes`, for an agent whose result is a file rather
+- 2026-08-23 · #92 —
+  `output.type` gains `bytes`, for an agent whose result is a file rather
   than prose. `value` carries the artifact base64-encoded and stays a JSON
   string, so no envelope changes shape; `media_type` is **REQUIRED** beside
   it and is an open RFC 6838 string, because an enum would need a
@@ -2449,7 +2489,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   runner bounding what it returns declares `limits.max_output_bytes` in
   `status`, measured before base64. Additive: a client written against
   §4.1.4's receive-side rule survives it (§4.1.4, §4.3, §4.4).
-- A runner whose first-ever check answers `404` reports `revoked` with its
+- 2026-08-23 · #93 —
+  A runner whose first-ever check answers `404` reports `revoked` with its
   own re-check cadence as `stale_after_seconds`. That fallback was already
   the rule, but reachable only by reading "its own re-check cadence" as the
   field. The clause that did name the field attached a **SHOULD** — reuse
@@ -2463,7 +2504,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   overstating it. §5.7.3 says that a `404` is a completed check and so not
   its case, and `status.schema.json`'s two descriptions carry the same
   exception (§5.7.3, §5.7.4).
-- The `delta` concatenation invariant gains the receive-side rule it was
+- 2026-08-29 · #95 —
+  The `delta` concatenation invariant gains the receive-side rule it was
   missing: where the accumulated deltas and `done`'s `output.value` disagree,
   a client **SHOULD** prefer `done`, and **MUST NOT** report the run as
   having failed on that ground. It was the one place a client could be
@@ -2472,7 +2514,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   client that rendered it wrongly. A **SHOULD** rather than a **MUST**
   because a client writing deltas to standard output has already emitted
   them. The invariant itself is unchanged and still binds the runner (§4.3).
-- A runner that honours an `Idempotency-Key` declares it, as
+- 2026-08-29 · #95 —
+  A runner that honours an `Idempotency-Key` declares it, as
   `capabilities.idempotent_retry` in `describe`. §2.3 already varied a
   browser client's preflight by whether the runner honours the header, so
   the one answer was being advertised in a CORS header to a client with no
@@ -2490,7 +2533,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   discard rule forbids. A runner declaring the field **MUST** admit the
   header in its preflight, or the promise holds for every client kind except
   the browser (§2.3, §4.1.2, §4.2, §4.5).
-- `run_id` is unique **per execution** rather than per response, so a
+- 2026-08-31 · #102 —
+  `run_id` is unique **per execution** rather than per response, so a
   replayed idempotent answer carries the `run_id` of the execution it
   replays. The uniqueness **MUST** predates the replay rule by some distance
   and the two were never read together: a strict reader of the older sentence
@@ -2499,7 +2543,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   correlation the same sentence's **SHOULD** exists for. Nothing an
   implementer builds under either reading fails, which is why this needed
   saying rather than leaving to sense (§4.2).
-- An `Idempotency-Key` identifies a request rather than a caller, and
+- 2026-08-31 · #102 —
+  An `Idempotency-Key` identifies a request rather than a caller, and
   `idempotency_conflict` (409) is what a runner answers when one is presented
   with different `inputs`. #89 keyed the replay rule on the header alone,
   which answers the second request with a result computed for inputs the
@@ -2517,7 +2562,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   state one **SHOULD** declare `status.limits.idempotency_retention_seconds`,
   the one member of `limits` bounding a promise rather than a run (§2.1,
   §4.2, §4.4).
-- `capabilities.streaming` is **withdrawn**. It appeared in §4.1's example
+- 2026-08-31 · #102 —
+  `capabilities.streaming` is **withdrawn**. It appeared in §4.1's example
   and in `describe.schema.json` — the one property there carrying no
   `description` — and no prose ever defined it, which left `capabilities`
   documenting one of its two booleans once #89 gave `idempotent_retry` a
@@ -2536,7 +2582,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   the line that keeps the field from being re-proposed. The conformance
   checker's `streaming`/`level` agreement warning goes with it — that rule
   was the tool's own inference from §3, with no sentence to cite (§3, §4.1).
-- `status` gains an **OPTIONAL** `update` block, reporting what a runner
+- 2026-09-02 · #118 —
+  `status` gains an **OPTIONAL** `update` block, reporting what a runner
   learned when it asked its distributor whether a newer version of the agent
   exists: a `state` of `not_required`, `unreachable`, `current` or
   `update_available`, with the running version as `current` and the reported
@@ -2553,7 +2600,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   version answer is neither, and a runner that never asks conforms fully — so
   how `latest` is obtained is the distributor's to publish, and §8 records
   Sigrix's, unauthenticated because it names no buyer (§4.4, §8).
-- `output.media_type` is bounded by the grammar it always claimed. Both
+- 2026-09-02 · #124 —
+  `output.media_type` is bounded by the grammar it always claimed. Both
   schemas carried a pattern that was wrong in each direction at once: it
   refused every experimental type, `x-custom/foo` among them, because the
   type half admitted no `-`, while accepting a subtype beginning `!`, which
@@ -2562,7 +2610,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   runner emits the field in lower case, so two runners naming one format
   agree octet-for-octet, and a client **MUST NOT** reject a response over
   its case (§4.1.4).
-- §4.6 places the entitlement refusals, which it previously left out of its
+- 2026-09-02 · #122 —
+  §4.6 places the entitlement refusals, which it previously left out of its
   sequence entirely. They are step 2 — behind the level check, ahead of the
   media type, the inputs and the environment — so a runner that has been told
   no answers that rather than a `400` naming something the caller could fix,
@@ -2571,7 +2620,8 @@ and informative for everyone else. Postern is usable with no reference to it.*
   runner holds* governs steps 3 to 5, and an entitlement is neither. Both
   orders conformed before, so a conformance checker could assert neither
   (§4.6, §5.7.4).
-- `version.schema.json` fixes the shape of a version answer — `postern`, the
+- 2026-09-02 · #120 —
+  `version.schema.json` fixes the shape of a version answer — `postern`, the
   `agent_id` echoed octet-for-octet, and a `version` string compared for
   equality only, with no ordering implied. It is the source of §4.4's
   `status.update.latest`, and the first schema here whose *path* this
