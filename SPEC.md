@@ -2119,6 +2119,24 @@ and informative for everyone else. Postern is usable with no reference to it.*
 **Unreleased** — corrections made before the first tagged release. Each
 entry carries the date it landed and the pull request that carried it.
 
+- 2026-09-06 · #154 —
+  §2.1's envelope binds "a path this specification defines" rather than
+  every non-2xx response. A runner binds a port, and §2 gives Postern's own
+  paths the `/postern/v0/…` prefix without scoping §2.1 to them — so read
+  literally the rule reached every other response that port gives, and a
+  request for a favicon was a conformance failure. It binds every request
+  under the prefix, an unimplemented path among them, and nothing outside
+  it, which is what the conformance checker already assumed (§2, §2.1).
+- 2026-09-06 · #154 —
+  Answering a preflight is responding to it, not admitting the origin.
+  §2.3 pairs a **MUST** to answer `OPTIONS` with a **SHOULD** to answer a
+  refused origin `204` rather than an error status, and left open whether a
+  refusal answers the **MUST** — a runner could read it as requiring the
+  origin be allowed. What the **MUST** forbids is leaving the method
+  unhandled: a reset connection and the `405` a framework gives an
+  unregistered method both reach the browser as a failed preflight, with
+  nothing to tell the page a refusal from a runner that is not running
+  (§2.3).
 - 2026-09-06 · #151 —
   A `424` `missing_credential` **SHOULD** carry `error.detail.missing`, an
   array of the environment variable names `describe` declares and the
