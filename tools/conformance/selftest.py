@@ -15,6 +15,25 @@ runner with exactly one rule broken, where the matching check — named here,
 not merely *some* check — must fail. A check that cannot be made to fail is
 reported as such, which is the finding this file exists to produce.
 
+Three shapes of check live here, and the difference is worth knowing
+before adding a fourth. Two are runner-driven and are what the file is
+named for: `_baseline_is_clean` and `_every_fault_is_caught` reach the fake
+runner over a socket through `_report`, once clean and once per planted
+breach. Four are *static*, reading what the package ships — the schemas,
+the build hook, the format registry, the README — and asserting that two
+copies of one fact still agree; no runner, no socket, no network. One is a
+plain *unit* check: `_the_stream_reader_stops_without_going_blind` drives
+`_read_sse` over a list of lines, because the property there is what the
+reader keeps rather than a rule a runner can break, so there is no fault to
+plant for it.
+
+`_the_readme_quotes_this_run` is the static check that is also a claim
+about the whole run, comparing the README's transcript of this command
+against the tally every other check printed, in order. That is why this is
+a script rather than a collection of test functions: split one per check
+and it has nothing left to assert against. `tests/` holds the fake runner
+and no test modules; see `tests/README.md` before reaching for pytest.
+
 Standard library only. Exit status is 0 when every rule is caught, 1
 otherwise, matching `scripts/validate.py`.
 """
