@@ -37,6 +37,14 @@ updates:
   # a warning at the top of a log nobody reads until the runtime is withdrawn
   # and checkout starts failing on whichever pull request happens to be open
   # that day.
+  #
+  # It is also what makes the SHA pins in those workflows safe to have. Every
+  # `uses:` names a commit rather than a tag, so a retagged or compromised
+  # release cannot reach this repository silently — and by the same token
+  # nothing moves a pin on its own, which is exactly the trade the opening
+  # paragraph above describes for scripts/requirements.txt. Dependabot reads
+  # the `# vX.Y.Z` comment beside each SHA to know what it is bumping from, so
+  # a pin written without one goes quietly stale.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
