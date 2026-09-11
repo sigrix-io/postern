@@ -1059,6 +1059,45 @@ A stream **MUST** end with exactly one `done` or one `error`. A client
 **MUST** ignore unrecognised event names rather than aborting, which is how
 this list grows without a version bump.
 
+**The wire format is the `text/event-stream` format** of the [HTML Living
+Standard](https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream),
+and this section names the parts of it Postern uses rather than restating
+it: an `event:` field carrying the name, one or more `data:` fields
+carrying the payload, and a blank line ending the event. A runner **MUST**
+write each event in that shape and a client **MUST** read it with that
+grammar rather than a grammar of its own. Three of its rules are the ones a
+reader written for one line per event gets wrong, and each is stated here
+so that it has a sentence to cite:
+
+- **`data:` may span lines.** The format joins an event's `data:` lines with
+  a newline, so the payload is the joined text and not the first line. A
+  runner **SHOULD** emit each payload on one `data:` line, as every
+  transcript in this repository does — JSON needs no line break — and a
+  client **MUST** reassemble the lines it is given either way.
+- **A comment line is not an event.** A line beginning `:` is a comment the
+  format defines, and a client **MUST** skip it. A runner **MAY** send one
+  at any point, and **SHOULD** send one periodically while a run produces
+  no event: a model call can hold a stream silent for a minute, and a
+  connection that carries nothing for that long is one a proxy or a
+  client's own timeout closes — which §4.5 turns into a cancelled run. A
+  comment is the traffic that keeps the connection open without inventing
+  an event to do it.
+- **`id:` and `retry:` mean nothing here.** Postern reads no
+  `Last-Event-ID` (§4.5), so `id:` names nothing, and `retry:` instructs
+  the automatic reconnection §4.5 says starts a new run and spends the
+  money twice. A runner **MUST NOT** emit `retry:` and **SHOULD NOT** emit
+  `id:`; a client **MUST** ignore both where it meets them, since the format
+  permits either.
+
+The stream is UTF-8, as the format requires. A runner **MUST** write each
+event to the connection as soon as it is complete, rather than holding it
+until the run ends: a stream that arrives whole when the agent finishes is
+`run` under `stream`'s media type, and a client that chose the verb for its
+progress got none. What a proxy in front of the runner does with those
+bytes is the operator's to settle, on the terms §4.5 gives a proxy's
+timeout — a runner's promise is only as good as the shortest one on the
+path.
+
 `start` carries `run_id`, `delta` carries `text`, and a `step` carries at
 least `name` and `status` — one saying which step, the other which edge of
 it. `model_id` is absent for a step that calls no model.
@@ -1147,6 +1186,28 @@ Liveness, conformance level, and entitlement state.
 
 `state` is `ready`, `running`, or `degraded`. `entitlement.state` is
 `active`, `revoked`, `unknown`, or `not_required` (§5.1).
+
+`state` reports the runner's own readiness, and it repeats nothing the
+`entitlement` block says. `ready` means the runner would start a run now if
+the request and the entitlement let it. `running` means at least one run
+was in flight when `status` answered, which §4.5 says observes and promises
+nothing. `degraded` means the runner is up and answering, and as things
+stand would refuse at §4.6's step 5 every `run` that reached it: a
+credential `describe` declares (§4.1.3) is not set in its environment. It is the one fault of the
+deployment that no request can correct, and it is reported in a
+**REQUIRED** field because `credentials` below is not one — a runner that
+publishes no credential detail still owes a client the summary. Where both
+hold, `running` wins, being the more specific fact and the one a polling
+client asked about; a run in flight has already passed step 5, so the two
+rarely coincide. A Level 1 runner (§3) serves no run to be degraded about,
+and reports `ready`.
+
+Entitlement is deliberately not folded into `state`. `entitlement.state` is
+**REQUIRED** and already says whether this runner may serve this caller, so
+a `degraded` that also meant *revoked* would be one fact in two shapes — the
+reason `run` carries no `status` field (§4.2) — and a client reading `ready`
+beside `revoked` reads exactly what is true: the runner is whole, and the
+caller may not use it.
 
 `agent` and `entitlement` are **REQUIRED**, which the rest of this section
 assumed and never said. Every *top-level* member it marks, it marks
@@ -2174,6 +2235,35 @@ and informative for everyone else. Postern is usable with no reference to it.*
 first. Each entry carries the date it landed and the pull request that
 carried it.
 
+- 2026-09-11 · #TBD —
+  `status.state` is defined. §4.4 listed `degraded` beside `ready` and
+  `running` and defined none of the three, so a state the reference runner
+  emits — a declared credential unset — had no sentence to cite, and a
+  second runner could have meant something else by the same word. `state`
+  reports the runner's own readiness: `ready`; `running`, as §4.5 already
+  observed it; and `degraded` when, as things stand, the runner would
+  refuse at §4.6's step 5 every `run` that reached it. It carries that in a **REQUIRED** field
+  because `credentials` is **OPTIONAL**, and it repeats nothing the
+  **REQUIRED** `entitlement` block says — folding *revoked* into it would be
+  one fact in two shapes, the reason §4.2's `run` carries no `status`.
+  `running` outranks `degraded` where both hold, and a Level 1 runner
+  reports `ready` (§4.4).
+- 2026-09-11 · #TBD —
+  §4.3 names the wire format it uses. Events were "Server-Sent Events" by
+  name only, with nothing on the grammar a reader has to implement, so a
+  runner and a client each decided for themselves whether `data:` may span
+  lines, what a comment line is, and whether `id:` and `retry:` mean
+  anything — and a reader written for one line per event conformed to the
+  text while being wrong against the format. The stream is the
+  `text/event-stream` format of the HTML Living Standard; a runner **MUST**
+  write it and a client **MUST** read it with that grammar. `data:` lines
+  join with a newline, a comment line is skipped and **MAY** be sent as a
+  keepalive while a run is silent, `retry:` **MUST NOT** be emitted because
+  it instructs the reconnection §4.5 says starts a new run, `id:` **SHOULD
+  NOT** be, and a runner **MUST** flush each event as it completes rather
+  than deliver the stream whole at the end. The conformance checker's
+  reader already accepted every one of these, so a runner it passed passes
+  still (§4.3, §4.5).
 - 2026-09-06 · #156 —
   `idempotent_retry` moves from `describe.capabilities` to `status`. §4.1
   opens "`capabilities` describes the **agent**", and the field falsified
