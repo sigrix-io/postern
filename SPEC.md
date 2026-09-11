@@ -2235,7 +2235,7 @@ and informative for everyone else. Postern is usable with no reference to it.*
 first. Each entry carries the date it landed and the pull request that
 carried it.
 
-- 2026-09-11 · #TBD —
+- 2026-09-11 · #161 —
   `status.state` is defined. §4.4 listed `degraded` beside `ready` and
   `running` and defined none of the three, so a state the reference runner
   emits — a declared credential unset — had no sentence to cite, and a
@@ -2248,7 +2248,7 @@ carried it.
   one fact in two shapes, the reason §4.2's `run` carries no `status`.
   `running` outranks `degraded` where both hold, and a Level 1 runner
   reports `ready` (§4.4).
-- 2026-09-11 · #TBD —
+- 2026-09-11 · #161 —
   §4.3 names the wire format it uses. Events were "Server-Sent Events" by
   name only, with nothing on the grammar a reader has to implement, so a
   runner and a client each decided for themselves whether `data:` may span
