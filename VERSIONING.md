@@ -50,6 +50,57 @@ exception — the first reader to pin to a released version is exactly the
 dependent the rule is written for, and by then the exception would be
 describing them.
 
+What has to be true before that tag is cut is
+[stated below](#what-has-to-be-true-to-tag-spec-v01).
+
+## What has to be true to tag `spec-v0.1`
+
+The carve-out above closes at the first tagged release, and until this
+section existed nothing said what had to be true to cut one. That left the
+draft with no stopping rule: every correction was free, each was defensible
+on its own, and the text could go on growing with no moment at which it was
+called done. [Appendix A](SPEC.md#appendix-a--changes) carried fifty-five
+corrections in its first four weeks, eighteen of them in one five-day
+stretch. A specification is not released when it stops having faults; it is
+released when its maintainers decide the remaining ones can be carried
+under the version rules rather than under the carve-out.
+
+So the tag is cut when every line below holds, and not before. Each is
+checkable against the repository as it stands rather than a judgement call.
+
+1. **The text has stopped moving.** Fourteen days have passed since the
+   last Appendix A entry landed on `main`. A correction inside that window
+   restarts it. This is the convergence test, and the only line here that
+   costs time rather than work — which is the point: a draft that cannot go
+   a fortnight without a normative correction is not ready to promise
+   anyone anything.
+2. **Every question and defect is answered.** No open issue filed as a
+   *question* or a *defect* against the specification remains, or each one
+   that does carries a maintainer's note saying it does not block the tag
+   and why. A *change* request may stay open; the version rules exist for
+   it.
+3. **A stranger can implement it.** A quickstart and a client snippet are
+   in the repository, and the reference implementation's source is public
+   under a licence that lets a reader copy from it (#115, #116). A document
+   whose only complete implementation is private has been tested by nobody
+   who could not ask its author.
+4. **The checker tracks the text being tagged.** The `postern-conformance`
+   release on PyPI postdates the last Appendix A entry, so every rule it can
+   observe is the rule the tag names, and its README lists the ones it
+   cannot.
+5. **The published schemas are the tagged schemas.** The daily comparison
+   the serving side runs reports every `$id` byte-identical to
+   [`schemas/`](schemas).
+6. **The reference implementation conforms.** It passes the checker at the
+   level it declares, with `--execute`, against the text being tagged.
+
+Cutting it is one pull request and one tag. The pull request renames
+Appendix A's *Unreleased* heading to `0.1` with the date, and the tag
+`spec-v0.1` goes on its merge commit. The `postern` field, the path prefix
+and every schema `$id` already say `0.1` and do not move. From that commit
+on, a normative change moves the version, as the rule at the top of this
+document has always said it would.
+
 ## Before 1.0
 
 **Nothing is stable. Any `0.x` release may break any other `0.x` release.**
