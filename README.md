@@ -104,6 +104,124 @@ constraints on implementers rather than features:
 An agent that is free, self-authored, or local has no distributor and skips
 all of this.
 
+## Level 1 in fifteen minutes
+
+Two `GET`s and one refusal are a conforming runner. That is the whole of
+Level 1 for an agent with no distributor, which is every agent that is
+free, self-authored, or local:
+
+| Route | Answers |
+|---|---|
+| `GET /postern/v0/describe` | what the agent takes and what it returns |
+| `GET /postern/v0/status` | its level, its state, and `not_required` for the entitlement |
+| `POST /postern/v0/run`, `POST /postern/v0/stream` | `501` with `not_implemented`, being above Level 1 |
+| `OPTIONS` on `run` and `stream` | `204`, carrying `Access-Control-Allow-Origin` only for an origin you configured |
+
+The smallest `describe` that validates:
+
+```json
+{
+  "postern": "0.1",
+  "agent": {"id": "you/hello", "name": "Hello", "version": "0.1.0"},
+  "inputs": [
+    {"key": "prompt", "label": "What to say", "type": "text", "required": true}
+  ],
+  "output": {"type": "text"}
+}
+```
+
+and the smallest `status`:
+
+```json
+{
+  "postern": "0.1",
+  "level": 1,
+  "state": "ready",
+  "agent": {"id": "you/hello"},
+  "entitlement": {"state": "not_required"}
+}
+```
+
+Both are `application/json; charset=utf-8`, both answer without
+credentials, and neither changes anything. Every non-2xx answer under
+`/postern/v0/` — a verb above your level, a path you do not serve — carries
+the one error envelope:
+
+```json
+{"error": {"code": "not_implemented", "message": "This runner serves Level 1.", "detail": null}}
+```
+
+Four `curl` lines exercise all of it:
+
+```console
+curl -s http://127.0.0.1:8787/postern/v0/describe
+curl -s http://127.0.0.1:8787/postern/v0/status
+curl -s -X POST http://127.0.0.1:8787/postern/v0/run \
+     -H 'Content-Type: application/json; charset=utf-8' \
+     -d '{"inputs": {"prompt": "hello"}}'          # 501 at Level 1, 200 at Level 2
+curl -s -N -X POST http://127.0.0.1:8787/postern/v0/stream \
+     -H 'Content-Type: application/json; charset=utf-8' \
+     -d '{"inputs": {"prompt": "hello"}}'          # 501 below Level 3, events at Level 3
+```
+
+Then point the checker at it (below) before reading anything past §4.
+
+**Level 2 adds `run`, and one table.** A `run` can earn several refusals at
+once, and [§4.6](SPEC.md#46-the-order-of-refusals) fixes which one wins:
+
+| | Check | Refusal |
+|---|---|---|
+| 1 | the verb is above your level | `501` `not_implemented` |
+| 2 | the entitlement is not in force | `403` `not_entitled` or `503` `unavailable` — a row you skip with no distributor |
+| 3 | the body's media type is not `application/json` | `400` `bad_request` |
+| 4 | a required input is missing, or a declared validation fails | `400` `bad_request` |
+| 5 | a credential `describe` declares is not in your environment | `424` `missing_credential` |
+
+**Level 3 adds `stream`**: the same request body, answered as
+`text/event-stream` with `start` first and exactly one `done` or `error`
+last ([§4.3](SPEC.md#43-post-posternv0stream)). A browser cannot read it
+with `EventSource`, which only issues `GET`; it reads the response body
+itself, and this is all that takes:
+
+```js
+const res = await fetch("http://127.0.0.1:8787/postern/v0/stream", {
+  method: "POST",
+  headers: {"Content-Type": "application/json; charset=utf-8"},
+  body: JSON.stringify({inputs: {prompt: "hello"}}),
+});
+const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+let buffer = "", event = "", data = [];
+while (true) {
+  const {value, done} = await reader.read();
+  if (done) break;
+  buffer += value;
+  let end;
+  while ((end = buffer.indexOf("\n")) !== -1) {
+    const line = buffer.slice(0, end).replace(/\r$/, "");
+    buffer = buffer.slice(end + 1);
+    if (line === "") {
+      if (data.length) handle(event || "message", JSON.parse(data.join("\n")));
+      event = ""; data = [];
+    } else if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    } else if (line.startsWith("data:")) {
+      data.push(line.slice(5).replace(/^ /, ""));
+    } // a ":" comment line is a keepalive; "id:" and "retry:" mean nothing here
+  }
+}
+```
+
+`handle` receives `start`, `step`, `delta`, `done` and `error`, and ignores
+any name it does not know. The same walk in Python — `status` for the
+level, `describe` for the inputs, then `run` or `stream` — is
+[`examples/client.py`](examples/client.py), standard library only.
+
+**What binds a runner with no distributor** is §2, §2.1, §2.3, §3, §4.1 and
+§4.4 at Level 1; §4.2, §4.5 and §4.6 from Level 2; §4.3 at Level 3. All of
+[§5](SPEC.md#5-entitlement) binds only a runner configured with a
+distributor, and it is a quarter of the document. Run the checker before
+you read it.
+
 ## Conformance
 
 Three cumulative levels, so an agent that cannot stream — or cannot be run
