@@ -1059,6 +1059,45 @@ A stream **MUST** end with exactly one `done` or one `error`. A client
 **MUST** ignore unrecognised event names rather than aborting, which is how
 this list grows without a version bump.
 
+**The wire format is the `text/event-stream` format** of the [HTML Living
+Standard](https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream),
+and this section names the parts of it Postern uses rather than restating
+it: an `event:` field carrying the name, one or more `data:` fields
+carrying the payload, and a blank line ending the event. A runner **MUST**
+write each event in that shape and a client **MUST** read it with that
+grammar rather than a grammar of its own. Three of its rules are the ones a
+reader written for one line per event gets wrong, and each is stated here
+so that it has a sentence to cite:
+
+- **`data:` may span lines.** The format joins an event's `data:` lines with
+  a newline, so the payload is the joined text and not the first line. A
+  runner **SHOULD** emit each payload on one `data:` line, as every
+  transcript in this repository does — JSON needs no line break — and a
+  client **MUST** reassemble the lines it is given either way.
+- **A comment line is not an event.** A line beginning `:` is a comment the
+  format defines, and a client **MUST** skip it. A runner **MAY** send one
+  at any point, and **SHOULD** send one periodically while a run produces
+  no event: a model call can hold a stream silent for a minute, and a
+  connection that carries nothing for that long is one a proxy or a
+  client's own timeout closes — which §4.5 turns into a cancelled run. A
+  comment is the traffic that keeps the connection open without inventing
+  an event to do it.
+- **`id:` and `retry:` mean nothing here.** Postern reads no
+  `Last-Event-ID` (§4.5), so `id:` names nothing, and `retry:` instructs
+  the automatic reconnection §4.5 says starts a new run and spends the
+  money twice. A runner **MUST NOT** emit `retry:` and **SHOULD NOT** emit
+  `id:`; a client **MUST** ignore both where it meets them, since the format
+  permits either.
+
+The stream is UTF-8, as the format requires. A runner **MUST** write each
+event to the connection as soon as it is complete, rather than holding it
+until the run ends: a stream that arrives whole when the agent finishes is
+`run` under `stream`'s media type, and a client that chose the verb for its
+progress got none. What a proxy in front of the runner does with those
+bytes is the operator's to settle, on the terms §4.5 gives a proxy's
+timeout — a runner's promise is only as good as the shortest one on the
+path.
+
 `start` carries `run_id`, `delta` carries `text`, and a `step` carries at
 least `name` and `status` — one saying which step, the other which edge of
 it. `model_id` is absent for a step that calls no model.
@@ -1147,6 +1186,28 @@ Liveness, conformance level, and entitlement state.
 
 `state` is `ready`, `running`, or `degraded`. `entitlement.state` is
 `active`, `revoked`, `unknown`, or `not_required` (§5.1).
+
+`state` reports the runner's own readiness, and it repeats nothing the
+`entitlement` block says. `ready` means the runner would start a run now if
+the request and the entitlement let it. `running` means at least one run
+was in flight when `status` answered, which §4.5 says observes and promises
+nothing. `degraded` means the runner is up and answering, and as things
+stand would refuse at §4.6's step 5 every `run` that reached it: a
+credential `describe` declares (§4.1.3) is not set in its environment. It is the one fault of the
+deployment that no request can correct, and it is reported in a
+**REQUIRED** field because `credentials` below is not one — a runner that
+publishes no credential detail still owes a client the summary. Where both
+hold, `running` wins, being the more specific fact and the one a polling
+client asked about; a run in flight has already passed step 5, so the two
+rarely coincide. A Level 1 runner (§3) serves no run to be degraded about,
+and reports `ready`.
+
+Entitlement is deliberately not folded into `state`. `entitlement.state` is
+**REQUIRED** and already says whether this runner may serve this caller, so
+a `degraded` that also meant *revoked* would be one fact in two shapes — the
+reason `run` carries no `status` field (§4.2) — and a client reading `ready`
+beside `revoked` reads exactly what is true: the runner is whole, and the
+caller may not use it.
 
 `agent` and `entitlement` are **REQUIRED**, which the rest of this section
 assumed and never said. Every *top-level* member it marks, it marks
@@ -2170,9 +2231,39 @@ and informative for everyone else. Postern is usable with no reference to it.*
 
 ## Appendix A · Changes
 
-**Unreleased** — corrections made before the first tagged release. Each
-entry carries the date it landed and the pull request that carried it.
+**Unreleased** — corrections made before the first tagged release, newest
+first. Each entry carries the date it landed and the pull request that
+carried it.
 
+- 2026-09-11 · #161 —
+  `status.state` is defined. §4.4 listed `degraded` beside `ready` and
+  `running` and defined none of the three, so a state the reference runner
+  emits — a declared credential unset — had no sentence to cite, and a
+  second runner could have meant something else by the same word. `state`
+  reports the runner's own readiness: `ready`; `running`, as §4.5 already
+  observed it; and `degraded` when, as things stand, the runner would
+  refuse at §4.6's step 5 every `run` that reached it. It carries that in a **REQUIRED** field
+  because `credentials` is **OPTIONAL**, and it repeats nothing the
+  **REQUIRED** `entitlement` block says — folding *revoked* into it would be
+  one fact in two shapes, the reason §4.2's `run` carries no `status`.
+  `running` outranks `degraded` where both hold, and a Level 1 runner
+  reports `ready` (§4.4).
+- 2026-09-11 · #161 —
+  §4.3 names the wire format it uses. Events were "Server-Sent Events" by
+  name only, with nothing on the grammar a reader has to implement, so a
+  runner and a client each decided for themselves whether `data:` may span
+  lines, what a comment line is, and whether `id:` and `retry:` mean
+  anything — and a reader written for one line per event conformed to the
+  text while being wrong against the format. The stream is the
+  `text/event-stream` format of the HTML Living Standard; a runner **MUST**
+  write it and a client **MUST** read it with that grammar. `data:` lines
+  join with a newline, a comment line is skipped and **MAY** be sent as a
+  keepalive while a run is silent, `retry:` **MUST NOT** be emitted because
+  it instructs the reconnection §4.5 says starts a new run, `id:` **SHOULD
+  NOT** be, and a runner **MUST** flush each event as it completes rather
+  than deliver the stream whole at the end. The conformance checker's
+  reader already accepted every one of these, so a runner it passed passes
+  still (§4.3, §4.5).
 - 2026-09-06 · #156 —
   `idempotent_retry` moves from `describe.capabilities` to `status`. §4.1
   opens "`capabilities` describes the **agent**", and the field falsified
@@ -2353,6 +2444,26 @@ entry carries the date it landed and the pull request that carried it.
   `status.credentials` staying **OPTIONAL** is not the same obligation — it
   governs publishing the satisfied set, not checking one before a run
   (§4.1.3, §4.4, §4.6).
+- 2026-09-02 · #124 —
+  `output.media_type` is bounded by the grammar it always claimed. Both
+  schemas carried a pattern that was wrong in each direction at once: it
+  refused every experimental type, `x-custom/foo` among them, because the
+  type half admitted no `-`, while accepting a subtype beginning `!`, which
+  §4.2 of RFC 6838 forbids. Both halves are that RFC's `restricted-name`
+  now. §4.1.4 also states what the pattern used to imply by accident — a
+  runner emits the field in lower case, so two runners naming one format
+  agree octet-for-octet, and a client **MUST NOT** reject a response over
+  its case (§4.1.4).
+- 2026-09-02 · #122 —
+  §4.6 places the entitlement refusals, which it previously left out of its
+  sequence entirely. They are step 2 — behind the level check, ahead of the
+  media type, the inputs and the environment — so a runner that has been told
+  no answers that rather than a `400` naming something the caller could fix,
+  which §5.7.4 already forbids it to imply. The general sentence is narrowed
+  to the steps it was always about: *what the request says before what the
+  runner holds* governs steps 3 to 5, and an entitlement is neither. Both
+  orders conformed before, so a conformance checker could assert neither
+  (§4.6, §5.7.4).
 - 2026-09-02 · #121 —
   Added `unauthorized` (401), the answer a runner gives when it requires
   inbound authentication of its own and a request does not satisfy it (§2.1,
@@ -2372,6 +2483,36 @@ entry carries the date it landed and the pull request that carried it.
   authenticate — and a runner requiring nothing **SHOULD NOT** name it, since
   the header is off the safelist and admitting it preflights a `describe`
   that would otherwise go without one (§2.1, §2.3, §5.5, §7).
+- 2026-09-02 · #120 —
+  `version.schema.json` fixes the shape of a version answer — `postern`, the
+  `agent_id` echoed octet-for-octet, and a `version` string compared for
+  equality only, with no ordering implied. It is the source of §4.4's
+  `status.update.latest`, and the first schema here whose *path* this
+  specification does not define: §5 fixes the two distributor paths a runner
+  must call to serve its agent at all, a version answer is neither, and §8
+  records where Sigrix serves it. Fixing the shape without fixing the path is
+  the point — a second distributor offering the same answer answers it the
+  same way, and a runner reads both with one parser. It joins
+  `entitlement.schema.json` as a distributor payload the conformance checker
+  does not bundle, since a runner never emits one (§4.4, §8).
+- 2026-09-02 · #118 —
+  `status` gains an **OPTIONAL** `update` block, reporting what a runner
+  learned when it asked its distributor whether a newer version of the agent
+  exists: a `state` of `not_required`, `unreachable`, `current` or
+  `update_available`, with the running version as `current` and the reported
+  one as `latest`. It is present only where a check ran, so a runner
+  configured for none omits it — a different fact from a check that ran and
+  found no distributor. An unreachable check is explicitly not a failure: a
+  runner **MUST NOT** refuse to start or to run because it could not tell,
+  which is §5.7's posture for an entitlement it cannot re-check, and a client
+  reads `unreachable` as *not known* rather than as *out of date*. It sits in
+  `status` rather than `describe` for the reason `limits` does — the version
+  a runner happens to be running, against a distributor it happens to be
+  configured for, is a fact about the deployment. **No distributor path is
+  added**: §5 fixes the two a runner must call to serve its agent at all, a
+  version answer is neither, and a runner that never asks conforms fully — so
+  how `latest` is obtained is the distributor's to publish, and §8 records
+  Sigrix's, unauthenticated because it names no buyer (§4.4, §8).
 - 2026-09-01 · #105 —
   A runner's refusals are ordered: it decides what the request says before
   it inspects what it holds, so a `run` that both omits a `required` input
@@ -2384,284 +2525,6 @@ entry carries the date it landed and the pull request that carried it.
   producing rule it never had: it was the only code in §2.1's table that no
   section required, defined and never asked for. §4.5's capacity refusal is
   deliberately left unordered (§2.1, §4.2, §4.6).
-- 2026-08-16 · #38 —
-  A client **MUST** tolerate an error `code` it does not recognise, so that
-  adding a code stays an additive change (§2.1).
-- 2026-08-16 · #38 —
-  Added `not_implemented` (501). A Level 2 runner answers `stream` with it
-  rather than with `unavailable`, which is now 503 only (§2.1, §4.3).
-- 2026-08-16 · #38 —
-  Added `withdrawn` (410), so the withdrawn-agent response in §5.6 has a
-  code and can be constructed at all (§2.1, §5.6).
-- 2026-08-16 · #38 —
-  The entitlement check response now carries `checked_at`, defined as the
-  moment the distributor last consulted the authority rather than the moment
-  it answered. A runner propagates it unchanged and **MUST NOT** re-stamp it,
-  so the distributor's cache and the runner's cache share one deadline
-  instead of stacking (§5.3, §5.4).
-- 2026-08-16 · #38 —
-  `entitlement.checked_at` is now **REQUIRED** in `status` when the
-  entitlement state is `active` or `revoked` (§4.4).
-- 2026-08-16 · #38 —
-  The `delta` reconstruction rule applies only when a `delta` is emitted, so
-  a Level 3 runner that cannot produce incremental text stays conformant by
-  emitting none (§4.3).
-- 2026-08-18 · #46 —
-  A runner serves exactly one agent, stated normatively rather than left to
-  be inferred from the absence of an identifier in its paths. `not_found`'s
-  "no such agent" meaning is distributor-side only; on a runner the code can
-  only mean an unimplemented path. Each code in the §2.1 table now says
-  which side emits it (§2.1, §2.2).
-- 2026-08-18 · #48 —
-  The error envelope's root is closed by design — nothing sits beside
-  `error`, so the envelope has one extension point rather than two. The
-  schema already asserted this; §2.1 now states it, with the reason and with
-  the fact that it constrains what an implementation emits rather than
-  licensing a client to reject what it receives (§2.1).
-- 2026-08-18 · #48 —
-  The §5.6 `410` body carries the date access ends as
-  `error.detail.access_ends_at`. The closed root leaves `detail` as the only
-  place it can go, and the specification previously left it unplaced (§5.6).
-- 2026-08-16 · #38 —
-  The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
-  mixed-case form (§2).
-- 2026-08-16 · #38 —
-  Removed `verification` from the `org.sigrix` member list (§8).
-- 2026-08-19 · #50 —
-  A runner answers *any* verb above its declared level with `501` and
-  `not_implemented`. The rule was previously stated only for a Level 2
-  runner asked to `stream`, leaving a Level 1 runner asked to `run` with no
-  defined answer; it now sits in §3, so it also covers any level added later
-  (§3, §4.2, §4.3).
-- 2026-08-19 · #50 —
-  Narrowed input values to what the three declared types can produce.
-  `run`'s `inputs` map and an input's `default` no longer admit a boolean,
-  which none of `text`, `number` or `select` yields. Adding a fourth type
-  later is additive; withdrawing a value shape a runner had relied on would
-  not be (§4.1.1).
-- 2026-08-19 · #50 —
-  Removed `status` from the `run` response. Its only legal value was `ok`,
-  because §2.1 routes every failure through a non-2xx error envelope, and
-  the partial-result case it might have grown into cannot be carried by a
-  value an older client would read as a complete result (§4.2).
-- 2026-08-19 · #53 —
-  §5.5's indistinguishability rule covers token state, not only agents. An
-  unknown, revoked, or superseded token answers `404` with `not_found`, the
-  same as a valid token presented for an agent the buyer may not have, and
-  Postern defines no `401` — a status meaning "authenticate and try again"
-  would confirm the token was once real. §5.3's success rule gains the
-  failure branch it presupposed, and §7's "stop resolving" now names the
-  answer it stops with (§2.1, §5.3, §5.5, §7).
-- 2026-08-19 · #53 —
-  `entitlement.stale_after_seconds` is now **REQUIRED** for `revoked` as
-  well as `active`, matching `checked_at`: it is required wherever a check
-  actually happened. Without it a runner held a timestamp and no deadline,
-  so §5.4's re-check rule could not be evaluated for a `revoked` answer and
-  the restoration §5.4 obliges a distributor to support could never be
-  observed (§4.4, §5.4).
-- 2026-08-19 · #55 —
-  `agent_id` has a grammar: two parts of lowercase ASCII alphanumerics, `-`
-  and `.`, joined by one `/`, bounded at 128 characters and compared
-  octet-for-octet with no folding or normalisation of any kind (§1.5). It was
-  previously only a non-empty string, and the canonical
-  `acme/market-research-crew` did not fit the single path segment the
-  distributor endpoints gave it. It now occupies two segments and is never
-  percent-encoded — the grammar admits no character a path requires encoding
-  for — and a string that fills two segments without matching the grammar is
-  answered `400`, an answer a distributor **MUST** be able to produce without
-  consulting its catalogue, which is why it does not weaken §5.5 (§5.3.1,
-  §5.6). The identifier carries no listing type, so a distributor dispatching
-  on one resolves it itself and **MUST** test each branch out of band: §5.5
-  makes a missing branch indistinguishable from a correct refusal, so no
-  client will ever report it (§5.5). `agent.id` carries the pattern and the
-  bound in `describe.schema.json` and `status.schema.json` (§4.1, §4.4).
-- 2026-08-19 · #56 —
-  The entitlement check has a schema, and its response carries `postern`
-  like every other success payload in the protocol. It was the only one
-  without a version marker, and a distributor's version is inferable from
-  nothing else — [VERSIONING.md](VERSIONING.md) forbids reading it off the
-  path prefix. Freezing the shape settled two things the prose had left
-  loose: `stale_after_seconds` is sent whether or not the distributor
-  caches, because §5.4's re-check deadline and §4.4's `status` report both
-  need it and neither is conditional on a cache existing; and `agent_id`
-  echoes the identifier the request addressed, octet-for-octet, so a
-  mismatch is a failed check rather than something to reconcile. The
-  `validate.py` skip over the §5.3 block is gone with it — that payload was
-  checked by nothing until now (§5.3).
-- 2026-08-19 · #56 —
-  `Digest: sha-256=<base64>` becomes
-  `Repr-Digest: sha-256=:<base64>:` on a bundle response. RFC 3230 was
-  obsoleted by [RFC 9530](https://www.rfc-editor.org/rfc/rfc9530) before
-  this specification shipped, and the replacement is a structured field, so
-  the colons are syntax rather than decoration. `Repr-Digest` rather than
-  `Content-Digest` because a client verifies the bundle it keeps, not the
-  bytes of one hop (§5.6).
-- 2026-08-19 · #59 —
-  A runner has defined behaviour when the distributor cannot be reached
-  (§5.7). The check response declares `grace_seconds` beside
-  `stale_after_seconds`, and a runner whose answer has expired with nothing
-  answering keeps running until
-  `checked_at + stale_after_seconds + grace_seconds`, reporting `unknown` —
-  the state §4.4 has always listed and nothing in §5 produced. The honest
-  upper bound in §5.4 is now the sum of the two rather than the first alone,
-  and is stated as such; both terms are the distributor's own, so it can
-  evaluate the sum before publishing either. `0` is a valid grace and means
-  *stop at the window*, so strictness is declared rather than inferred from
-  an absent field. §8 puts Sigrix's at 86400 (§4.4, §5.3, §5.4, §5.7, §8).
-- 2026-08-19 · #59 —
-  §5.4's rule against persisting an `active` answer across a restart is
-  replaced. A runner **MAY** persist an answer, provided it persists
-  `checked_at` with it and evaluates the deadlines against that value on
-  load; a restart yields no fresh window. The old rule was written when the
-  check returned no timestamp at all, so a persisted answer had no
-  trustworthy expiry and discarding it was the only bound available. With
-  the anchor returned and propagated unchanged (§5.3), discarding shortens
-  nothing — a runner that can reach the distributor re-checks anyway — and
-  costs the case §5.7 exists for, where a machine reboots with no network
-  and cannot tell an entitlement it held five minutes ago from one it never
-  had (§5.4, §5.7).
-- 2026-08-19 · #59 —
-  A `404` from the check is an answer rather than an outage: no grace
-  applies, the runner stops at once, reports `revoked`, and answers `run`
-  and `stream` with `403` `not_entitled`. It reports `revoked` even though
-  §5.5 stops it distinguishing a withdrawn entitlement from one that never
-  existed or a token that no longer resolves — what the three have in common
-  is all a client can act on. A runner that has never completed a check does
-  not run at all, reports `unknown` with no `checked_at`, and answers `503`
-  `unavailable`. The rule under both: unreachable answers `unavailable`,
-  refused answers `not_entitled` (§5.7).
-- 2026-08-22 · #74 —
-  Browser clients have a defined answer: a runner **MUST** answer the
-  `OPTIONS` preflight on `run` and `stream`, and the origin policy behind it
-  is the operator's, defaulting to refusal rather than to
-  `Access-Control-Allow-Origin: *`. The specification named a web UI as a
-  client kind and said nothing about CORS, so a fully conforming runner
-  could be unreachable from one — while the obvious remedy, a wildcard,
-  would hand `run` and its `write_tools` to every page the user visits.
-  A runner **MUST** now also reject a `run` or `stream` body whose
-  `Content-Type` is not `application/json`: `application/json` is what makes
-  the request preflight at all, and a runner accepting `text/plain` executes
-  the agent for any origin without one, which is the whole of the preceding
-  rule undone (§2.3, §7).
-- 2026-08-22 · #75 —
-  A run in flight has a defined life (§4.5). A runner **SHOULD** abort the
-  agent when the client disconnects, on `run` and `stream` alike, and
-  **MUST NOT** deliver an abandoned run's output anywhere else — there being
-  no callback and no verb that takes a `run_id`, which is also why an abort
-  cannot be reported and a reopened `stream` is a new run rather than a
-  resumption. An abort is not a rollback: §4.1.2's `write_tools` name things
-  that may already have happened, and a retry without an `Idempotency-Key`
-  buys the work twice. Previously nothing said whether closing a laptop lid
-  stopped an agent from spending money (§4.2, §4.3, §4.5).
-- 2026-08-22 · #75 —
-  Added `run_timeout` (504), and with it a runner's right to impose a maximum
-  run duration. `agent_error` and `unavailable` both nearly fit and both
-  mislead — one reports a working agent as broken, the other invites a retry
-  into the same deadline. A runner imposing a limit **MUST** declare it as
-  `status.limits.max_run_seconds` and **MUST NOT** declare one longer than it
-  can enforce, and the refusal **SHOULD** carry it as
-  `error.detail.max_run_seconds` (§2.1, §4.4, §4.5).
-- 2026-08-22 · #75 —
-  Concurrency is the runner's to decide and discoverable rather than assumed:
-  it **MAY** refuse an overlapping run with `503` `unavailable`, needing no
-  new code because the client's move is the one that code already asks for,
-  and **SHOULD** declare `status.limits.max_concurrent_runs`.
-  `status.state: "running"` observes that a run is in flight and promises
-  nothing about admission — a client **MUST** be ready for `503` whatever
-  `status` last said, since the slot can go elsewhere between the two calls
-  (§4.4, §4.5).
-- 2026-08-22 · #76 —
-  `output` has a section of its own (§4.1.4). `text` is the v0 output type
-  by decision rather than by accident of the examples, matching what §4.1.1
-  already said for inputs — and an unrecognised `output.type` now has a
-  receive-side rule, which is the part that changes the contract rather than
-  recording it. It is deliberately not the rule the other four extensible
-  surfaces use: an error `code`, a `stream` event name, an input `type` and a
-  `validation` member are all things a client may ignore, and `output.type`
-  is what says how to read `value`, so ignoring it misreads a known rather
-  than tolerating an unknown. A client **MUST NOT** present `value` as text,
-  **MUST NOT** report the run as failed — a `200` it cannot render is a run
-  that succeeded — and **SHOULD** name the type it was given. The rule has to
-  exist before a second output type can, or the addition breaks every client
-  written against the closed set: the ordering the error-code enum already
-  paid for (§2.1, §4.1.1, §4.1.4).
-- 2026-08-22 · #82 —
-  `stream`'s event payloads have schemas, and its rules about them are
-  stated rather than implied by a table cell. A `step` carries at least
-  `name` and `status`; `latency_ms` is an elapsed time, so it is reported on
-  `finished` and a runner **MUST NOT** emit it on a `started` step, where
-  there is nothing yet to measure — a client receiving one anyway ignores it
-  rather than rejecting the event.
-  [`stream-event.schema.json`](schemas/stream-event.schema.json) covers the
-  three payloads this specification defines itself; `done` and `error` carry
-  bodies §4.2 and §2.1 already define, and the SSE framing spans events, so
-  neither is expressible there (§4.3).
-- 2026-08-22 · #87 —
-  The plaintext-token prohibition has a loopback exception, on both halves:
-  a distributor reachable only on loopback may serve plaintext, and a runner
-  may send its token when the peer address is loopback — the one case where
-  the network the TLS rule exists to protect is not there. The condition is
-  the address connected to rather than the hostname configured, because a
-  name is resolved by something the runner does not control, and resolving
-  before connecting leaves a gap between the two answers. A runner
-  **SHOULD** say when it takes the exception, to its operator rather than in
-  `status` (§7).
-- 2026-08-23 · #92 —
-  `output.type` gains `bytes`, for an agent whose result is a file rather
-  than prose. `value` carries the artifact base64-encoded and stays a JSON
-  string, so no envelope changes shape; `media_type` is **REQUIRED** beside
-  it and is an open RFC 6838 string, because an enum would need a
-  specification revision per format. A `bytes` run emits no `delta` — §4.3's
-  invariant is text-shaped, and base64 fragments would satisfy it while
-  giving a client nothing but the encoding to print — so it reports progress
-  with `step` instead. `describe.output.example` stays text-only, and a
-  runner bounding what it returns declares `limits.max_output_bytes` in
-  `status`, measured before base64. Additive: a client written against
-  §4.1.4's receive-side rule survives it (§4.1.4, §4.3, §4.4).
-- 2026-08-23 · #93 —
-  A runner whose first-ever check answers `404` reports `revoked` with its
-  own re-check cadence as `stale_after_seconds`. That fallback was already
-  the rule, but reachable only by reading "its own re-check cadence" as the
-  field. The clause that did name the field attached a **SHOULD** — reuse
-  the distributor's last value — which a first check cannot satisfy, so the
-  one case a plain misconfiguration produces was the one left unstated, and
-  the conformant reading was the harder of the two to find. §5.7.4 also now
-  answers whether a client can tell a runner-supplied number from a
-  distributor's: it cannot, and does not need to, because the bound protects
-  the runner's own operator under `revoked` where it protects the
-  distributor under `active`, and only the second party gains by
-  overstating it. §5.7.3 says that a `404` is a completed check and so not
-  its case, and `status.schema.json`'s two descriptions carry the same
-  exception (§5.7.3, §5.7.4).
-- 2026-08-29 · #95 —
-  The `delta` concatenation invariant gains the receive-side rule it was
-  missing: where the accumulated deltas and `done`'s `output.value` disagree,
-  a client **SHOULD** prefer `done`, and **MUST NOT** report the run as
-  having failed on that ground. It was the one place a client could be
-  surprised with nothing stated for it — every other one has a rule, and
-  §4.1.4's is the near neighbour, separating a run that succeeded from a
-  client that rendered it wrongly. A **SHOULD** rather than a **MUST**
-  because a client writing deltas to standard output has already emitted
-  them. The invariant itself is unchanged and still binds the runner (§4.3).
-- 2026-08-29 · #95 —
-  A runner that honours an `Idempotency-Key` declares it, as
-  `capabilities.idempotent_retry` in `describe`. §2.3 already varied a
-  browser client's preflight by whether the runner honours the header, so
-  the one answer was being advertised in a CORS header to a client with no
-  protocol-level way to ask for it, and §4.5 had since made being charged
-  twice a documented outcome of an ordinary disconnect. Declaring it forced
-  fixing what honouring means, which the specification had never said: a
-  repeat key **MUST NOT** execute the agent again and **MUST** be answered
-  with the result of the first execution, a produced error included, while a
-  request refused before the agent ran binds no key. Absent and `false` read
-  identically, so a client written before the field is right about every
-  runner that had not made the promise. §4.5 stops naming the key as the
-  remedy for the disconnect it can do least about — the run it would
-  deduplicate against was aborted and its output discarded — and says that
-  answering a retry carrying that run's key is not the late delivery its
-  discard rule forbids. A runner declaring the field **MUST** admit the
-  header in its preflight, or the promise holds for every client kind except
-  the browser (§2.3, §4.1.2, §4.2, §4.5).
 - 2026-08-31 · #102 —
   `run_id` is unique **per execution** rather than per response, so a
   replayed idempotent answer carries the `run_id` of the execution it
@@ -2711,56 +2574,284 @@ entry carries the date it landed and the pull request that carried it.
   the line that keeps the field from being re-proposed. The conformance
   checker's `streaming`/`level` agreement warning goes with it — that rule
   was the tool's own inference from §3, with no sentence to cite (§3, §4.1).
-- 2026-09-02 · #118 —
-  `status` gains an **OPTIONAL** `update` block, reporting what a runner
-  learned when it asked its distributor whether a newer version of the agent
-  exists: a `state` of `not_required`, `unreachable`, `current` or
-  `update_available`, with the running version as `current` and the reported
-  one as `latest`. It is present only where a check ran, so a runner
-  configured for none omits it — a different fact from a check that ran and
-  found no distributor. An unreachable check is explicitly not a failure: a
-  runner **MUST NOT** refuse to start or to run because it could not tell,
-  which is §5.7's posture for an entitlement it cannot re-check, and a client
-  reads `unreachable` as *not known* rather than as *out of date*. It sits in
-  `status` rather than `describe` for the reason `limits` does — the version
-  a runner happens to be running, against a distributor it happens to be
-  configured for, is a fact about the deployment. **No distributor path is
-  added**: §5 fixes the two a runner must call to serve its agent at all, a
-  version answer is neither, and a runner that never asks conforms fully — so
-  how `latest` is obtained is the distributor's to publish, and §8 records
-  Sigrix's, unauthenticated because it names no buyer (§4.4, §8).
-- 2026-09-02 · #124 —
-  `output.media_type` is bounded by the grammar it always claimed. Both
-  schemas carried a pattern that was wrong in each direction at once: it
-  refused every experimental type, `x-custom/foo` among them, because the
-  type half admitted no `-`, while accepting a subtype beginning `!`, which
-  §4.2 of RFC 6838 forbids. Both halves are that RFC's `restricted-name`
-  now. §4.1.4 also states what the pattern used to imply by accident — a
-  runner emits the field in lower case, so two runners naming one format
-  agree octet-for-octet, and a client **MUST NOT** reject a response over
-  its case (§4.1.4).
-- 2026-09-02 · #122 —
-  §4.6 places the entitlement refusals, which it previously left out of its
-  sequence entirely. They are step 2 — behind the level check, ahead of the
-  media type, the inputs and the environment — so a runner that has been told
-  no answers that rather than a `400` naming something the caller could fix,
-  which §5.7.4 already forbids it to imply. The general sentence is narrowed
-  to the steps it was always about: *what the request says before what the
-  runner holds* governs steps 3 to 5, and an entitlement is neither. Both
-  orders conformed before, so a conformance checker could assert neither
-  (§4.6, §5.7.4).
-- 2026-09-02 · #120 —
-  `version.schema.json` fixes the shape of a version answer — `postern`, the
-  `agent_id` echoed octet-for-octet, and a `version` string compared for
-  equality only, with no ordering implied. It is the source of §4.4's
-  `status.update.latest`, and the first schema here whose *path* this
-  specification does not define: §5 fixes the two distributor paths a runner
-  must call to serve its agent at all, a version answer is neither, and §8
-  records where Sigrix serves it. Fixing the shape without fixing the path is
-  the point — a second distributor offering the same answer answers it the
-  same way, and a runner reads both with one parser. It joins
-  `entitlement.schema.json` as a distributor payload the conformance checker
-  does not bundle, since a runner never emits one (§4.4, §8).
+- 2026-08-29 · #95 —
+  The `delta` concatenation invariant gains the receive-side rule it was
+  missing: where the accumulated deltas and `done`'s `output.value` disagree,
+  a client **SHOULD** prefer `done`, and **MUST NOT** report the run as
+  having failed on that ground. It was the one place a client could be
+  surprised with nothing stated for it — every other one has a rule, and
+  §4.1.4's is the near neighbour, separating a run that succeeded from a
+  client that rendered it wrongly. A **SHOULD** rather than a **MUST**
+  because a client writing deltas to standard output has already emitted
+  them. The invariant itself is unchanged and still binds the runner (§4.3).
+- 2026-08-29 · #95 —
+  A runner that honours an `Idempotency-Key` declares it, as
+  `capabilities.idempotent_retry` in `describe`. §2.3 already varied a
+  browser client's preflight by whether the runner honours the header, so
+  the one answer was being advertised in a CORS header to a client with no
+  protocol-level way to ask for it, and §4.5 had since made being charged
+  twice a documented outcome of an ordinary disconnect. Declaring it forced
+  fixing what honouring means, which the specification had never said: a
+  repeat key **MUST NOT** execute the agent again and **MUST** be answered
+  with the result of the first execution, a produced error included, while a
+  request refused before the agent ran binds no key. Absent and `false` read
+  identically, so a client written before the field is right about every
+  runner that had not made the promise. §4.5 stops naming the key as the
+  remedy for the disconnect it can do least about — the run it would
+  deduplicate against was aborted and its output discarded — and says that
+  answering a retry carrying that run's key is not the late delivery its
+  discard rule forbids. A runner declaring the field **MUST** admit the
+  header in its preflight, or the promise holds for every client kind except
+  the browser (§2.3, §4.1.2, §4.2, §4.5).
+- 2026-08-23 · #93 —
+  A runner whose first-ever check answers `404` reports `revoked` with its
+  own re-check cadence as `stale_after_seconds`. That fallback was already
+  the rule, but reachable only by reading "its own re-check cadence" as the
+  field. The clause that did name the field attached a **SHOULD** — reuse
+  the distributor's last value — which a first check cannot satisfy, so the
+  one case a plain misconfiguration produces was the one left unstated, and
+  the conformant reading was the harder of the two to find. §5.7.4 also now
+  answers whether a client can tell a runner-supplied number from a
+  distributor's: it cannot, and does not need to, because the bound protects
+  the runner's own operator under `revoked` where it protects the
+  distributor under `active`, and only the second party gains by
+  overstating it. §5.7.3 says that a `404` is a completed check and so not
+  its case, and `status.schema.json`'s two descriptions carry the same
+  exception (§5.7.3, §5.7.4).
+- 2026-08-23 · #92 —
+  `output.type` gains `bytes`, for an agent whose result is a file rather
+  than prose. `value` carries the artifact base64-encoded and stays a JSON
+  string, so no envelope changes shape; `media_type` is **REQUIRED** beside
+  it and is an open RFC 6838 string, because an enum would need a
+  specification revision per format. A `bytes` run emits no `delta` — §4.3's
+  invariant is text-shaped, and base64 fragments would satisfy it while
+  giving a client nothing but the encoding to print — so it reports progress
+  with `step` instead. `describe.output.example` stays text-only, and a
+  runner bounding what it returns declares `limits.max_output_bytes` in
+  `status`, measured before base64. Additive: a client written against
+  §4.1.4's receive-side rule survives it (§4.1.4, §4.3, §4.4).
+- 2026-08-22 · #87 —
+  The plaintext-token prohibition has a loopback exception, on both halves:
+  a distributor reachable only on loopback may serve plaintext, and a runner
+  may send its token when the peer address is loopback — the one case where
+  the network the TLS rule exists to protect is not there. The condition is
+  the address connected to rather than the hostname configured, because a
+  name is resolved by something the runner does not control, and resolving
+  before connecting leaves a gap between the two answers. A runner
+  **SHOULD** say when it takes the exception, to its operator rather than in
+  `status` (§7).
+- 2026-08-22 · #82 —
+  `stream`'s event payloads have schemas, and its rules about them are
+  stated rather than implied by a table cell. A `step` carries at least
+  `name` and `status`; `latency_ms` is an elapsed time, so it is reported on
+  `finished` and a runner **MUST NOT** emit it on a `started` step, where
+  there is nothing yet to measure — a client receiving one anyway ignores it
+  rather than rejecting the event.
+  [`stream-event.schema.json`](schemas/stream-event.schema.json) covers the
+  three payloads this specification defines itself; `done` and `error` carry
+  bodies §4.2 and §2.1 already define, and the SSE framing spans events, so
+  neither is expressible there (§4.3).
+- 2026-08-22 · #76 —
+  `output` has a section of its own (§4.1.4). `text` is the v0 output type
+  by decision rather than by accident of the examples, matching what §4.1.1
+  already said for inputs — and an unrecognised `output.type` now has a
+  receive-side rule, which is the part that changes the contract rather than
+  recording it. It is deliberately not the rule the other four extensible
+  surfaces use: an error `code`, a `stream` event name, an input `type` and a
+  `validation` member are all things a client may ignore, and `output.type`
+  is what says how to read `value`, so ignoring it misreads a known rather
+  than tolerating an unknown. A client **MUST NOT** present `value` as text,
+  **MUST NOT** report the run as failed — a `200` it cannot render is a run
+  that succeeded — and **SHOULD** name the type it was given. The rule has to
+  exist before a second output type can, or the addition breaks every client
+  written against the closed set: the ordering the error-code enum already
+  paid for (§2.1, §4.1.1, §4.1.4).
+- 2026-08-22 · #75 —
+  A run in flight has a defined life (§4.5). A runner **SHOULD** abort the
+  agent when the client disconnects, on `run` and `stream` alike, and
+  **MUST NOT** deliver an abandoned run's output anywhere else — there being
+  no callback and no verb that takes a `run_id`, which is also why an abort
+  cannot be reported and a reopened `stream` is a new run rather than a
+  resumption. An abort is not a rollback: §4.1.2's `write_tools` name things
+  that may already have happened, and a retry without an `Idempotency-Key`
+  buys the work twice. Previously nothing said whether closing a laptop lid
+  stopped an agent from spending money (§4.2, §4.3, §4.5).
+- 2026-08-22 · #75 —
+  Added `run_timeout` (504), and with it a runner's right to impose a maximum
+  run duration. `agent_error` and `unavailable` both nearly fit and both
+  mislead — one reports a working agent as broken, the other invites a retry
+  into the same deadline. A runner imposing a limit **MUST** declare it as
+  `status.limits.max_run_seconds` and **MUST NOT** declare one longer than it
+  can enforce, and the refusal **SHOULD** carry it as
+  `error.detail.max_run_seconds` (§2.1, §4.4, §4.5).
+- 2026-08-22 · #75 —
+  Concurrency is the runner's to decide and discoverable rather than assumed:
+  it **MAY** refuse an overlapping run with `503` `unavailable`, needing no
+  new code because the client's move is the one that code already asks for,
+  and **SHOULD** declare `status.limits.max_concurrent_runs`.
+  `status.state: "running"` observes that a run is in flight and promises
+  nothing about admission — a client **MUST** be ready for `503` whatever
+  `status` last said, since the slot can go elsewhere between the two calls
+  (§4.4, §4.5).
+- 2026-08-22 · #74 —
+  Browser clients have a defined answer: a runner **MUST** answer the
+  `OPTIONS` preflight on `run` and `stream`, and the origin policy behind it
+  is the operator's, defaulting to refusal rather than to
+  `Access-Control-Allow-Origin: *`. The specification named a web UI as a
+  client kind and said nothing about CORS, so a fully conforming runner
+  could be unreachable from one — while the obvious remedy, a wildcard,
+  would hand `run` and its `write_tools` to every page the user visits.
+  A runner **MUST** now also reject a `run` or `stream` body whose
+  `Content-Type` is not `application/json`: `application/json` is what makes
+  the request preflight at all, and a runner accepting `text/plain` executes
+  the agent for any origin without one, which is the whole of the preceding
+  rule undone (§2.3, §7).
+- 2026-08-19 · #59 —
+  A runner has defined behaviour when the distributor cannot be reached
+  (§5.7). The check response declares `grace_seconds` beside
+  `stale_after_seconds`, and a runner whose answer has expired with nothing
+  answering keeps running until
+  `checked_at + stale_after_seconds + grace_seconds`, reporting `unknown` —
+  the state §4.4 has always listed and nothing in §5 produced. The honest
+  upper bound in §5.4 is now the sum of the two rather than the first alone,
+  and is stated as such; both terms are the distributor's own, so it can
+  evaluate the sum before publishing either. `0` is a valid grace and means
+  *stop at the window*, so strictness is declared rather than inferred from
+  an absent field. §8 puts Sigrix's at 86400 (§4.4, §5.3, §5.4, §5.7, §8).
+- 2026-08-19 · #59 —
+  §5.4's rule against persisting an `active` answer across a restart is
+  replaced. A runner **MAY** persist an answer, provided it persists
+  `checked_at` with it and evaluates the deadlines against that value on
+  load; a restart yields no fresh window. The old rule was written when the
+  check returned no timestamp at all, so a persisted answer had no
+  trustworthy expiry and discarding it was the only bound available. With
+  the anchor returned and propagated unchanged (§5.3), discarding shortens
+  nothing — a runner that can reach the distributor re-checks anyway — and
+  costs the case §5.7 exists for, where a machine reboots with no network
+  and cannot tell an entitlement it held five minutes ago from one it never
+  had (§5.4, §5.7).
+- 2026-08-19 · #59 —
+  A `404` from the check is an answer rather than an outage: no grace
+  applies, the runner stops at once, reports `revoked`, and answers `run`
+  and `stream` with `403` `not_entitled`. It reports `revoked` even though
+  §5.5 stops it distinguishing a withdrawn entitlement from one that never
+  existed or a token that no longer resolves — what the three have in common
+  is all a client can act on. A runner that has never completed a check does
+  not run at all, reports `unknown` with no `checked_at`, and answers `503`
+  `unavailable`. The rule under both: unreachable answers `unavailable`,
+  refused answers `not_entitled` (§5.7).
+- 2026-08-19 · #56 —
+  The entitlement check has a schema, and its response carries `postern`
+  like every other success payload in the protocol. It was the only one
+  without a version marker, and a distributor's version is inferable from
+  nothing else — [VERSIONING.md](VERSIONING.md) forbids reading it off the
+  path prefix. Freezing the shape settled two things the prose had left
+  loose: `stale_after_seconds` is sent whether or not the distributor
+  caches, because §5.4's re-check deadline and §4.4's `status` report both
+  need it and neither is conditional on a cache existing; and `agent_id`
+  echoes the identifier the request addressed, octet-for-octet, so a
+  mismatch is a failed check rather than something to reconcile. The
+  `validate.py` skip over the §5.3 block is gone with it — that payload was
+  checked by nothing until now (§5.3).
+- 2026-08-19 · #56 —
+  `Digest: sha-256=<base64>` becomes
+  `Repr-Digest: sha-256=:<base64>:` on a bundle response. RFC 3230 was
+  obsoleted by [RFC 9530](https://www.rfc-editor.org/rfc/rfc9530) before
+  this specification shipped, and the replacement is a structured field, so
+  the colons are syntax rather than decoration. `Repr-Digest` rather than
+  `Content-Digest` because a client verifies the bundle it keeps, not the
+  bytes of one hop (§5.6).
+- 2026-08-19 · #55 —
+  `agent_id` has a grammar: two parts of lowercase ASCII alphanumerics, `-`
+  and `.`, joined by one `/`, bounded at 128 characters and compared
+  octet-for-octet with no folding or normalisation of any kind (§1.5). It was
+  previously only a non-empty string, and the canonical
+  `acme/market-research-crew` did not fit the single path segment the
+  distributor endpoints gave it. It now occupies two segments and is never
+  percent-encoded — the grammar admits no character a path requires encoding
+  for — and a string that fills two segments without matching the grammar is
+  answered `400`, an answer a distributor **MUST** be able to produce without
+  consulting its catalogue, which is why it does not weaken §5.5 (§5.3.1,
+  §5.6). The identifier carries no listing type, so a distributor dispatching
+  on one resolves it itself and **MUST** test each branch out of band: §5.5
+  makes a missing branch indistinguishable from a correct refusal, so no
+  client will ever report it (§5.5). `agent.id` carries the pattern and the
+  bound in `describe.schema.json` and `status.schema.json` (§4.1, §4.4).
+- 2026-08-19 · #53 —
+  §5.5's indistinguishability rule covers token state, not only agents. An
+  unknown, revoked, or superseded token answers `404` with `not_found`, the
+  same as a valid token presented for an agent the buyer may not have, and
+  Postern defines no `401` — a status meaning "authenticate and try again"
+  would confirm the token was once real. §5.3's success rule gains the
+  failure branch it presupposed, and §7's "stop resolving" now names the
+  answer it stops with (§2.1, §5.3, §5.5, §7).
+- 2026-08-19 · #53 —
+  `entitlement.stale_after_seconds` is now **REQUIRED** for `revoked` as
+  well as `active`, matching `checked_at`: it is required wherever a check
+  actually happened. Without it a runner held a timestamp and no deadline,
+  so §5.4's re-check rule could not be evaluated for a `revoked` answer and
+  the restoration §5.4 obliges a distributor to support could never be
+  observed (§4.4, §5.4).
+- 2026-08-19 · #50 —
+  A runner answers *any* verb above its declared level with `501` and
+  `not_implemented`. The rule was previously stated only for a Level 2
+  runner asked to `stream`, leaving a Level 1 runner asked to `run` with no
+  defined answer; it now sits in §3, so it also covers any level added later
+  (§3, §4.2, §4.3).
+- 2026-08-19 · #50 —
+  Narrowed input values to what the three declared types can produce.
+  `run`'s `inputs` map and an input's `default` no longer admit a boolean,
+  which none of `text`, `number` or `select` yields. Adding a fourth type
+  later is additive; withdrawing a value shape a runner had relied on would
+  not be (§4.1.1).
+- 2026-08-19 · #50 —
+  Removed `status` from the `run` response. Its only legal value was `ok`,
+  because §2.1 routes every failure through a non-2xx error envelope, and
+  the partial-result case it might have grown into cannot be carried by a
+  value an older client would read as a complete result (§4.2).
+- 2026-08-18 · #48 —
+  The error envelope's root is closed by design — nothing sits beside
+  `error`, so the envelope has one extension point rather than two. The
+  schema already asserted this; §2.1 now states it, with the reason and with
+  the fact that it constrains what an implementation emits rather than
+  licensing a client to reject what it receives (§2.1).
+- 2026-08-18 · #48 —
+  The §5.6 `410` body carries the date access ends as
+  `error.detail.access_ends_at`. The closed root leaves `detail` as the only
+  place it can go, and the specification previously left it unplaced (§5.6).
+- 2026-08-18 · #46 —
+  A runner serves exactly one agent, stated normatively rather than left to
+  be inferred from the absence of an identifier in its paths. `not_found`'s
+  "no such agent" meaning is distributor-side only; on a runner the code can
+  only mean an unimplemented path. Each code in the §2.1 table now says
+  which side emits it (§2.1, §2.2).
+- 2026-08-16 · #38 —
+  A client **MUST** tolerate an error `code` it does not recognise, so that
+  adding a code stays an additive change (§2.1).
+- 2026-08-16 · #38 —
+  Added `not_implemented` (501). A Level 2 runner answers `stream` with it
+  rather than with `unavailable`, which is now 503 only (§2.1, §4.3).
+- 2026-08-16 · #38 —
+  Added `withdrawn` (410), so the withdrawn-agent response in §5.6 has a
+  code and can be constructed at all (§2.1, §5.6).
+- 2026-08-16 · #38 —
+  The entitlement check response now carries `checked_at`, defined as the
+  moment the distributor last consulted the authority rather than the moment
+  it answered. A runner propagates it unchanged and **MUST NOT** re-stamp it,
+  so the distributor's cache and the runner's cache share one deadline
+  instead of stacking (§5.3, §5.4).
+- 2026-08-16 · #38 —
+  `entitlement.checked_at` is now **REQUIRED** in `status` when the
+  entitlement state is `active` or `revoked` (§4.4).
+- 2026-08-16 · #38 —
+  The `delta` reconstruction rule applies only when a `delta` is emitted, so
+  a Level 3 runner that cannot produce incremental text stays conformant by
+  emitting none (§4.3).
+- 2026-08-16 · #38 —
+  The subprocess discovery line is `POSTERN_PORT=<port>`, replacing the
+  mixed-case form (§2).
+- 2026-08-16 · #38 —
+  Removed `verification` from the `org.sigrix` member list (§8).
 
 **0.1** — First public draft. Four verbs, entitlement flow, Agent Plugins
 v1.0.0 packaging. Nothing is stable yet; see
