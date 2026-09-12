@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/social-preview.png" alt="Postern — the open execution and entitlement protocol for packaged AI agents" width="800">
+</p>
+
 # Postern
 
 **The open execution and entitlement protocol for packaged AI agents** — a
