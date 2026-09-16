@@ -256,7 +256,15 @@ well as a Python one, and it does not run your agent unless you pass
 and an abort is not a rollback ([§4.5](SPEC.md#45-the-life-of-a-run)), so
 most of the specification is checked through refusals that execute nothing.
 
-It is a test suite, not an SDK, and not a reference implementation.
+It is a test suite, not an SDK, and not a reference implementation —
+[`examples/minimal_runner.py`](examples/minimal_runner.py) is that: a
+complete Level 3 runner in about 300 lines of the standard library, worth
+reading end to end before writing your own.
+
+```console
+python examples/minimal_runner.py &
+postern-conformance --execute http://127.0.0.1:8787
+```
 
 ## Status
 
@@ -269,13 +277,18 @@ carry release the checker in `tools/conformance/`, not the specification
 ([VERSIONING.md](VERSIONING.md)). Breaking changes will happen before 1.0, and
 [VERSIONING.md](VERSIONING.md) says which of them move what.
 
-There is no reference implementation in this repository. There is one
-elsewhere: [Sigrix](https://sigrix.io) serves the four verbs at Level 3 for a
-packaged agent, and the §5 endpoints as a distributor.
+There is no reference implementation of the distributor side
+([§5](SPEC.md#5-entitlement)) in this repository — that stays proprietary,
+since it is how a seller checks a buyer paid. The runner side has one now:
+[`examples/minimal_runner.py`](examples/minimal_runner.py) is a complete,
+runnable Level 3 runner, standard library only, with no distributor
+configured — read it end to end, or point the checker at it.
+[Sigrix](https://sigrix.io) runs a production implementation of the same
+four verbs, framework-wrapped and backed by a real distributor.
 
-It is an implementation of this document rather than a second definition of
-it — where the two appear to disagree, this document is what anyone pinned to,
-and the disagreement is worth an issue here.
+Neither is a second definition of this document — where an implementation
+and this document appear to disagree, this document is what anyone pinned
+to, and the disagreement is worth an issue here.
 
 If you are building against this, please [open an
 issue](../../issues) — knowing who depends on what is what lets us avoid

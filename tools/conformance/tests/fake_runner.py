@@ -17,13 +17,32 @@ from __future__ import annotations
 import contextlib
 import enum
 import json
+import pathlib
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Iterator
 
-ALLOWED_ORIGIN = "https://app.example.com"
+# The conformant baseline this fixture plants faults onto. Imported rather
+# than duplicated so the payload examples/minimal_runner.py serves and the
+# one this fixture serves cannot silently disagree — see that file's
+# docstring. sys.path, not a package: examples/ ships no __init__.py, and
+# giving it one to satisfy an import used only here and in selftest.py
+# would be a bigger change than the fixture needs.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3] / "examples"))
 
-# A one-pixel PNG, base64. Small on purpose: the point is the type.
+from minimal_runner import (  # noqa: E402
+    ALLOWED_ORIGIN,
+    DESCRIBE as _DESCRIBE,
+    DELTAS as _DELTAS,
+    OUTPUT_VALUE,
+    error as _error,
+    validation_failure as _validation_failure,
+)
+
+# A one-pixel PNG, base64. Small on purpose: the point is the type. Bytes
+# output is optional (section 4.1.4) and minimal_runner.py leaves it out,
+# so it stays fixture-only.
 BYTES_OUTPUT_VALUE = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="
 )
@@ -108,54 +127,6 @@ class Fault(enum.Enum):
 
     def __str__(self) -> str:  # pragma: no cover - readable test ids
         return self.name.lower()
-
-
-_DESCRIBE: dict[str, Any] = {
-    "postern": "0.1",
-    "agent": {
-        "id": "acme/market-research-crew",
-        "name": "Market Research Crew",
-        "version": "1.3.0",
-        "summary": "Researches a market segment and returns a positioning brief.",
-    },
-    "inputs": [
-        {
-            "key": "segment",
-            "label": "Market segment",
-            "type": "text",
-            "required": True,
-            "default": None,
-            "validation": {"max_length": 200},
-        },
-        {
-            "key": "depth",
-            "label": "Depth",
-            "type": "select",
-            "required": False,
-            "default": "standard",
-            "validation": {"options": ["quick", "standard", "exhaustive"]},
-        },
-    ],
-    "output": {"type": "text", "example": "## Positioning brief"},
-    "capabilities": {
-        "tools": ["serper_search", "file_write"],
-        "write_tools": ["file_write"],
-    },
-    "credentials": [
-        {
-            "env": "OPENAI_API_KEY",
-            "purpose": "Runs the agents in this crew.",
-            "signup_url": "https://platform.openai.com/api-keys",
-        }
-    ],
-}
-
-OUTPUT_VALUE = "## Positioning brief\n\nThe mid-market segment is underserved."
-_DELTAS = ["## Positioning brief\n", "\nThe mid-market segment ", "is underserved."]
-
-
-def _error(code: str, message: str) -> dict[str, Any]:
-    return {"error": {"code": code, "message": message, "detail": None}}
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -630,30 +601,6 @@ class RunCounter:
     @property
     def runs(self) -> int:
         return self._server.runs
-
-
-def _validation_failure(inputs: dict[str, Any]) -> str | None:
-    """The first declared constraint these inputs break, or None.
-
-    Read off `_DESCRIBE` rather than restated: a fake enforcing a rule it
-    does not publish would refuse requests the checker had every right to
-    send, and the mismatch would read as a checker bug.
-    """
-    for declared in _DESCRIBE["inputs"]:
-        key = declared["key"]
-        if key not in inputs:
-            continue
-        value = inputs[key]
-        rules = declared.get("validation") or {}
-
-        options = rules.get("options")
-        if isinstance(options, list) and value not in options:
-            return f"'{key}' must be one of {', '.join(options)}."
-
-        max_length = rules.get("max_length")
-        if isinstance(max_length, int) and isinstance(value, str) and len(value) > max_length:
-            return f"'{key}' is longer than {max_length} characters."
-    return None
 
 
 @contextlib.contextmanager
