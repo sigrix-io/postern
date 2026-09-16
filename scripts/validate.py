@@ -8,7 +8,7 @@ aspirational: run it before opening a pull request.
     pip install jsonschema
     python scripts/validate.py
 
-Nine things are checked, because nine different kinds of edit go wrong:
+Ten things are checked, because ten different kinds of edit go wrong:
 
 1. Every file in examples/ validates against its schema.
 2. Every fenced JSON block in SPEC.md validates against its schema too.
@@ -35,6 +35,10 @@ Nine things are checked, because nine different kinds of edit go wrong:
 9. Every line count docs/ cites is SPEC.md's real one. The pages there
    state its length as the thing a reader is deciding whether to take on,
    and every edit to SPEC.md invalidates the number.
+10. Every text read in this repository names utf-8. Without the argument
+   Python decodes with the locale's encoding, so the same file reads
+   differently on a contributor's machine than it does here — quietly,
+   because the common case is mojibake rather than an error.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -43,6 +47,7 @@ reference implementation here yet.
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import os
@@ -1044,6 +1049,81 @@ _NUMBER_WORDS = {
 }
 
 
+def _text_reads_name_their_encoding() -> bool:
+    """Every text read here names utf-8 rather than taking the locale's.
+
+    ``Path.read_text()`` with no ``encoding`` decodes with the locale's
+    preferred encoding, not the file's: cp1252 on a Windows contributor's
+    machine, ASCII under ``LC_ALL=C``. Everything this tooling reads — SPEC.md,
+    the schemas, the examples, the docs pages — is UTF-8, and most of it
+    carries characters outside ASCII, so the omission is a defect rather than a
+    style point. Every job here runs on ubuntu, so nothing in CI would notice.
+
+    All nineteen reads name it today; this is what keeps the twentieth honest.
+    The failure is worth pre-empting because it is quiet in the direction that
+    matters. cp1252 *decodes* an em dash into mojibake, so a check that greps
+    the mangled text goes on passing while reading a corrupted document; only a
+    character cp1252 has no slot for turns it into a traceback, and which of
+    those a file holds is not something anyone tracks. Sigrix hit exactly this:
+    a guard read a template as cp1252 for six weeks before a stopwatch emoji
+    landed in it and the Windows leg went red.
+
+    Read with ``ast`` rather than by pattern, because this repository has its
+    own ``Report.write_text(stream)`` under tools/conformance and a textual
+    sweep flags it on sight — a check that fires on correct code is one that
+    gets switched off rather than obeyed. Arity separates them without a list
+    of exemptions to maintain: ``Path.write_text`` requires the data to write,
+    so a ``write_text()`` call with no positional argument is not it.
+
+    Sweeping nothing is a failure, for the reason _docs_cite_the_real_length
+    gives one check up: a check with nothing to assert reports exactly like one
+    that holds.
+
+    Returns True when a call omits the encoding, so callers can accumulate.
+    """
+    sources = sorted(
+        path
+        for path in ROOT.rglob("*.py")
+        if ".git" not in path.parts and "__pycache__" not in path.parts
+    )
+
+    failed = False
+    checked = 0
+    for path in sources:
+        where = path.relative_to(ROOT)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+        except SyntaxError as exc:  # pragma: no cover - a broken file fails elsewhere too
+            failed = True
+            print(f"FAIL  {where} does not parse: {exc}")
+            continue
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr not in {"read_text", "write_text"}:
+                continue
+            if node.func.attr == "write_text" and not node.args:
+                continue
+
+            checked += 1
+            if any(keyword.arg == "encoding" for keyword in node.keywords):
+                continue
+
+            failed = True
+            print(f"FAIL  {where}:{node.lineno} {node.func.attr}() names no encoding.")
+            print("        It decodes with the locale's encoding, not the file's.")
+
+    if not checked:
+        failed = True
+        print("FAIL  no text reads found anywhere — this check swept nothing.")
+        print("        Either the sweep broke or the calls moved; both need a look.")
+    elif not failed:
+        print(f"ok    {checked} text reads name their encoding")
+
+    return failed
+
+
 def _docs_list_every_error_code() -> bool:
     """docs/flow.html's error table carries every code §2.1 defines.
 
@@ -1472,6 +1552,9 @@ def main() -> int:
     failed |= _docs_cite_real_sections()
     failed |= _docs_cite_the_real_length()
     failed |= _docs_list_every_error_code()
+
+    print()
+    failed |= _text_reads_name_their_encoding()
 
     return 1 if failed else 0
 
