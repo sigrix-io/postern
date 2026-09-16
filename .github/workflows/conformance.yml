@@ -1,36 +1,70 @@
 # Runs the conformance checker's self-test, and builds its distribution.
 #
-# Separate from `validate.yml` and gated on paths, because the two answer
-# different questions and the specification's own gate should not slow down
-# or fail for a change to a tool beside it. `validate.py` asks whether
-# SPEC.md, the schemas and the examples still agree; this asks whether the
-# checker that reads them can still fail when a runner breaks a rule.
+# Separate from `validate.yml`, because the two answer different questions
+# and the specification's own gate should not slow down or fail for a
+# change to a tool beside it. `validate.py` asks whether SPEC.md, the
+# schemas and the examples still agree; this asks whether the checker that
+# reads them can still fail when a runner breaks a rule.
 #
 # The self-test is the part worth having in CI. A conformance checker's own
 # failure mode is a false green — every check reads correctly and would
 # have passed against a runner that implemented none of it — so the thing
 # to protect is not that the checks pass, but that each one still catches
 # the rule it was written for.
+#
+# No trigger-level `paths:` filter, even though `selftest`/`build` only
+# matter for tools/conformance/** and schemas/**: a workflow gated at the
+# trigger reports nothing for a PR outside those paths, so it can never be
+# marked a required status check without leaving every other PR waiting on
+# a status that never arrives. Path-sensitivity lives in the `changes` job
+# instead, gating the two real jobs; `conformance-status` reports on every
+# run regardless of what it skipped, which is the job safe to require.
 name: conformance
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'tools/conformance/**'
-      - 'schemas/**'
-      - '.github/workflows/conformance.yml'
   pull_request:
-    paths:
-      - 'tools/conformance/**'
-      - 'schemas/**'
-      - '.github/workflows/conformance.yml'
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      conformance_changed: ${{ steps.filter.outputs.conformance_changed || steps.filter_fallback.outputs.conformance_changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        continue-on-error: true
+        with:
+          filters: |
+            conformance_changed:
+              - 'tools/conformance/**'
+              - 'schemas/**'
+              - '.github/workflows/conformance.yml'
+
+      # paths-filter above is continue-on-error, and an unhandled failure
+      # fails open the wrong way: the output stays unset, `== 'true'` reads
+      # false, and selftest/build silently skip on a run that should have
+      # exercised them. Default to running both instead.
+      - name: Fallback when paths-filter cannot determine changed files
+        if: ${{ steps.filter.outcome == 'failure' }}
+        id: filter_fallback
+        run: |
+          echo "paths-filter failed; defaulting to conservative full checks."
+          echo "conformance_changed=true" >> "$GITHUB_OUTPUT"
+
   selftest:
+    needs: changes
+    if: needs.changes.outputs.conformance_changed == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -60,6 +94,8 @@ jobs:
       - run: postern-conformance --version
 
   build:
+    needs: changes
+    if: needs.changes.outputs.conformance_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -101,3 +137,24 @@ jobs:
         with:
           name: postern-conformance-dist
           path: dist/
+
+  conformance-status:
+    name: conformance-status
+    needs: [changes, selftest, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify upstream jobs passed
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          SELFTEST: ${{ needs.selftest.result }}
+          BUILD: ${{ needs.build.result }}
+        run: |
+          echo "changes=$CHANGES selftest=$SELFTEST build=$BUILD"
+          for r in "$CHANGES" "$SELFTEST" "$BUILD"; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::A required CI job did not pass (result: $r)."
+              exit 1
+            fi
+          done
+          echo "All CI jobs passed or were safely skipped."
