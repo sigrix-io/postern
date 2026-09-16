@@ -58,8 +58,8 @@ answers a different question.
 |---|---|---|
 | **[Agent Plugins v1.0.0](https://agent-plugins.org)** | How is an agent packaged? | Adopted verbatim. Postern defines no packaging (§6). |
 | **[MCP](https://modelcontextprotocol.io)** | How does an agent reach tools and context? | Complementary. A Postern agent may use MCP internally; `describe` reports the tools it exposes. |
-| **A2A** | How do two agents collaborate? | Orthogonal. Postern is one client talking to one agent. |
-| **ACP / ANP** | How are agent messages routed and agents discovered? | Orthogonal. Postern assumes you already have the agent. |
+| **A2A** | How do two agents collaborate? | Orthogonal. Postern is one client talking to one agent. IBM/BeeAI's ACP merged into A2A in August 2025 and is no longer developed as a separate specification. |
+| **ANP** | How are agent messages routed and agents discovered? | Orthogonal. Postern assumes you already have the agent. |
 | **OpenAI-compatible chat APIs** | How is one model call made? | Below Postern. A single `run` may make many. |
 | **AP2, and agent-payment schemes generally** | How does an agent *make* a purchase? | The mirror image. Postern is about being licensed to run an agent, not about an agent buying something. |
 | **Agent-identity work (DIF, KYA-OS)** | Is this agent who it claims to be? | Adjacent, different subject. Postern authorises the *human* running the agent. |
@@ -2087,6 +2087,16 @@ v1.0.0](https://agent-plugins.org) plugin: a root `plugin.json` carrying
 `skills/` and `mcp.json` the agent needs.
 
 Postern adds no files to that layout and changes none of it.
+
+Agent Plugins v1.0.0 defines two kinds of component a plugin may declare —
+skills and MCP servers — and an Agent Plugins client (Cursor, Claude Code,
+Codex, and others like them) reads a bundle looking for those. Nothing here
+requires either: an agent's tools travel in `describe`'s
+`capabilities.tools` (§4.1.2) instead, a Postern-specific field those
+clients do not read. A `plugin.json` declaring neither is still valid by
+this section's own **MUST**, and one of those clients loading it correctly
+finds a plugin with nothing to run — the manifest is here for identity and
+`extensions` (below), not a second declaration of what the agent does.
 
 Distributor-specific data — entitlement identifiers, catalogue URLs,
 verification records — **MUST** ride the `extensions` member under a
