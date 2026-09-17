@@ -35,10 +35,11 @@ Ten things are checked, because ten different kinds of edit go wrong:
 9. Every line count docs/ cites is SPEC.md's real one. The pages there
    state its length as the thing a reader is deciding whether to take on,
    and every edit to SPEC.md invalidates the number.
-10. Every text read in this repository names utf-8. Without the argument
-   Python decodes with the locale's encoding, so the same file reads
-   differently on a contributor's machine than it does here — quietly,
-   because the common case is mojibake rather than an error.
+10. Every text read in this repository names utf-8 — the builtin `open()`
+   as much as `read_text()`. Without the argument Python decodes with the
+   locale's encoding, so the same file reads differently on a contributor's
+   machine than it does here — quietly, because the common case is mojibake
+   rather than an error.
 
 Exit status is 0 when everything validates, 1 otherwise. This is repository
 tooling, not an implementation of the protocol — there is deliberately no
@@ -1049,18 +1050,121 @@ _NUMBER_WORDS = {
 }
 
 
+_MODE_LETTERS = re.compile(r"^[rwxabt+]+$")
+_MODE_UNREADABLE = object()
+
+# The rule below has to tell three look-alikes apart, and this repository
+# contains none of them: one `open(path, "wb")` in examples/client.py and
+# nothing else. So the tree cannot notice if the discriminator stops
+# discriminating, the way `report.write_text(stream)` notices for the arity
+# rule. These say what it must answer, and the must-not-flag half is the
+# half that matters: without it the rule could be "fixed" into one that
+# flags every Popen and still sweep this repository clean.
+ENCODING_MUST_FLAG = [
+    ('Path("a").read_text()', "a bare read_text()"),
+    ('Path("a").write_text(body)', "a bare write_text()"),
+    ('open("notes.txt")', "the builtin open() with no mode"),
+    ('open("notes.txt", "r")', "the builtin open() in text mode"),
+    ('Path("a").open()', "pathlib's open() with no mode"),
+    ('open("notes.txt", mode="w")', "a mode passed by keyword"),
+]
+
+ENCODING_MUST_NOT_FLAG = [
+    ('Path("a").read_text(encoding="utf-8")', "a read_text() that names it"),
+    ('open("blob.bin", "rb")', "the builtin open() in binary mode"),
+    ('open("notes.txt", encoding="utf-8")', "an open() that names it"),
+    ('Path("a").open("rb")', "pathlib's open() in binary mode"),
+    ("subprocess.Popen(argv)", "Popen, which merely ends in open"),
+    ("postern_open(bundle)", "an identifier ending in _open"),
+    ('archive.open("notes.txt")', "ZipFile.open, whose first argument is a member"),
+    ("archive.open(info)", "ZipFile.open passed a member it cannot read"),
+    ("open(path, mode)", "an open() whose mode is a variable"),
+    ("report.write_text()", "a write_text() that writes nothing"),
+]
+
+
+def _named_mode(node: ast.Call, position: int) -> object:
+    """The mode a call passes: the string, None when it passes none.
+
+    ``_MODE_UNREADABLE`` when it passes something that cannot be read here —
+    a variable, an f-string, a call — which is the answer that makes the
+    caller leave the call alone rather than guess at it.
+    """
+    mode = node.args[position] if len(node.args) > position else None
+    for keyword in node.keywords:
+        if keyword.arg == "mode":
+            mode = keyword.value
+    if mode is None:
+        return None
+    if isinstance(mode, ast.Constant) and isinstance(mode.value, str):
+        return mode.value
+    return _MODE_UNREADABLE
+
+
+def _text_io_calls(tree: ast.AST) -> list[tuple[str, int, bool]]:
+    """Every text-mode read or write in ``tree``, as (name, line, names_utf8).
+
+    Binary calls are left out rather than reported: they take no encoding, so
+    there is nothing for a caller to assert about them.
+
+    Three shapes spell something close to a text read without being one, and
+    each is told apart by *what the call is* rather than how it is spelled:
+
+    * ``subprocess.Popen(argv)`` is an ``Attribute`` named ``Popen`` and
+      ``postern_open(bundle)`` is a ``Name`` that merely ends in ``open``;
+      neither is the builtin, which is a ``Name`` called exactly ``open``.
+    * ``ZipFile.open`` shares a method name with ``Path.open`` but puts a
+      *member name* where pathlib puts a *mode*, and modes are drawn from
+      ``rwxabt+`` while member names are not. A mode that cannot be read at
+      all leaves the call alone: **missing one costs less than flagging a zip
+      member**, which is how a check gets deleted rather than obeyed.
+    * ``Path.write_text`` requires the data to write, so the no-argument
+      ``report.write_text()`` under tools/conformance is some other method.
+    """
+    calls: list[tuple[str, int, bool]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+
+        if isinstance(function, ast.Name) and function.id == "open":
+            name, mode = "open", _named_mode(node, 1)
+        elif isinstance(function, ast.Attribute) and function.attr == "open":
+            name, mode = "open", _named_mode(node, 0)
+            if isinstance(mode, str) and not _MODE_LETTERS.match(mode):
+                continue  # a member name, so this is not pathlib's open
+        elif isinstance(function, ast.Attribute) and function.attr in {
+            "read_text",
+            "write_text",
+        }:
+            if function.attr == "write_text" and not node.args:
+                continue
+            name, mode = function.attr, None
+        else:
+            continue
+
+        if mode is _MODE_UNREADABLE or (isinstance(mode, str) and "b" in mode):
+            continue
+
+        calls.append(
+            (name, node.lineno, any(keyword.arg == "encoding" for keyword in node.keywords))
+        )
+    return calls
+
+
 def _text_reads_name_their_encoding() -> bool:
     """Every text read here names utf-8 rather than taking the locale's.
 
-    ``Path.read_text()`` with no ``encoding`` decodes with the locale's
-    preferred encoding, not the file's: cp1252 on a Windows contributor's
-    machine, ASCII under ``LC_ALL=C``. Everything this tooling reads — SPEC.md,
-    the schemas, the examples, the docs pages — is UTF-8, and most of it
-    carries characters outside ASCII, so the omission is a defect rather than a
-    style point. Every job here runs on ubuntu, so nothing in CI would notice.
+    ``Path.read_text()`` and ``open()`` with no ``encoding`` decode with the
+    locale's preferred encoding, not the file's: cp1252 on a Windows
+    contributor's machine, ASCII under ``LC_ALL=C``. Everything this tooling
+    reads — SPEC.md, the schemas, the examples, the docs pages — is UTF-8, and
+    most of it carries characters outside ASCII, so the omission is a defect
+    rather than a style point. Every job here runs on ubuntu, so nothing in CI
+    would notice.
 
-    All nineteen reads name it today; this is what keeps the twentieth honest.
-    The failure is worth pre-empting because it is quiet in the direction that
+    Every read names it today; this is what keeps the next one honest. The
+    failure is worth pre-empting because it is quiet in the direction that
     matters. cp1252 *decodes* an em dash into mojibake, so a check that greps
     the mangled text goes on passing while reading a corrupted document; only a
     character cp1252 has no slot for turns it into a traceback, and which of
@@ -1068,26 +1172,39 @@ def _text_reads_name_their_encoding() -> bool:
     a guard read a template as cp1252 for six weeks before a stopwatch emoji
     landed in it and the Windows leg went red.
 
-    Read with ``ast`` rather than by pattern, because this repository has its
-    own ``Report.write_text(stream)`` under tools/conformance and a textual
-    sweep flags it on sight — a check that fires on correct code is one that
-    gets switched off rather than obeyed. Arity separates them without a list
-    of exemptions to maintain: ``Path.write_text`` requires the data to write,
-    so a ``write_text()`` call with no positional argument is not it.
+    Read with ``ast`` rather than by pattern, because the builtin ``open`` is
+    what anyone reaching for a file writes first and cannot be matched
+    textually: ``open(`` is a suffix of ``Popen(`` and of every identifier
+    ending in ``_open``. _text_io_calls says how each is told apart.
 
     Sweeping nothing is a failure, for the reason _docs_cite_the_real_length
     gives one check up: a check with nothing to assert reports exactly like one
-    that holds.
+    that holds. The cases above are the same argument one level in — the
+    discriminator has no look-alike in this tree to catch it going wrong.
 
     Returns True when a call omits the encoding, so callers can accumulate.
     """
+    failed = False
+
+    for source, description in ENCODING_MUST_FLAG:
+        if not any(not names_utf8 for _, _, names_utf8 in _text_io_calls(ast.parse(source))):
+            failed = True
+            print(f"FAIL  the encoding rule misses {description}: {source}")
+    for source, description in ENCODING_MUST_NOT_FLAG:
+        if any(not names_utf8 for _, _, names_utf8 in _text_io_calls(ast.parse(source))):
+            failed = True
+            print(f"FAIL  the encoding rule wrongly flags {description}: {source}")
+    if not failed:
+        cases = len(ENCODING_MUST_FLAG) + len(ENCODING_MUST_NOT_FLAG)
+        print(f"ok    {cases} encoding-rule cases answered both ways")
+
     sources = sorted(
         path
         for path in ROOT.rglob("*.py")
         if ".git" not in path.parts and "__pycache__" not in path.parts
     )
 
-    failed = False
+    swept = False
     checked = 0
     for path in sources:
         where = path.relative_to(ROOT)
@@ -1095,30 +1212,24 @@ def _text_reads_name_their_encoding() -> bool:
             tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
         except SyntaxError as exc:  # pragma: no cover - a broken file fails elsewhere too
             failed = True
-            print(f"FAIL  {where} does not parse: {exc}")
+            print(f"FAIL  {where} does not parse, so nothing in it was checked: {exc}")
             continue
 
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-                continue
-            if node.func.attr not in {"read_text", "write_text"}:
-                continue
-            if node.func.attr == "write_text" and not node.args:
-                continue
-
+        for name, lineno, names_utf8 in _text_io_calls(tree):
             checked += 1
-            if any(keyword.arg == "encoding" for keyword in node.keywords):
+            if names_utf8:
                 continue
 
             failed = True
-            print(f"FAIL  {where}:{node.lineno} {node.func.attr}() names no encoding.")
+            swept = True
+            print(f"FAIL  {where}:{lineno} {name}() names no encoding.")
             print("        It decodes with the locale's encoding, not the file's.")
 
     if not checked:
         failed = True
         print("FAIL  no text reads found anywhere — this check swept nothing.")
         print("        Either the sweep broke or the calls moved; both need a look.")
-    elif not failed:
+    elif not swept and not failed:
         print(f"ok    {checked} text reads name their encoding")
 
     return failed
