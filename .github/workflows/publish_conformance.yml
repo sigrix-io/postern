@@ -48,6 +48,20 @@ on:
 permissions:
   contents: read
 
+# Deliberately NOT `cancel-in-progress`, which is what the CI workflows set.
+# Cancelling a validation run wastes a runner; cancelling a run that is
+# mid-upload can leave a release half-landed, and — as the destination check
+# below already says of a pre-release — a version on PyPI is spent
+# permanently, not even recoverable by deleting the file. There is nothing to
+# gain here by being fast.
+#
+# Two runs can genuinely overlap: a `conformance-v*` tag and a maintainer
+# pressing `workflow_dispatch`. Queuing the second behind the first is the
+# whole point.
+concurrency:
+  group: publish-conformance-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # Deliberately a separate job from the publish, so the artifact that gets
   # uploaded is the one that passed — rather than a second build of the same
@@ -60,6 +74,12 @@ jobs:
   # verification did not look.
   build:
     runs-on: ubuntu-latest
+    # A fork can push a `conformance-v*` tag to itself. PyPI's trusted-publisher
+    # claim names this repository, so a fork could not complete the upload
+    # anyway — but it should not get as far as building the artifacts that
+    # claim would be asked to vouch for, and saying so here makes the intent
+    # explicit rather than leaving it to a failure three jobs later.
+    if: github.repository == 'sigrix-io/postern'
     outputs:
       target: ${{ steps.destination.outputs.target }}
       upload_url: ${{ steps.destination.outputs.upload_url }}
@@ -147,6 +167,11 @@ jobs:
         with:
           name: dist
           path: dist/
+          # Without this an empty `dist/` uploads an empty artifact and the
+          # job stays green; the run then fails in `publish`, one job away
+          # from the build that produced nothing, with an error about the
+          # upload rather than about the build.
+          if-no-files-found: error
 
   publish:
     needs: build

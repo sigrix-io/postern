@@ -20,6 +20,13 @@ on:
 permissions:
   contents: read
 
+# A superseded push has nothing to say. Cancelling its run frees the runner
+# for the commit that replaced it, and the only thing lost is a verdict on a
+# tree nobody will merge.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
