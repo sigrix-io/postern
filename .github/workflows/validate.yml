@@ -31,14 +31,11 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      # Pinned in scripts/requirements.txt so this installs the same
+      # validator a contributor installed locally.
+      - uses: sigrix-io/actions/setup-python-project@765103f1c9d89e019dcaea72a78eed2577b30ae1 # v1.0.0
         with:
           python-version: '3.12'
-
-      # Pinned in scripts/requirements.txt so this step installs the same
-      # validator a contributor installed locally.
-      - run: pip install -r scripts/requirements.txt
+          install: -r scripts/requirements.txt
 
       - run: python scripts/validate.py
