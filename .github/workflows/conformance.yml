@@ -30,6 +30,13 @@ permissions:
   contents: read
   pull-requests: read
 
+# A superseded push has nothing to say. Cancelling its run frees the runner
+# for the commit that replaced it, and the only thing lost is a verdict on a
+# tree nobody will merge.
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   changes:
     name: changes
