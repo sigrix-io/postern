@@ -108,6 +108,13 @@ constraints on implementers rather than features:
 An agent that is free, self-authored, or local has no distributor and skips
 all of this.
 
+**"Nobody else" is a strong claim, so it is shown rather than asserted.**
+[`docs/why-not-a2a.md`](docs/why-not-a2a.md) puts Postern beside A2A, MCP,
+AG-UI, Agent Protocol and the rest: which of the four verbs each one covers,
+which of them has any entitlement model, and what you would give up by
+picking one. It also says where A2A is straightforwardly the better choice,
+because a comparison that only lists the author's wins is marketing.
+
 ## Level 1 in fifteen minutes
 
 Two `GET`s and one refusal are a conforming runner. That is the whole of
