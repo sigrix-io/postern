@@ -1,0 +1,148 @@
+# Audits the pinned dependencies against the published advisory data.
+#
+# This exists because the mechanism that should already do it does not reach
+# this repository. Dependabot *version updates* work here — several have
+# landed — but *alerts* read the dependency graph, and this repository's graph
+# answers `404` where the private sibling's answers `200`, measured three times
+# across three weeks (postern#159). The endpoint names `contents=read` as the
+# permission it wants, the token presenting these requests holds that on this
+# repository, and when a permission really is missing this same token is told
+# so with a `403` naming it rather than a masked `404`. So the likeliest
+# reading is that the graph holds nothing here, and no alert can fire against
+# these pins however the settings read.
+#
+# The pins matter more than a repository this size suggests: the set in
+# tools/conformance/pyproject.toml is what is published to PyPI and installed
+# by implementers of this specification. An advisory against one of them is
+# something they inherit from us.
+#
+# Nothing here asserts the graph is broken. It makes the answer stop mattering.
+name: audit
+
+on:
+  schedule:
+    # Mondays, 06:00 UTC, an hour ahead of the link check so two failures on
+    # the same morning arrive as two separate notifications rather than one
+    # run nobody finishes reading.
+    #
+    # The same two GitHub behaviours links.yml records apply here: a scheduled
+    # workflow runs only from the default branch, so editing this on a branch
+    # changes nothing until it merges; and GitHub disables schedules in a
+    # repository with 60 days of no activity, so a quiet period ends with this
+    # silently off. For a job standing in for security alerts, that second one
+    # is the failure mode worth remembering.
+    - cron: '0 6 * * 1'
+
+  # So a maintainer can answer "are we exposed to the thing in the news?"
+  # without waiting until Monday.
+  workflow_dispatch:
+
+  # A bump arriving by pull request — Dependabot's or a person's — is audited
+  # before it lands rather than up to six days afterwards.
+  #
+  # This filter is why this workflow **must not** be made a required status
+  # check. A `paths:`-filtered workflow reports nothing at all on a pull
+  # request that misses the filter, and a required check that never reports
+  # blocks every such pull request permanently, with no way for the author to
+  # clear it. conformance.yml resolves that differently, by filtering inside a
+  # job so that one status always reports; this one has no reason to, because
+  # a scheduled audit is not a merge gate.
+  pull_request:
+    paths:
+      - 'scripts/requirements.txt'
+      - 'tools/conformance/pyproject.toml'
+      - '.github/workflows/audit.yml'
+
+permissions:
+  contents: read
+
+# A superseded push has nothing to say. Scheduled runs share a ref and so a
+# group, which is harmless: two audits of the same tree answer the same thing.
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: sigrix-io/actions/setup-python-project@765103f1c9d89e019dcaea72a78eed2577b30ae1 # v1.0.0
+        with:
+          python-version: '3.12'
+          install: pip-audit
+
+      # `--strict` throughout: without it, a dependency pip-audit cannot
+      # collect is skipped with a warning and the run still ends green. A
+      # sweep that silently audits nothing reports exactly like a clean one,
+      # which is the failure this whole workflow exists to stop repeating.
+      - name: The validator's pins
+        run: pip-audit --strict -r scripts/requirements.txt
+
+      # The conformance package is audited as an *install* rather than by
+      # reading its pyproject.toml, because the manifest names three packages
+      # and installing them brings nine. The six it does not name are where an
+      # advisory is most likely to arrive unannounced, and they are equally
+      # installed on the implementer's machine.
+      - name: What an implementer installs from PyPI
+        run: |
+          python -m venv /tmp/auditenv
+          /tmp/auditenv/bin/pip install --quiet ./tools/conformance
+
+          # `pip freeze`, not `pip list`: freeze omits the virtualenv's own
+          # pip and setuptools. Those are bootstrap tooling that no wheel
+          # ships and no implementer inherits from this package, and auditing
+          # them makes this job permanently red for something nobody here can
+          # fix by editing a pin.
+          #
+          # `--exclude postern-conformance` drops the package under test. It
+          # was installed from a path, so it freezes as a `file://`
+          # requirement that names this checkout rather than anything on an
+          # index — and it is the subject of the audit, not a dependency of it.
+          /tmp/auditenv/bin/pip freeze --exclude postern-conformance > /tmp/conformance-lock.txt
+
+          echo "Auditing the resolved install:"
+          cat /tmp/conformance-lock.txt
+
+          pip-audit --strict -r /tmp/conformance-lock.txt
+
+      # Both manifests pin the same three packages at the same versions today,
+      # and nothing enforces that. If they drift, the step above stops
+      # covering the step below it and both still pass — so the drift is
+      # reported here rather than discovered by an advisory that only reached
+      # one of them.
+      - name: The two manifests still pin the same versions
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys, tomllib
+
+          def pins(text):
+              found = {}
+              for raw in text.splitlines():
+                  line = raw.split("#", 1)[0].strip()
+                  m = re.fullmatch(r"([A-Za-z0-9._-]+)==([^\s;]+)", line)
+                  if m:
+                      found[m.group(1).lower().replace("_", "-")] = m.group(2)
+              return found
+
+          requirements = pins(pathlib.Path("scripts/requirements.txt").read_text(encoding="utf-8"))
+          project = tomllib.loads(
+              pathlib.Path("tools/conformance/pyproject.toml").read_text(encoding="utf-8")
+          )
+          declared = pins("\n".join(project["project"]["dependencies"]))
+
+          if not requirements or not declared:
+              print("FAIL  read no pins from one of the manifests; this check found nothing to compare")
+              sys.exit(1)
+
+          shared = sorted(requirements.keys() & declared.keys())
+          drifted = [n for n in shared if requirements[n] != declared[n]]
+
+          for name in drifted:
+              print(f"FAIL  {name}: scripts/requirements.txt has {requirements[name]}, "
+                    f"tools/conformance/pyproject.toml has {declared[name]}")
+          if drifted:
+              sys.exit(1)
+
+          print(f"ok    {len(shared)} shared pins agree: " + ", ".join(
+              f"{n}=={requirements[n]}" for n in shared))
+          PY
