@@ -68,6 +68,13 @@ Agent Plugins v1.0.0 states that *licensing is metadata only; no portable
 verification mechanism defined*. §5 of this document is the mechanism that
 statement leaves open.
 
+"Orthogonal" is true of the question A2A asks and not of the decision an
+adopter makes, who is choosing one surface to implement rather than two
+philosophies to agree with. [`docs/why-not-a2a.md`](docs/why-not-a2a.md) is
+the long answer — what each specification above covers of the four verbs,
+which of them has an entitlement model, and where A2A is simply the better
+choice. It is non-normative and nothing in it governs.
+
 ### 1.4 Terminology
 
 The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHOULD**,
