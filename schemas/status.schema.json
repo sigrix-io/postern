@@ -52,6 +52,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "The grace the distributor declared for an unreachable check (SPEC.md sections 5.3, 5.7), where the runner has been told one. A client needs it beside checked_at to say when an agent running through an outage stops."
+        },
+        "access_ends_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The date the distributor gave for this buyer's access to end (SPEC.md sections 4.4, 5.3), unchanged, where the answer the runner holds gave one. Kept through a grace period, the date being the last thing the distributor said, and absent after a 404, which gives none. A client needs it to warn a buyer before access ends."
         }
       },
       "additionalProperties": true,
