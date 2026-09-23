@@ -1657,9 +1657,15 @@ A distributor issues each buyer an **entitlement token**.
   cryptographically secure source.
 - A distributor **MUST NOT** store a token in recoverable form. Store a
   cryptographic hash and compare hashes.
-- A token **SHOULD** be scoped to a buyer rather than to a single agent.
-  Per-agent tokens multiply the revocation surface without adding
-  protection, since the entitlement check (§5.3) is per-agent regardless.
+- A token **MAY** be scoped to a single agent rather than to a buyer. A
+  check is per-agent whatever the token's scope (§5.3), so a narrower scope
+  protects nothing there. It does protect bundle retrieval (§5.6): a
+  buyer-scoped token that leaks retrieves every agent its buyer owns, and
+  one scoped to a single agent retrieves that agent alone. A runner serves
+  exactly one agent (§2.2), so it never needs more. The cost is more tokens
+  to list and to revoke, and a distributor that issues them has to make
+  both easy. A token presented for an agent outside its scope is answered
+  as §5.5 answers one presented for an agent its buyer is not entitled to.
 - A token **SHOULD NOT** expire. Rotation and revocation are the controls;
   expiry adds a failure mode — an agent that stops working on a timer —
   without adding a control the distributor did not already have.
@@ -2273,8 +2279,12 @@ Two distributors' namespaces coexisting in one bundle is valid.
 and informative for everyone else. Postern is usable with no reference to it.*
 
 - Namespace: `org.sigrix`, carrying `agent_id` and `listing_url`.
-- Tokens are 32 random bytes, URL-safe base64, stored as SHA-256. One active
-  token per buyer; rotation revokes every predecessor.
+- Tokens are 32 random bytes, URL-safe base64, stored as SHA-256, and come
+  in two kinds. A buyer's *feed token* is scoped to the buyer: one is active
+  at a time, and rotation revokes every predecessor. A *runner token* is
+  scoped to the one agent it was minted for (§5.2): a buyer may hold any
+  number, each is revoked on its own, and rotating the feed token leaves
+  them alone. Both distributor paths accept either kind.
 - `stale_after_seconds` is 60, and `grace_seconds` is 86400 — long enough
   to ride out an outage, short enough that a refunded buyer is not still
   running a week later.
@@ -2302,6 +2312,18 @@ and informative for everyone else. Postern is usable with no reference to it.*
 first. Each entry carries the date it landed and the pull request that
 carried it.
 
+- 2026-09-23 · #177 —
+  §5.2 permits a token scoped to a single agent. It said a token **SHOULD**
+  be scoped to a buyer, because per-agent tokens "multiply the revocation
+  surface without adding protection, since the entitlement check (§5.3) is
+  per-agent regardless". That holds for the check and not for bundle
+  retrieval: a buyer-scoped token that leaks retrieves every agent its buyer
+  owns (§5.6), where one scoped to a single agent retrieves one. A runner
+  serves one agent (§2.2), so a token scoped to it costs the runner
+  nothing. The bullet is now a **MAY**, and a token presented for an agent
+  outside its scope is answered as §5.5 answers any agent its buyer is not
+  entitled to. A distributor issuing only buyer-scoped tokens conforms as
+  before. §8 records the two kinds Sigrix issues (§5.2, §5.5, §8).
 - 2026-09-23 · #176 —
   The check can say when access ends. `access_ends_at`, an **OPTIONAL**
   RFC 3339 member of §5.3's answer, carries the date a distributor already
