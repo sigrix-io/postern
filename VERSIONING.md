@@ -237,7 +237,11 @@ descriptive tagline for the search terms — Vault, Consul, Nomad, Boundary,
 Waypoint, Sigstore. Postern follows that pattern, and the tagline is the
 subtitle on the README. A postern is the small gate in a fortification
 through which authorised people pass: present proof, pass through, then run.
-Collisions are limited to a dormant API-mocking tool.
+The name is not unique, though. Besides a dormant API-mocking tool,
+`postern` on PyPI is an unrelated project, released since July 2026 — an
+OS-isolated sandbox for untrusted Python — so nothing here is published
+under the bare name: the conformance checker installs as
+`postern-conformance`.
 
 Animal names were considered and rejected on availability — Pangolin already
 names three significant projects, Kestrel is ASP.NET Core's web server,
