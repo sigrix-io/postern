@@ -1,7 +1,7 @@
 # Postern in pictures
 
 Seven diagrams of [SPEC.md](../SPEC.md), for a reader deciding whether Postern is
-for them before committing to 2,941 lines of prose.
+for them before committing to 2,963 lines of prose.
 
 > [!NOTE]
 > **Non-normative.** Nothing on this page adds to the protocol, constrains an
@@ -244,7 +244,7 @@ What §8 does pin down:
 | | |
 |---|---|
 | Bundle namespace | `org.sigrix`, carrying `agent_id` and `listing_url` (§6) |
-| Tokens | 32 random bytes, URL-safe base64, SHA-256 at rest; one active token per buyer, and rotation revokes every predecessor |
+| Tokens | 32 random bytes, URL-safe base64, SHA-256 at rest. A feed token per buyer, which rotation replaces, and runner tokens scoped to one agent each, revoked one at a time (§5.2) |
 | Declared window | `stale_after_seconds` 60, `grace_seconds` 86400 |
 | Withdrawal | Twelve months for buyers who owned the listing: the check answers `active` with `access_ends_at` through the tail, then `revoked`, and the bundle `410 withdrawn` (§5.3, §5.6) |
 
@@ -274,7 +274,7 @@ out.
 
 | | |
 |---|---|
-| The specification | [SPEC.md](../SPEC.md) — 2,941 lines, and the only thing that governs |
+| The specification | [SPEC.md](../SPEC.md) — 2,963 lines, and the only thing that governs |
 | Machine-readable payloads | [`schemas/`](../schemas), with worked instances in [`examples/`](../examples) |
 | What may change before 1.0 | [VERSIONING.md](../VERSIONING.md) |
 | Why this and not A2A | [`why-not-a2a.md`](why-not-a2a.md) — coverage against the adjacent specifications, and the one column that is empty for all of them |
