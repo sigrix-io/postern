@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sigrix.io/schemas/postern/0.1/entitlement.schema.json",
   "title": "Postern entitlement check response",
-  "description": "Response body of GET {distributor}/postern/v0/entitlements/{owner}/{name}, the only success payload a distributor returns. See SPEC.md section 5.3. Every member is required: a runner cannot evaluate section 5.4's re-check deadline without all of checked_at, stale_after_seconds and the state they qualify.",
+  "description": "Response body of GET {distributor}/postern/v0/entitlements/{owner}/{name}, the only success payload a distributor returns. See SPEC.md section 5.3. Every member but access_ends_at is required: a runner cannot evaluate section 5.4's re-check deadline without all of checked_at, stale_after_seconds and the state they qualify.",
   "type": "object",
   "required": [
     "postern",
@@ -43,6 +43,11 @@
       "type": "integer",
       "minimum": 0,
       "description": "How long a runner may keep running past checked_at + stale_after_seconds while the distributor is unreachable (SPEC.md section 5.7). 0 is a valid declaration and means stop at the window. Required, because an absent field would make strictness something inferred rather than declared. With this the honest bound on a revoked entitlement is stale_after_seconds + grace_seconds."
+    },
+    "access_ends_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339. The moment this buyer's access to this agent ends, where the distributor already knows when that will be: an agent withdrawn from sale with a period of continued access for its buyers is the case it exists for. Still to come on an active answer. On a revoked one it is past, and says access ran out on that date rather than a purchase being reversed. It adds no deadline: a runner MUST NOT refuse a run on the date alone, since what ends access is the revoked answer a later check returns (SPEC.md section 5.3)."
     }
   },
   "additionalProperties": true

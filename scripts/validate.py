@@ -110,6 +110,11 @@ PAIRS = [
     # which to ask again.
     ("entitlement.schema.json", "entitlement.json"),
     ("entitlement.schema.json", "entitlement-revoked.json"),
+    # The answer's one optional member, on the answer that carries it ahead
+    # of time. Its date is error-withdrawn.json's on purpose: where §5.6's
+    # `410` and §5.3's check both give one, they give the same date, and an
+    # implementer reading the two examples side by side should find one.
+    ("entitlement.schema.json", "entitlement-ending.json"),
     # The other distributor answer, and the only payload in this list whose
     # path this specification does not define — §5 fixes the two a runner
     # must call, and a version answer is neither, so §8 records where Sigrix
@@ -607,6 +612,23 @@ MUST_REJECT = [
         "entitlement.schema.json",
         "a checked_at that is nearly RFC 3339, with a space for the T",
         {**_ENTITLEMENT, "checked_at": "2026-08-15 09:14:02Z"},
+    ),
+    # §5.3's access_ends_at is a timestamp for the reason §5.6's is. A bare
+    # date is its likeliest near miss, the message a client shows beside it
+    # being written in days, so each place the member is defined refuses one.
+    (
+        "entitlement.schema.json",
+        "an access_ends_at that is a bare date rather than a timestamp",
+        {**_ENTITLEMENT, "access_ends_at": "2027-08-15"},
+    ),
+    (
+        "status.schema.json",
+        "a status access_ends_at that is a bare date rather than a timestamp",
+        {"postern": "0.1", "level": 3, "state": "ready",
+         "agent": {"id": "acme/a"},
+         "entitlement": {"state": "active", "checked_at": _CHECKED_AT,
+                         "stale_after_seconds": 60,
+                         "access_ends_at": "2027-08-15"}},
     ),
     # §4.6 step 5 says `missing` is an array, matching the cardinality
     # `status.credentials.missing` already publishes. A single name is the

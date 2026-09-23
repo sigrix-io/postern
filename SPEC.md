@@ -1257,6 +1257,12 @@ distributor declared (§5.3) where the runner has been told one. A client
 needs it beside `checked_at` to say when an agent running through an outage
 will stop.
 
+`entitlement.access_ends_at` is **OPTIONAL**, and carries the date the
+distributor gave (§5.3), unchanged, where the answer the runner holds gave
+one — through a grace period too, the date being the last thing the
+distributor said. A `404` gives none. A client needs it to warn a buyer
+before access ends, rather than explain afterwards why it did.
+
 `entitlement.checked_at` is **REQUIRED** whenever `entitlement.state` is
 `active` or `revoked`. Both are answers a distributor actually gave, and
 neither is terminal — a revoked entitlement may later be restored (§5.4), so
@@ -1733,6 +1739,46 @@ its own clock on receipt, and the two caches run back to back — so the real
 worst case is their sum while `stale_after_seconds` claims to be the whole
 of it.
 
+One member is **OPTIONAL**. `access_ends_at` is an RFC 3339 timestamp: the
+moment this buyer's access to this agent ends, where the distributor already
+knows when that will be. The case it exists for is an agent withdrawn from
+sale with a period of continued access for the buyers who owned it (§5.6).
+The date is the one thing such a buyer can plan by, and without it nothing
+reaches a runner before the refusal does: a runner with its bundle on disk
+never requests §5.6's `410` again.
+
+```json
+{
+  "postern": "0.1",
+  "state": "active",
+  "agent_id": "acme/market-research-crew",
+  "checked_at": "2026-08-15T09:14:02Z",
+  "stale_after_seconds": 60,
+  "grace_seconds": 86400,
+  "access_ends_at": "2027-08-15T00:00:00Z"
+}
+```
+
+On an `active` answer the date is still to come. Once access has ended on
+it, a distributor **SHOULD** go on answering the buyer's check `revoked`,
+carrying the date, rather than `404`: the token still resolves to a buyer
+who was entitled, and §5.5 has nothing to hide from them in a date they were
+already given. A `revoked` answer carrying a past date therefore says that
+access ran out when the distributor said it would, which is a different
+thing from a purchase reversed under §5.4, and a client can tell its user
+when rather than only that. A runner refusing a run on such an answer
+**MAY** carry the date as `error.detail.access_ends_at`, the member §5.6
+already defines for the same fact.
+
+The date adds no deadline. A runner keeps to §5.4's and §5.7's, and **MUST
+NOT** refuse a run on the strength of the date alone: what ends access is
+the `revoked` a later check returns, from the one party that can still move
+the date. A withdrawal reversed before its date would otherwise leave a
+runner that stopped on the old date refusing an agent its buyer still has.
+Nor does the date cut §5.7's grace short, so a runner that cannot reach the
+distributor as the date passes stops where §5.4 already bounds it, at
+`checked_at + stale_after_seconds + grace_seconds`.
+
 #### 5.3.1 Addressing the agent
 
 An identifier occupies **two path segments**, not one:
@@ -1903,7 +1949,8 @@ match §1.5's grammar.
   been withdrawn. The body **SHOULD** carry the date access ends as
   `error.detail.access_ends_at`, an RFC 3339 timestamp, so a client can say
   something true about it. The envelope's root is closed (§2.1), so it rides
-  inside `detail` rather than beside `error`.
+  inside `detail` rather than beside `error`. Where the check carries one
+  too (§5.3), the two are the same date.
 
 A withdrawal answer in full:
 
@@ -2231,8 +2278,11 @@ and informative for everyone else. Postern is usable with no reference to it.*
 - `stale_after_seconds` is 60, and `grace_seconds` is 86400 — long enough
   to ride out an outage, short enough that a refunded buyer is not still
   running a week later.
-- Withdrawn listings answer `410` with a twelve-month tail from the
-  withdrawal date for buyers who owned them.
+- A withdrawn listing stays available to the buyers who owned it for twelve
+  months from the withdrawal date. Through that tail its check answers
+  `active` with `access_ends_at` set to the tail's end, and its bundle is
+  served as before. Once the tail is over, the check answers `revoked` with
+  the same date, and the bundle `410` (§5.3, §5.6).
 - A version answer for §4.4's `update` is served at
   `GET /postern/v0/versions/{owner}/{name}`, and reads no bearer token: it
   names no buyer and carries only the identifier it was asked about and a
@@ -2252,6 +2302,22 @@ and informative for everyone else. Postern is usable with no reference to it.*
 first. Each entry carries the date it landed and the pull request that
 carried it.
 
+- 2026-09-23 · #176 —
+  The check can say when access ends. `access_ends_at`, an **OPTIONAL**
+  RFC 3339 member of §5.3's answer, carries the date a distributor already
+  knows an entitlement will end, and an agent withdrawn from sale with a
+  period of continued access for its buyers is the case it exists for.
+  Until now the date reached a client only in §5.6's `410`, from the one
+  request a runner with its bundle on disk never makes again, so a buyer
+  learned it from the refusal rather than ahead of it. Once access has
+  ended on the date, a distributor **SHOULD** answer `revoked` carrying it,
+  rather than `404`: §5.5 hides a catalogue from strangers, and this buyer
+  was given the date. A runner **MUST NOT** refuse a run on the date alone,
+  which adds no deadline to §5.4's and §5.7's; `status` reports it in
+  `entitlement`; and a runner's `403` **MAY** carry it as
+  `error.detail.access_ends_at`, the member §5.6 already defines. A runner
+  that ignores the member conforms as before, the answer's root having
+  always been open (§4.4, §5.3, §5.6, §8).
 - 2026-09-11 · #161 —
   `status.state` is defined. §4.4 listed `degraded` beside `ready` and
   `running` and defined none of the three, so a state the reference runner
