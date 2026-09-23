@@ -297,9 +297,18 @@ Neither is a second definition of this document — where an implementation
 and this document appear to disagree, this document is what anyone pinned
 to, and the disagreement is worth an issue here.
 
-If you are building against this, please [open an
-issue](../../issues) — knowing who depends on what is what lets us avoid
-breaking you.
+If you are building against this, please [say
+so](../../issues/new?template=04-depend.yml) — knowing who depends on what is
+what lets us avoid breaking you.
+
+### Who depends on this
+
+| Who | Builds | Relies on |
+| --- | --- | --- |
+| [Sigrix](https://sigrix.io) ([#174](../../issues/174)) | A distributor, and the Level 3 runner inside every bundle it sells, also published as `sigrix/runner` | All four verbs, [§5](SPEC.md#5-entitlement) end to end, [§8](SPEC.md#8-sigrix-profile)'s version check, and the schemas, served at `sigrix.io/schemas/postern/0.1/` |
+
+A row comes from a closed [`dependent`](../../issues?q=label%3Adependent) issue,
+so the list says only what someone told us.
 
 ## Contributing
 
