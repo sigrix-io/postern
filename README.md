@@ -290,8 +290,14 @@ since it is how a seller checks a buyer paid. The runner side has one now:
 [`examples/minimal_runner.py`](examples/minimal_runner.py) is a complete,
 runnable Level 3 runner, standard library only, with no distributor
 configured — read it end to end, or point the checker at it.
-[Sigrix](https://sigrix.io) runs a production implementation of the same
-four verbs, framework-wrapped and backed by a real distributor.
+The production runner [Sigrix](https://sigrix.io) ships inside every bundle is
+public too:
+[`sigrix-io/sigrix-runtime`](https://github.com/sigrix-io/sigrix-runtime),
+Apache-2.0, on PyPI as `sigrix-runtime`. It serves the same four verbs for a
+CrewAI crew or an MCP server's tools, and adds what the example leaves out:
+the entitlement check and the verified bundle pull against a real
+distributor ([§5](SPEC.md#5-entitlement)), and the version check
+([§8](SPEC.md#8-sigrix-profile)).
 
 Neither is a second definition of this document — where an implementation
 and this document appear to disagree, this document is what anyone pinned
@@ -305,7 +311,7 @@ what lets us avoid breaking you.
 
 | Who | Builds | Relies on |
 | --- | --- | --- |
-| [Sigrix](https://sigrix.io) ([#174](../../issues/174)) | A distributor, and the Level 3 runner inside every bundle it sells, also published as `sigrix/runner` | All four verbs, [§5](SPEC.md#5-entitlement) end to end, [§8](SPEC.md#8-sigrix-profile)'s version check, and the schemas, served at `sigrix.io/schemas/postern/0.1/` |
+| [Sigrix](https://sigrix.io) ([#174](../../issues/174)) | A distributor, and the Level 3 runner inside every bundle it sells, published as source in [`sigrix-io/sigrix-runtime`](https://github.com/sigrix-io/sigrix-runtime) and as the `sigrix/runner` image | All four verbs, [§5](SPEC.md#5-entitlement) end to end, [§8](SPEC.md#8-sigrix-profile)'s version check, and the schemas, served at `sigrix.io/schemas/postern/0.1/` |
 
 A row comes from a closed [`dependent`](../../issues?q=label%3Adependent) issue,
 so the list says only what someone told us.
