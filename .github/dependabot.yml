@@ -17,6 +17,13 @@
 # branch changes nothing until it merges; and Dependabot needs the dependency
 # graph enabled on the repository, which is not something this file can assert.
 #
+# One pull request per ecosystem, not one per dependency. The branch ruleset
+# only merges a pull request that is up to date with main, so every merge puts
+# every other open update behind, and each then needs `@dependabot rebase` and
+# a fresh CI run before it can follow. A group costs one round of that. The
+# price is that a bump which breaks something holds back the rest of its group
+# until it is fixed, or excluded with `@dependabot ignore <dependency>`.
+#
 # Deliberately no auto-merge. Whether these should merge themselves when green
 # is a judgement about how much unattended merging is wanted, and it belongs on
 # the record rather than defaulted into by a config nobody revisits.
@@ -28,6 +35,10 @@ updates:
     directory: "/scripts"
     schedule:
       interval: "weekly"
+    groups:
+      scripts-python-dependencies:
+        patterns:
+          - "*"
 
   # Every workflow, rather than a list of them: the directory is the
   # repository root, so this covers whatever .github/workflows holds and does
@@ -49,6 +60,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   # The conformance checker's own dependencies. It pins the same three
   # packages as scripts/requirements.txt, at the same versions and for the
@@ -63,3 +78,7 @@ updates:
     directory: "/tools/conformance"
     schedule:
       interval: "weekly"
+    groups:
+      conformance-python-dependencies:
+        patterns:
+          - "*"
