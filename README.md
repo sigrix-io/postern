@@ -14,6 +14,10 @@ through. Present proof, pass through, then run.*
 📄 **[Read the specification →](SPEC.md)** · Version 0.1 · Draft ·
 [Apache-2.0](LICENSE)
 
+[![postern-conformance on PyPI](https://img.shields.io/pypi/v/postern-conformance?label=postern-conformance)](https://pypi.org/project/postern-conformance/)
+[![validate](https://github.com/sigrix-io/postern/actions/workflows/validate.yml/badge.svg?branch=main)](https://github.com/sigrix-io/postern/actions/workflows/validate.yml)
+[![conformance](https://github.com/sigrix-io/postern/actions/workflows/conformance.yml/badge.svg?branch=main)](https://github.com/sigrix-io/postern/actions/workflows/conformance.yml)
+
 ---
 
 ## What problem this solves
@@ -272,6 +276,23 @@ reading end to end before writing your own.
 python examples/minimal_runner.py &
 postern-conformance --execute http://127.0.0.1:8787
 ```
+
+## Implementations and tools
+
+What you can build with today. Each is Apache-2.0 and published by
+[Sigrix](https://sigrix.io), and none is a second definition of this
+document: where one and the specification disagree, the specification wins.
+
+| Project | What it is | Start with |
+|---|---|---|
+| [`examples/minimal_runner.py`](examples/minimal_runner.py) | A complete Level 3 runner in about 300 lines of the standard library, with no distributor | `python examples/minimal_runner.py` |
+| [`postern-conformance`](tools/conformance) | The checker: which level a runner really meets, over the wire | `pip install postern-conformance` |
+| [sigrix-runtime](https://github.com/sigrix-io/sigrix-runtime) | The production runner inside every Sigrix bundle: Level 3, the entitlement check and verified pull of [§5](SPEC.md#5-entitlement), the version check of [§8](SPEC.md#8-sigrix-profile), and an MCP server's tools served as one agent | `pip install sigrix-runtime` |
+| [Gatehouse](https://github.com/sigrix-io/gatehouse) | A browser client: the page a person runs an agent from, for any runner that allows its origin ([§2.3](SPEC.md#23-browser-clients)) | `npm install @sigrix-io/gatehouse` |
+| [sigrix-launcher](https://github.com/sigrix-io/sigrix-launcher) | A client of a distributor: checks a purchase and fetches what was bought, then starts it as an MCP server | `uvx sigrix-launcher run <seller>/<listing-id>` |
+
+Every project Sigrix publishes, and a map of how they connect:
+[sigrix.io/open-source](https://sigrix.io/open-source).
 
 ## Status
 
