@@ -2278,7 +2278,14 @@ Two distributors' namespaces coexisting in one bundle is valid.
 *This section is normative for [Sigrix](https://sigrix.io) as a distributor
 and informative for everyone else. Postern is usable with no reference to it.*
 
-- Namespace: `org.sigrix`, carrying `agent_id` and `listing_url`.
+- Namespace: `org.sigrix`, carrying `agent_id` and `listing_url`. Two more
+  members each name a file inside the bundle, and are present only when the
+  bundle carries that file: `ui`, the presentation composition (`ui.json`)
+  a client lays a run's screen out from, and `assistant`, the solution
+  document (`assistant.json`) that says how a solution's skills, tools and
+  knowledge fit together. The second is a format of its own, published with
+  [Bailey](https://github.com/sigrix-io/bailey/blob/main/schemas/README.md).
+  Nothing in this specification reads either file.
 - Tokens are 32 random bytes, URL-safe base64, stored as SHA-256, and come
   in two kinds. A buyer's *feed token* is scoped to the buyer: one is active
   at a time, and rotation revokes every predecessor. A *runner token* is
@@ -2312,6 +2319,16 @@ and informative for everyone else. Postern is usable with no reference to it.*
 first. Each entry carries the date it landed and the pull request that
 carried it.
 
+- 2026-10-01 · #TBD —
+  §8 names the two members Sigrix writes into `org.sigrix` beside
+  `agent_id` and `listing_url`: `ui`, which names a crew bundle's
+  presentation composition and has been written since that file first
+  shipped, and `assistant`, which names `assistant.json`, the document that
+  makes an Agent Plugins plugin a solution, in a format Bailey publishes.
+  Each is present only when the bundle carries the file it names. §8's list
+  is the profile's, so a member missing from it was Sigrix shipping more
+  than its own profile said. Nothing a runner does changes: neither file is
+  part of the protocol, and a runner reads neither (§8).
 - 2026-09-23 · #177 —
   §5.2 permits a token scoped to a single agent. It said a token **SHOULD**
   be scoped to a buyer, because per-agent tokens "multiply the revocation
