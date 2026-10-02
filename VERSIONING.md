@@ -80,8 +80,10 @@ checkable against the repository as it stands rather than a judgement call.
    and why. A *change* request may stay open; the version rules exist for
    it.
 3. **A stranger can implement it.** A quickstart and a client snippet are
-   in the repository, and the reference implementation's source is public
-   under a licence that lets a reader copy from it (#115, #116). A document
+   in the repository, and the complete implementation's source
+   ([`sigrix-runtime`](https://github.com/sigrix-io/sigrix-runtime), every
+   section including §5 and §8) is public under a licence that lets a reader
+   copy from it (#115, #116). A document
    whose only complete implementation is private has been tested by nobody
    who could not ask its author.
 4. **The checker tracks the text being tagged.** The `postern-conformance`
@@ -91,8 +93,10 @@ checkable against the repository as it stands rather than a judgement call.
 5. **The published schemas are the tagged schemas.** The daily comparison
    the serving side runs reports every `$id` byte-identical to
    [`schemas/`](schemas).
-6. **The reference implementation conforms.** It passes the checker at the
-   level it declares, with `--execute`, against the text being tagged.
+6. **Both implementations conform.** The complete implementation,
+   `sigrix-runtime`, and the example runner, `examples/minimal_runner.py`,
+   each pass the checker at the level they declare, with `--execute`,
+   against the text being tagged.
 
 Cutting it is one pull request and one tag. The pull request renames
 Appendix A's *Unreleased* heading to `0.1` with the date, and the tag

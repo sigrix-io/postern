@@ -267,10 +267,13 @@ well as a Python one, and it does not run your agent unless you pass
 and an abort is not a rollback ([§4.5](SPEC.md#45-the-life-of-a-run)), so
 most of the specification is checked through refusals that execute nothing.
 
-It is a test suite, not an SDK, and not a reference implementation —
-[`examples/minimal_runner.py`](examples/minimal_runner.py) is that: a
-complete Level 3 runner in about 300 lines of the standard library, worth
-reading end to end before writing your own.
+It is a test suite, not an SDK, and not an implementation. Two runners are:
+[`examples/minimal_runner.py`](examples/minimal_runner.py), the *example
+runner*, is a Level 3 runner in about 300 lines of the standard library,
+worth reading end to end before writing your own; and
+[`sigrix-runtime`](https://github.com/sigrix-io/sigrix-runtime), the
+*complete implementation*, also covers the entitlement check and the version
+check (below).
 
 ```console
 python examples/minimal_runner.py &
@@ -285,9 +288,9 @@ document: where one and the specification disagree, the specification wins.
 
 | Project | What it is | Start with |
 |---|---|---|
-| [`examples/minimal_runner.py`](examples/minimal_runner.py) | A complete Level 3 runner in about 300 lines of the standard library, with no distributor | `python examples/minimal_runner.py` |
+| [`examples/minimal_runner.py`](examples/minimal_runner.py) | The example runner: Level 3 in about 300 lines of the standard library, with no distributor | `python examples/minimal_runner.py` |
 | [`postern-conformance`](tools/conformance) | The checker: which level a runner really meets, over the wire | `pip install postern-conformance` |
-| [sigrix-runtime](https://github.com/sigrix-io/sigrix-runtime) | The production runner inside every Sigrix bundle: Level 3, the entitlement check and verified pull of [§5](SPEC.md#5-entitlement), the version check of [§8](SPEC.md#8-sigrix-profile), and an MCP server's tools served as one agent | `pip install sigrix-runtime` |
+| [sigrix-runtime](https://github.com/sigrix-io/sigrix-runtime) | The complete implementation, and the production runner inside every Sigrix bundle: Level 3, the entitlement check and verified pull of [§5](SPEC.md#5-entitlement), the version check of [§8](SPEC.md#8-sigrix-profile), and an MCP server's tools served as one agent | `pip install sigrix-runtime` |
 | [Gatehouse](https://github.com/sigrix-io/gatehouse) | A browser client: the page a person runs an agent from, for any runner that allows its origin ([§2.3](SPEC.md#23-browser-clients)) | `npm install @sigrix-io/gatehouse` |
 | [sigrix-launcher](https://github.com/sigrix-io/sigrix-launcher) | A client of a distributor: checks a purchase and fetches what was bought, then starts it as an MCP server | `uvx sigrix-launcher run <seller>/<listing-id>` |
 
@@ -305,14 +308,14 @@ carry release the checker in `tools/conformance/`, not the specification
 ([VERSIONING.md](VERSIONING.md)). Breaking changes will happen before 1.0, and
 [VERSIONING.md](VERSIONING.md) says which of them move what.
 
-There is no reference implementation of the distributor side
+There is no implementation of the distributor side
 ([§5](SPEC.md#5-entitlement)) in this repository — that stays proprietary,
 since it is how a seller checks a buyer paid. The runner side has one now:
 [`examples/minimal_runner.py`](examples/minimal_runner.py) is a complete,
 runnable Level 3 runner, standard library only, with no distributor
 configured — read it end to end, or point the checker at it.
-The production runner [Sigrix](https://sigrix.io) ships inside every bundle is
-public too:
+The complete implementation is public too, and is the production runner
+[Sigrix](https://sigrix.io) ships inside every bundle:
 [`sigrix-io/sigrix-runtime`](https://github.com/sigrix-io/sigrix-runtime),
 Apache-2.0, on PyPI as `sigrix-runtime`. It serves the same four verbs for a
 CrewAI crew or an MCP server's tools, and adds what the example leaves out:
