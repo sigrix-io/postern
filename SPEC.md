@@ -2319,7 +2319,7 @@ and informative for everyone else. Postern is usable with no reference to it.*
 first. Each entry carries the date it landed and the pull request that
 carried it.
 
-- 2026-10-01 · #TBD —
+- 2026-10-01 · #181 —
   §8 names the two members Sigrix writes into `org.sigrix` beside
   `agent_id` and `listing_url`: `ui`, which names a crew bundle's
   presentation composition and has been written since that file first
