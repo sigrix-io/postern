@@ -1,5 +1,8 @@
 <p align="center">
-  <img src=".github/social-preview.png" alt="Postern — the open execution and entitlement protocol for packaged AI agents" width="800">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-on-dark.svg">
+    <img src=".github/assets/logo.svg" alt="Postern" width="120">
+  </picture>
 </p>
 
 # Postern
